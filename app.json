@@ -1,29 +1,113 @@
 {
   "expo": {
-    "name": "food_dude",
-    "slug": "food_dude",
+    "name": "Food Dude",
+    "slug": "food-dude",
     "version": "1.0.0",
+    "scheme": "fooddude",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FF6B35"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fooddude.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Food Dude needs access to your camera to scan barcodes and take photos of ingredients.",
+        "NSPhotoLibraryUsageDescription": "Food Dude needs access to your photo library to save and share recipe images.",
+        "NSPhotoLibraryAddUsageDescription": "Food Dude needs permission to save photos to your library.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FF6B35"
       },
+      "package": "com.fooddude.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_AUDIO"
+      ],
       "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-barcode-scanner",
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Food Dude to access your camera to scan barcodes and take photos."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Food Dude to access your photos to share recipe images.",
+          "cameraPermission": "Allow Food Dude to use your camera to take photos of ingredients."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Food Dude to save photos to your library.",
+          "savePhotosPermission": "Allow Food Dude to save photos.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "ios": {
+            "activationRules": {
+              "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+              "NSExtensionActivationSupportsText": true,
+              "NSExtensionActivationSupportsImageWithMaxCount": 10
+            }
+          },
+          "android": {
+            "intentFilters": [
+              {
+                "action": "android.intent.action.SEND",
+                "data": {
+                  "mimeType": "text/plain"
+                }
+              },
+              {
+                "action": "android.intent.action.SEND",
+                "data": {
+                  "mimeType": "image/*"
+                }
+              },
+              {
+                "action": "android.intent.action.SEND_MULTIPLE",
+                "data": {
+                  "mimeType": "image/*"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8ae8b6b6-6669-4f66-bd80-e16bbe8dc268"
+      }
     }
   }
 }
