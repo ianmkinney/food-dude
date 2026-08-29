@@ -13,10 +13,18 @@ import {
     Image,
     ScrollView,
 } from 'react-native';
+import Animated, {
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
+    Easing,
+} from 'react-native-reanimated';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { getTheme } from '../theme';
+import { getTheme, motion } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { aiConversationOperations, pantryOperations, recipeOperations, userOperations } from '../database/operations';
@@ -24,10 +32,13 @@ import aiChefService from '../services/aiChefService';
 import StyledMessage from '../components/StyledMessage';
 import TypingIndicator from '../components/TypingIndicator';
 
+const HELPERS_COLLAPSED_KEY = 'aiChefHelpersCollapsed';
+
 const AiChefScreen = () => {
     const navigation = useNavigation();
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const reduceMotion = useReducedMotion();
     const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(false);
@@ -39,6 +50,56 @@ const AiChefScreen = () => {
     const cancelledRef = useRef(false);
     const [aiStatus, setAiStatus] = useState('');
     const [generatingRecipeStatus, setGeneratingRecipeStatus] = useState('');
+    const [helpersCollapsed, setHelpersCollapsed] = useState(false);
+    // 1 = fully expanded, 0 = fully collapsed. Height is driven off a measured
+    // shared value instead of a layout animation so web behaves like native.
+    const helpersProgress = useSharedValue(1);
+    const helpersHeight = useSharedValue(0);
+
+    useEffect(() => {
+        let mounted = true;
+        AsyncStorage.getItem(HELPERS_COLLAPSED_KEY)
+            .then((saved) => {
+                if (mounted && saved === 'true') {
+                    setHelpersCollapsed(true);
+                    helpersProgress.value = 0;
+                }
+            })
+            .catch((error) => {
+                console.error('Error loading AI Chef helper state:', error);
+            });
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    const toggleHelpers = useCallback(() => {
+        const next = !helpersCollapsed;
+        setHelpersCollapsed(next);
+        const target = next ? 0 : 1;
+        helpersProgress.value = reduceMotion
+            ? target
+            : withTiming(target, {
+                duration: motion.duration.normal,
+                easing: Easing.out(Easing.cubic),
+            });
+        AsyncStorage.setItem(HELPERS_COLLAPSED_KEY, String(next)).catch((error) => {
+            console.error('Error saving AI Chef helper state:', error);
+        });
+    }, [helpersCollapsed, reduceMotion]);
+
+    const handleHelpersLayout = useCallback((event) => {
+        helpersHeight.value = event.nativeEvent.layout.height;
+    }, []);
+
+    const helpersBodyStyle = useAnimatedStyle(() => ({
+        height: helpersHeight.value * helpersProgress.value,
+        opacity: helpersProgress.value,
+    }));
+
+    const helpersChevronStyle = useAnimatedStyle(() => ({
+        transform: [{ rotate: `${180 * helpersProgress.value}deg` }],
+    }));
 
     const loadConversation = useCallback(async () => {
         try {
@@ -587,70 +648,94 @@ const AiChefScreen = () => {
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             keyboardVerticalOffset={90}
         >
-            {/* Quick Actions */}
-            <View style={[styles.quickActions, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
+            {/* Help me cook — collapsible quick actions + recipe shortcuts */}
+            <View style={[styles.helpersPanel, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
                 <AnimatedPressable
-                    style={[styles.quickActionButton, { backgroundColor: theme.primary[100] }]}
-                    onPress={handleGenerateFromPantry}
-                    disabled={loading}
+                    style={styles.helpersHeader}
+                    onPress={toggleHelpers}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel="Help me cook"
+                    accessibilityHint={
+                        helpersCollapsed
+                            ? 'Expands the cooking shortcuts'
+                            : 'Collapses the cooking shortcuts to give the chat more room'
+                    }
+                    accessibilityState={{ expanded: !helpersCollapsed }}
                 >
-                    {loading && generatingRecipeStatus ? (
-                        <>
-                            <ActivityIndicator size="small" color={theme.primary[500]} />
-                            <Text style={[styles.quickActionText, { color: theme.primary[500] }]}>
-                                {generatingRecipeStatus}
-                            </Text>
-                        </>
-                    ) : (
-                        <>
-                            <Ionicons name="sparkles" size={20} color={theme.primary[500]} />
-                            <Text style={[styles.quickActionText, { color: theme.primary[500] }]}>
-                                Recipe from Pantry
-                            </Text>
-                        </>
-                    )}
-                </AnimatedPressable>
-            </View>
-
-            {/* Recipe Selector */}
-            {recipes.length > 0 && (
-                <View style={[styles.recipeSelectorContainer, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
-                    <Text style={[styles.recipeSelectorTitle, { color: theme.colors.text.primary }]}>
+                    <Text style={[styles.helpersHeaderTitle, { color: theme.colors.text.primary }]}>
                         Help me cook...
                     </Text>
-                    <ScrollView 
-                        horizontal 
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.recipeSelectorScroll}
-                    >
-                        {recipes.map((recipe) => (
-                            <ElevatedCard
-                                key={recipe.id}
-                                theme={theme}
-                                style={styles.recipeBubble}
-                                onPress={() => handleRecipeSelect(recipe)}
+                    <Animated.View style={helpersChevronStyle}>
+                        <Ionicons name="chevron-down" size={20} color={theme.colors.text.secondary} />
+                    </Animated.View>
+                </AnimatedPressable>
+
+                <Animated.View
+                    style={[styles.helpersBody, helpersBodyStyle]}
+                    pointerEvents={helpersCollapsed ? 'none' : 'auto'}
+                >
+                    <View onLayout={handleHelpersLayout}>
+                        <View style={styles.quickActions}>
+                            <AnimatedPressable
+                                style={[styles.quickActionButton, { backgroundColor: theme.primary[100] }]}
+                                onPress={handleGenerateFromPantry}
+                                disabled={loading}
                             >
-                                {recipe.image_uri ? (
-                                    <Image 
-                                        source={{ uri: recipe.image_uri }} 
-                                        style={styles.recipeBubbleImage}
-                                    />
+                                {loading && generatingRecipeStatus ? (
+                                    <>
+                                        <ActivityIndicator size="small" color={theme.primary[500]} />
+                                        <Text style={[styles.quickActionText, { color: theme.primary[500] }]}>
+                                            {generatingRecipeStatus}
+                                        </Text>
+                                    </>
                                 ) : (
-                                    <View style={[styles.recipeBubblePlaceholder, { backgroundColor: theme.primary[100] }]}>
-                                        <Ionicons name="restaurant" size={24} color={theme.primary[500]} />
-                                    </View>
+                                    <>
+                                        <Ionicons name="sparkles" size={20} color={theme.primary[500]} />
+                                        <Text style={[styles.quickActionText, { color: theme.primary[500] }]}>
+                                            Recipe from Pantry
+                                        </Text>
+                                    </>
                                 )}
-                                <Text 
-                                    style={[styles.recipeBubbleTitle, { color: theme.colors.text.primary }]} 
-                                    numberOfLines={2}
-                                >
-                                    {recipe.title}
-                                </Text>
-                            </ElevatedCard>
-                        ))}
-                    </ScrollView>
-                </View>
-            )}
+                            </AnimatedPressable>
+                        </View>
+
+                        {recipes.length > 0 && (
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.recipeSelectorScroll}
+                            >
+                                {recipes.map((recipe) => (
+                                    <ElevatedCard
+                                        key={recipe.id}
+                                        theme={theme}
+                                        style={styles.recipeBubble}
+                                        onPress={() => handleRecipeSelect(recipe)}
+                                    >
+                                        {recipe.image_uri ? (
+                                            <Image 
+                                                source={{ uri: recipe.image_uri }} 
+                                                style={styles.recipeBubbleImage}
+                                            />
+                                        ) : (
+                                            <View style={[styles.recipeBubblePlaceholder, { backgroundColor: theme.primary[100] }]}>
+                                                <Ionicons name="restaurant" size={24} color={theme.primary[500]} />
+                                            </View>
+                                        )}
+                                        <Text 
+                                            style={[styles.recipeBubbleTitle, { color: theme.colors.text.primary }]} 
+                                            numberOfLines={2}
+                                        >
+                                            {recipe.title}
+                                        </Text>
+                                    </ElevatedCard>
+                                ))}
+                            </ScrollView>
+                        )}
+                    </View>
+                </Animated.View>
+            </View>
 
             {/* Messages */}
             <FlatList
@@ -686,8 +771,11 @@ const AiChefScreen = () => {
                             }
                         ]}
                         onPress={handleStopGeneration}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Stop generating"
                     >
-                        <Ionicons name="stop-circle" size={20} color="#FFFFFF" />
+                        <Ionicons name="stop-circle" size={22} color="#FFFFFF" />
                         <Text style={styles.stopButtonText}>Stop</Text>
                     </AnimatedPressable>
                 ) : (
@@ -702,8 +790,12 @@ const AiChefScreen = () => {
                         ]}
                         onPress={handleSendMessage}
                         disabled={!inputText.trim()}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Send message"
+                        accessibilityState={{ disabled: !inputText.trim() }}
                     >
-                        <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+                        <Ionicons name="sparkles" size={24} color="#FFFFFF" />
                     </AnimatedPressable>
                 )}
             </View>
@@ -715,10 +807,28 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
+    helpersPanel: {
+        borderBottomWidth: 1,
+    },
+    helpersHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        minHeight: 44,
+    },
+    helpersHeaderTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    helpersBody: {
+        overflow: 'hidden',
+    },
     quickActions: {
         flexDirection: 'row',
-        padding: 12,
-        borderBottomWidth: 1,
+        paddingHorizontal: 12,
+        paddingBottom: 12,
     },
     quickActionButton: {
         flexDirection: 'row',
@@ -773,56 +883,48 @@ const styles = StyleSheet.create({
         padding: 12,
         borderTopWidth: 1,
         alignItems: 'flex-end',
+        gap: 10,
     },
     input: {
         flex: 1,
-        minHeight: 40,
-        maxHeight: 100,
-        borderRadius: 20,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
+        minHeight: 52,
+        maxHeight: 120,
+        borderRadius: 26,
+        paddingHorizontal: 18,
+        paddingVertical: 14,
         fontSize: 15,
-        marginRight: 8,
     },
     stopButton: {
-        height: 40,
-        width: 70,
-        borderRadius: 20,
+        height: 52,
+        minWidth: 96,
+        borderRadius: 26,
         alignItems: 'center',
         justifyContent: 'center',
         flexDirection: 'row',
+        paddingHorizontal: 18,
         gap: 6,
     },
     stopButtonText: {
         color: '#FFFFFF',
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '600',
     },
     sendButton: {
-        height: 40,
-        borderRadius: 20,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
         alignItems: 'center',
         justifyContent: 'center',
         flexDirection: 'row',
-        paddingHorizontal: 0,
     },
     sendButtonText: {
         color: '#FFFFFF',
         fontSize: 11,
         fontWeight: '600',
     },
-    recipeSelectorContainer: {
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-    },
-    recipeSelectorTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginBottom: 8,
-        paddingHorizontal: 16,
-    },
     recipeSelectorScroll: {
         paddingHorizontal: 16,
+        paddingBottom: 12,
         gap: 12,
     },
     recipeBubble: {
