@@ -122,7 +122,7 @@ export const recipeOperations = {
                 `INSERT INTO recipes (title, description, source_url, source_platform, image_uri, 
          servings, prep_time, cook_time, total_time, difficulty, cuisine, notes, is_cooked, date_added,
          calories, protein, carbohydrates, fat, fiber, sugar, sodium, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     recipe.title,
                     recipe.description || null,
