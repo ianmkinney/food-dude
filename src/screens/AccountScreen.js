@@ -4,7 +4,6 @@ import {
     Text,
     StyleSheet,
     ScrollView,
-    TouchableOpacity,
     TextInput,
     Alert,
     Image,
@@ -14,6 +13,8 @@ import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { userOperations, partyStatsOperations, recipeCookingHistoryOperations } from '../database/operations';
 import AiProviderSettings from '../components/AiProviderSettings';
+import ElevatedCard from '../components/ElevatedCard';
+import AnimatedPressable from '../components/AnimatedPressable';
 
 const AccountScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -106,9 +107,8 @@ const AccountScreen = ({ navigation }) => {
 
     return (
         <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            {/* Profile Header */}
-            <View style={[styles.profileHeader, { backgroundColor: theme.colors.surface }]}>
-                <View style={[styles.avatarContainer, { backgroundColor: theme.primary[100] }]}>
+            <ElevatedCard theme={theme} variant="glass" style={styles.profileHeader}>
+                <View style={[styles.avatarContainer, { backgroundColor: theme.primary[100] }, theme.shadows.md]}>
                     {user?.avatar_uri ? (
                         <Image source={{ uri: user.avatar_uri }} style={styles.avatar} />
                     ) : (
@@ -116,18 +116,17 @@ const AccountScreen = ({ navigation }) => {
                     )}
                 </View>
                 {!isEditing && (
-                    <TouchableOpacity
-                        style={[styles.editButton, { backgroundColor: theme.primary[500] }]}
+                    <AnimatedPressable
+                        style={[styles.editButton, { backgroundColor: theme.primary[500] }, theme.shadows.glow]}
                         onPress={() => setIsEditing(true)}
                     >
                         <Ionicons name="create-outline" size={18} color="#FFFFFF" />
                         <Text style={styles.editButtonText}>Edit Profile</Text>
-                    </TouchableOpacity>
+                    </AnimatedPressable>
                 )}
-            </View>
+            </ElevatedCard>
 
-            {/* Stats Section */}
-            <View style={[styles.statsContainer, { backgroundColor: theme.colors.surface }]}>
+            <ElevatedCard theme={theme} variant="elevated" style={styles.statsContainer}>
                 <View style={styles.statItem}>
                     <Ionicons name="restaurant" size={32} color={theme.primary[500]} />
                     <Text style={[styles.statValue, { color: theme.colors.text.primary }]}>{recipesCooked}</Text>
@@ -138,7 +137,7 @@ const AccountScreen = ({ navigation }) => {
                     <Text style={[styles.statValue, { color: theme.colors.text.primary }]}>{partyMembersJoined}</Text>
                     <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>Party Members</Text>
                 </View>
-            </View>
+            </ElevatedCard>
 
             {/* Profile Form */}
             <View style={styles.formContainer}>
@@ -217,56 +216,59 @@ const AccountScreen = ({ navigation }) => {
 
                 {isEditing && (
                     <View style={styles.buttonContainer}>
-                        <TouchableOpacity
+                        <AnimatedPressable
                             style={[styles.button, styles.cancelButton, { backgroundColor: theme.colors.border }]}
                             onPress={handleCancel}
                         >
                             <Text style={[styles.buttonText, { color: theme.colors.text.primary }]}>Cancel</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.button, styles.saveButton, { backgroundColor: theme.primary[500] }]}
+                        </AnimatedPressable>
+                        <AnimatedPressable
+                            style={[styles.button, styles.saveButton, { backgroundColor: theme.primary[500] }, theme.shadows.glow]}
                             onPress={handleSave}
                         >
                             <Text style={styles.buttonText}>Save</Text>
-                        </TouchableOpacity>
+                        </AnimatedPressable>
                     </View>
                 )}
             </View>
 
-            <View style={styles.settingsContainer}>
+            <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                 <AiProviderSettings theme={theme} />
-            </View>
+            </ElevatedCard>
 
             {/* Settings Section */}
             <View style={styles.settingsContainer}>
                 <Text style={[styles.settingsTitle, { color: theme.colors.text.primary }]}>Settings</Text>
                 
-                <TouchableOpacity
-                    style={[styles.settingItem, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+                <ElevatedCard
+                    theme={theme}
+                    style={styles.settingItem}
                     onPress={() => Alert.alert('Coming Soon', 'This feature will be available soon')}
                 >
                     <Ionicons name="notifications-outline" size={24} color={theme.colors.text.primary} />
                     <Text style={[styles.settingText, { color: theme.colors.text.primary }]}>Notifications</Text>
                     <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
-                </TouchableOpacity>
+                </ElevatedCard>
 
-                <TouchableOpacity
-                    style={[styles.settingItem, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+                <ElevatedCard
+                    theme={theme}
+                    style={styles.settingItem}
                     onPress={() => Alert.alert('Coming Soon', 'This feature will be available soon')}
                 >
                     <Ionicons name="shield-outline" size={24} color={theme.colors.text.primary} />
                     <Text style={[styles.settingText, { color: theme.colors.text.primary }]}>Privacy</Text>
                     <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
-                </TouchableOpacity>
+                </ElevatedCard>
 
-                <TouchableOpacity
-                    style={[styles.settingItem, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+                <ElevatedCard
+                    theme={theme}
+                    style={styles.settingItem}
                     onPress={() => Alert.alert('About', 'Food Dude v1.0.0\n\nYour personal cooking assistant!')}
                 >
                     <Ionicons name="information-circle-outline" size={24} color={theme.colors.text.primary} />
                     <Text style={[styles.settingText, { color: theme.colors.text.primary }]}>About</Text>
                     <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
-                </TouchableOpacity>
+                </ElevatedCard>
             </View>
         </ScrollView>
     );
@@ -281,6 +283,8 @@ const styles = StyleSheet.create({
         paddingTop: 40,
         paddingBottom: 24,
         paddingHorizontal: 24,
+        marginHorizontal: 16,
+        marginTop: 16,
     },
     avatarContainer: {
         width: 120,
@@ -322,7 +326,7 @@ const styles = StyleSheet.create({
     },
     input: {
         borderWidth: 1,
-        borderRadius: 8,
+        borderRadius: 14,
         padding: 12,
         fontSize: 16,
     },
@@ -352,9 +356,14 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
+    settingsCard: {
+        marginHorizontal: 16,
+        marginBottom: 8,
+        padding: 20,
+    },
     settingsContainer: {
         padding: 24,
-        paddingTop: 0,
+        paddingTop: 8,
     },
     settingsTitle: {
         fontSize: 18,
@@ -365,8 +374,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 16,
-        borderRadius: 12,
-        borderWidth: 1,
         marginBottom: 12,
         gap: 12,
     },
@@ -377,9 +384,8 @@ const styles = StyleSheet.create({
     statsContainer: {
         flexDirection: 'row',
         padding: 24,
-        marginHorizontal: 24,
+        marginHorizontal: 16,
         marginTop: 16,
-        borderRadius: 16,
         gap: 24,
         justifyContent: 'space-around',
     },

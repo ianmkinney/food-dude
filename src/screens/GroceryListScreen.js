@@ -18,6 +18,9 @@ import { useTheme } from '../context/ThemeContext';
 import { groceryOperations } from '../database/operations';
 import { simplifyGroceryList } from '../services/intelligentGroceryService';
 import SimplifiedListModal from '../components/SimplifiedListModal';
+import ElevatedCard from '../components/ElevatedCard';
+import AnimatedPressable from '../components/AnimatedPressable';
+import FloatingActionButton from '../components/FloatingActionButton';
 
 const GroceryListScreen = () => {
     const navigation = useNavigation();
@@ -152,9 +155,11 @@ const GroceryListScreen = () => {
         }
     };
 
-    const renderGroceryItem = ({ item }) => (
-        <TouchableOpacity
-            style={[styles.itemCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+    const renderGroceryItem = ({ item, index }) => (
+        <ElevatedCard
+            theme={theme}
+            index={index}
+            style={[styles.itemCard, item.is_checked && { opacity: 0.7 }]}
             onPress={() => toggleItemChecked(item.id)}
         >
             <View style={styles.itemContent}>
@@ -185,7 +190,7 @@ const GroceryListScreen = () => {
                     )}
                 </View>
             </View>
-        </TouchableOpacity>
+        </ElevatedCard>
     );
 
     const renderEmptyState = () => (
@@ -273,7 +278,7 @@ const GroceryListScreen = () => {
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {/* Header Stats */}
             {groceryItems.length > 0 && (
-                <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+                <View style={[styles.header, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
                     <View style={styles.statItem}>
                         <Text style={[styles.statNumber, { color: theme.primary[500] }]}>
                             {uncheckedCount}
@@ -283,7 +288,7 @@ const GroceryListScreen = () => {
                         </Text>
                     </View>
                     <View style={styles.headerActions}>
-                        <TouchableOpacity
+                        <AnimatedPressable
                             style={[styles.exportButton, { backgroundColor: theme.accent.green + '20' }]}
                             onPress={exportListToClipboard}
                         >
@@ -291,8 +296,8 @@ const GroceryListScreen = () => {
                             <Text style={[styles.exportText, { color: theme.accent.green }]}>
                                 Export
                             </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                        </AnimatedPressable>
+                        <AnimatedPressable
                             style={[styles.estimateButton, { backgroundColor: theme.primary[100] }]}
                             onPress={() => navigation.navigate('EstimateCost')}
                         >
@@ -300,8 +305,8 @@ const GroceryListScreen = () => {
                             <Text style={[styles.estimateText, { color: theme.primary[500] }]}>
                                 Estimate Cost
                             </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                        </AnimatedPressable>
+                        <AnimatedPressable
                             style={[styles.clearButton, { borderColor: theme.colors.error }]}
                             onPress={clearList}
                         >
@@ -309,7 +314,7 @@ const GroceryListScreen = () => {
                             <Text style={[styles.clearText, { color: theme.colors.error }]}>
                                 Clear
                             </Text>
-                        </TouchableOpacity>
+                        </AnimatedPressable>
                     </View>
                 </View>
             )}
@@ -326,13 +331,11 @@ const GroceryListScreen = () => {
 
             {/* Floating Action Buttons */}
             <View style={styles.fabContainer}>
-                <TouchableOpacity
-                    style={[
-                        styles.fab,
-                        styles.fabLeft,
-                        { backgroundColor: theme.accent.purple },
-                        (simplifying || groceryItems.filter(item => !item.is_checked).length === 0) && styles.fabDisabled
-                    ]}
+                <FloatingActionButton
+                    theme={theme}
+                    color={theme.accent.purple}
+                    style={styles.fabLeft}
+                    accessibilityLabel="Simplify grocery list with AI"
                     onPress={handleSimplifyWithAI}
                     disabled={simplifying || groceryItems.filter(item => !item.is_checked).length === 0}
                 >
@@ -341,13 +344,14 @@ const GroceryListScreen = () => {
                     ) : (
                         <Ionicons name="sparkles" size={24} color="#FFFFFF" />
                     )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.fab, styles.fabRight, { backgroundColor: theme.primary[500] }]}
+                </FloatingActionButton>
+                <FloatingActionButton
+                    theme={theme}
+                    accessibilityLabel="Add grocery item"
                     onPress={() => navigation.navigate('AddGroceryItem')}
                 >
                     <Ionicons name="add" size={28} color="#FFFFFF" />
-                </TouchableOpacity>
+                </FloatingActionButton>
             </View>
 
             {/* Store Info Modal */}
@@ -518,10 +522,8 @@ const styles = StyleSheet.create({
         padding: 16,
     },
     itemCard: {
-        borderRadius: 12,
         padding: 16,
-        marginBottom: 12,
-        borderWidth: 1,
+        marginBottom: 14,
     },
     itemContent: {
         flexDirection: 'row',
@@ -572,27 +574,7 @@ const styles = StyleSheet.create({
         gap: 12,
         alignItems: 'center',
     },
-    fab: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
-    },
-    fabLeft: {
-        // Left FAB (simplify with AI)
-    },
-    fabRight: {
-        // Right FAB (main add button)
-    },
-    fabDisabled: {
-        opacity: 0.5,
-    },
+    fabLeft: {},
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',

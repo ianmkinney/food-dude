@@ -5,10 +5,20 @@ import {
     StyleSheet,
     Modal,
     Animated,
+    Platform,
 } from 'react-native';
+import Reanimated, {
+    Easing,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withSequence,
+    withTiming,
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { getTheme } from '../theme';
+import { getSurfaceStyle, getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const MESSAGES = [
     "Firing up the grill...",
@@ -26,34 +36,69 @@ const MESSAGES = [
 const FunLoader = ({ visible, progress: externalProgress }) => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const reduceMotion = useReducedMotion();
     const [messageIndex, setMessageIndex] = useState(0);
     const internalProgress = useRef(new Animated.Value(0)).current;
     const progress = externalProgress !== undefined ? externalProgress : internalProgress;
     const animationRef = useRef(null);
+    const iconScale = useSharedValue(1);
+    const iconRotate = useSharedValue(0);
+    const shimmer = useSharedValue(-1);
+
+    useEffect(() => {
+        if (!visible) {
+            return;
+        }
+
+        if (reduceMotion) {
+            iconScale.value = 1;
+            iconRotate.value = 0;
+            shimmer.value = -1;
+            return;
+        }
+
+        iconScale.value = withRepeat(
+            withSequence(
+                withTiming(1.12, { duration: 520, easing: Easing.out(Easing.quad) }),
+                withTiming(1, { duration: 520, easing: Easing.in(Easing.quad) })
+            ),
+            -1,
+            false
+        );
+        iconRotate.value = withRepeat(
+            withSequence(
+                withTiming(-8, { duration: 480 }),
+                withTiming(8, { duration: 480 })
+            ),
+            -1,
+            true
+        );
+        shimmer.value = withRepeat(
+            withTiming(1, { duration: 1400, easing: Easing.linear }),
+            -1,
+            false
+        );
+    }, [visible, reduceMotion, iconRotate, iconScale, shimmer]);
 
     useEffect(() => {
         if (visible) {
-            // Reset state
             setMessageIndex(0);
             if (!externalProgress) {
                 internalProgress.setValue(0);
             }
 
-            // If no external progress provided, use simulated progress (slower, more realistic)
             if (!externalProgress) {
-                // Animate progress bar (simulated 30s load, but will complete when visible becomes false)
                 animationRef.current = Animated.timing(internalProgress, {
-                    toValue: 0.95, // Stop at 95% to allow completion when done
+                    toValue: 0.95,
                     duration: 30000,
                     useNativeDriver: false,
                 });
                 animationRef.current.start();
             }
 
-            // Cycle messages
             const interval = setInterval(() => {
                 setMessageIndex((prev) => (prev + 1) % MESSAGES.length);
-            }, 1500);
+            }, reduceMotion ? 4000 : 1500);
 
             return () => {
                 clearInterval(interval);
@@ -61,17 +106,28 @@ const FunLoader = ({ visible, progress: externalProgress }) => {
                     animationRef.current.stop();
                 }
             };
-        } else {
-            // When hiding, complete the progress animation quickly
-            if (!externalProgress) {
-                Animated.timing(internalProgress, {
-                    toValue: 1,
-                    duration: 300,
-                    useNativeDriver: false,
-                }).start();
-            }
         }
-    }, [visible, externalProgress]);
+
+        if (!externalProgress) {
+            Animated.timing(internalProgress, {
+                toValue: 1,
+                duration: reduceMotion ? 0 : 300,
+                useNativeDriver: false,
+            }).start();
+        }
+    }, [visible, externalProgress, reduceMotion]);
+
+    const iconStyle = useAnimatedStyle(() => ({
+        transform: [
+            { scale: iconScale.value },
+            { rotate: `${iconRotate.value}deg` },
+        ],
+    }));
+
+    const shimmerStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: shimmer.value * 220 }],
+        opacity: reduceMotion ? 0 : 0.45,
+    }));
 
     if (!visible) return null;
 
@@ -80,25 +136,35 @@ const FunLoader = ({ visible, progress: externalProgress }) => {
         outputRange: ['0%', '100%'],
     });
 
+    const cardStyle = getSurfaceStyle({ ...theme, platform: Platform.OS }, 'elevated');
+
     return (
-        <Modal transparent animationType="fade" visible={visible}>
-            <View style={styles.overlay}>
-                <View style={[styles.container, { backgroundColor: theme.colors.surface }]}>
-                    <Ionicons name="restaurant" size={48} color={theme.primary[500]} style={styles.icon} />
+        <Modal transparent animationType={reduceMotion ? 'none' : 'fade'} visible={visible}>
+            <View style={[styles.overlay, { backgroundColor: theme.colors.overlay }]}>
+                <View style={[styles.container, cardStyle, { backgroundColor: theme.colors.surfaceElevated }]}>
+                    <View style={[styles.iconHalo, { backgroundColor: theme.primary[100] }]}>
+                        <Reanimated.View style={iconStyle}>
+                            <Ionicons name="restaurant" size={40} color={theme.primary[500]} />
+                        </Reanimated.View>
+                    </View>
 
                     <Text style={[styles.message, { color: theme.colors.text.primary }]}>
                         {MESSAGES[messageIndex]}
                     </Text>
 
-                    <View style={[styles.progressTrack, { backgroundColor: theme.colors.border }]}>
+                    <View style={[styles.progressTrack, { backgroundColor: theme.colors.surfaceMuted }]}>
                         <Animated.View
                             style={[
                                 styles.progressBar,
                                 {
                                     backgroundColor: theme.primary[500],
                                     width: width,
-                                }
+                                },
                             ]}
+                        />
+                        <Reanimated.View
+                            pointerEvents="none"
+                            style={[styles.shimmer, shimmerStyle, { backgroundColor: '#FFFFFF' }]}
                         />
                     </View>
                 </View>
@@ -110,7 +176,6 @@ const FunLoader = ({ visible, progress: externalProgress }) => {
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
@@ -118,16 +183,15 @@ const styles = StyleSheet.create({
     container: {
         width: '100%',
         maxWidth: 340,
-        padding: 24,
-        borderRadius: 16,
+        padding: 28,
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
-        elevation: 5,
     },
-    icon: {
+    iconHalo: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
         marginBottom: 16,
     },
     message: {
@@ -135,17 +199,24 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         textAlign: 'center',
         marginBottom: 24,
-        height: 24, // Fixed height to prevent jumping
+        minHeight: 24,
     },
     progressTrack: {
         width: '100%',
-        height: 8,
-        borderRadius: 4,
+        height: 10,
+        borderRadius: 8,
         overflow: 'hidden',
     },
     progressBar: {
         height: '100%',
-        borderRadius: 4,
+        borderRadius: 8,
+    },
+    shimmer: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        width: 48,
+        borderRadius: 8,
     },
 });
 

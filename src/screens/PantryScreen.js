@@ -4,7 +4,6 @@ import {
     Text,
     StyleSheet,
     FlatList,
-    TouchableOpacity,
     Alert,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
@@ -12,6 +11,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { pantryOperations } from '../database/operations';
+import ElevatedCard from '../components/ElevatedCard';
+import AnimatedPressable from '../components/AnimatedPressable';
+import FloatingActionButton from '../components/FloatingActionButton';
 
 const PantryScreen = () => {
     const navigation = useNavigation();
@@ -66,8 +68,8 @@ const PantryScreen = () => {
         navigation.navigate('EditPantryItem', { item });
     };
 
-    const renderPantryItem = ({ item }) => (
-        <View style={[styles.itemCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+    const renderPantryItem = ({ item, index }) => (
+        <ElevatedCard theme={theme} index={index} style={styles.itemCard}>
             <View style={styles.itemContent}>
                 <Ionicons name="cube" size={32} color={theme.primary[500]} />
                 <View style={styles.itemInfo}>
@@ -96,21 +98,21 @@ const PantryScreen = () => {
                     </View>
                 )}
                 <View style={styles.actionButtons}>
-                    <TouchableOpacity
+                    <AnimatedPressable
                         style={[styles.actionButton, { backgroundColor: theme.primary[100] }]}
                         onPress={() => handleEdit(item)}
                     >
                         <Ionicons name="pencil" size={18} color={theme.primary[500]} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    </AnimatedPressable>
+                    <AnimatedPressable
                         style={[styles.actionButton, { backgroundColor: theme.colors.error + '20' }]}
                         onPress={() => handleDelete(item)}
                     >
                         <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
-                    </TouchableOpacity>
+                    </AnimatedPressable>
                 </View>
             </View>
-        </View>
+        </ElevatedCard>
     );
 
     const renderEmptyState = () => (
@@ -137,14 +139,14 @@ const PantryScreen = () => {
                 onRefresh={loadPantryItems}
             />
 
-            {/* Add Item Button */}
-            {/* Add Item Button */}
-            <TouchableOpacity
-                style={[styles.fab, { backgroundColor: theme.primary[500] }]}
+            <FloatingActionButton
+                theme={theme}
+                style={styles.fab}
+                accessibilityLabel="Add pantry item"
                 onPress={() => navigation.navigate('AddPantryItem')}
             >
                 <Ionicons name="add" size={28} color="#FFFFFF" />
-            </TouchableOpacity>
+            </FloatingActionButton>
         </View >
     );
 };
@@ -157,10 +159,8 @@ const styles = StyleSheet.create({
         padding: 16,
     },
     itemCard: {
-        borderRadius: 12,
         padding: 16,
-        marginBottom: 12,
-        borderWidth: 1,
+        marginBottom: 14,
     },
     itemContent: {
         flexDirection: 'row',
@@ -234,16 +234,6 @@ const styles = StyleSheet.create({
         position: 'absolute',
         right: 20,
         bottom: 20,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
     },
 });
 

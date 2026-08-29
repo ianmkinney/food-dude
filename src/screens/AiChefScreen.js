@@ -17,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import ElevatedCard from '../components/ElevatedCard';
+import AnimatedPressable from '../components/AnimatedPressable';
 import { aiConversationOperations, pantryOperations, recipeOperations, userOperations } from '../database/operations';
 import aiChefService from '../services/aiChefService';
 import StyledMessage from '../components/StyledMessage';
@@ -560,19 +562,20 @@ const AiChefScreen = () => {
                 style={[
                     styles.messageBubble,
                     isUser ? styles.userBubble : styles.assistantBubble,
-                    { backgroundColor: isUser ? theme.primary[500] : theme.colors.surface },
+                    isUser ? theme.shadows.glow : theme.shadows.md,
+                    { backgroundColor: isUser ? theme.primary[500] : theme.colors.surfaceElevated },
                 ]}
             >
                 <StyledMessage message={item.message} isUser={isUser} />
                 {hasRecipe && (
-                    <TouchableOpacity
+                    <AnimatedPressable
                         style={[styles.saveRecipeButton, { backgroundColor: theme.accent.green }]}
                         onPress={() => handleSaveRecipe(item.recipeData)}
                         disabled={loading}
                     >
                         <Ionicons name="bookmark" size={16} color="#FFFFFF" />
                         <Text style={styles.saveRecipeText}>Add to Recipe Book</Text>
-                    </TouchableOpacity>
+                    </AnimatedPressable>
                 )}
             </View>
         );
@@ -585,8 +588,8 @@ const AiChefScreen = () => {
             keyboardVerticalOffset={90}
         >
             {/* Quick Actions */}
-            <View style={[styles.quickActions, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-                <TouchableOpacity
+            <View style={[styles.quickActions, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
+                <AnimatedPressable
                     style={[styles.quickActionButton, { backgroundColor: theme.primary[100] }]}
                     onPress={handleGenerateFromPantry}
                     disabled={loading}
@@ -606,12 +609,12 @@ const AiChefScreen = () => {
                             </Text>
                         </>
                     )}
-                </TouchableOpacity>
+                </AnimatedPressable>
             </View>
 
             {/* Recipe Selector */}
             {recipes.length > 0 && (
-                <View style={[styles.recipeSelectorContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+                <View style={[styles.recipeSelectorContainer, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
                     <Text style={[styles.recipeSelectorTitle, { color: theme.colors.text.primary }]}>
                         Help me cook...
                     </Text>
@@ -621,9 +624,10 @@ const AiChefScreen = () => {
                         contentContainerStyle={styles.recipeSelectorScroll}
                     >
                         {recipes.map((recipe) => (
-                            <TouchableOpacity
+                            <ElevatedCard
                                 key={recipe.id}
-                                style={[styles.recipeBubble, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
+                                theme={theme}
+                                style={styles.recipeBubble}
                                 onPress={() => handleRecipeSelect(recipe)}
                             >
                                 {recipe.image_uri ? (
@@ -642,7 +646,7 @@ const AiChefScreen = () => {
                                 >
                                     {recipe.title}
                                 </Text>
-                            </TouchableOpacity>
+                            </ElevatedCard>
                         ))}
                     </ScrollView>
                 </View>
@@ -661,9 +665,9 @@ const AiChefScreen = () => {
             />
 
             {/* Input */}
-            <View style={[styles.inputContainer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
+            <View style={[styles.inputContainer, { backgroundColor: theme.colors.surfaceGlass, borderTopColor: theme.colors.borderSoft }]}>
                 <TextInput
-                    style={[styles.input, { color: theme.colors.text.primary, backgroundColor: theme.colors.background }]}
+                    style={[styles.input, { color: theme.colors.text.primary, backgroundColor: theme.colors.surfaceElevated }, theme.shadows.sm]}
                     placeholder="Ask me anything about cooking..."
                     placeholderTextColor={theme.colors.text.tertiary}
                     value={inputText}
@@ -673,9 +677,10 @@ const AiChefScreen = () => {
                     editable={!loading}
                 />
                 {loading ? (
-                    <TouchableOpacity
+                    <AnimatedPressable
                         style={[
                             styles.stopButton, 
+                            theme.shadows.md,
                             { 
                                 backgroundColor: theme.colors.error, 
                             }
@@ -684,11 +689,12 @@ const AiChefScreen = () => {
                     >
                         <Ionicons name="stop-circle" size={20} color="#FFFFFF" />
                         <Text style={styles.stopButtonText}>Stop</Text>
-                    </TouchableOpacity>
+                    </AnimatedPressable>
                 ) : (
-                    <TouchableOpacity
+                    <AnimatedPressable
                         style={[
                             styles.sendButton, 
+                            theme.shadows.glow,
                             { 
                                 backgroundColor: theme.primary[500], 
                                 opacity: !inputText.trim() ? 0.5 : 1,
@@ -698,7 +704,7 @@ const AiChefScreen = () => {
                         disabled={!inputText.trim()}
                     >
                         <Ionicons name="sparkles" size={20} color="#FFFFFF" />
-                    </TouchableOpacity>
+                    </AnimatedPressable>
                 )}
             </View>
         </KeyboardAvoidingView>
@@ -719,7 +725,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 12,
         paddingVertical: 8,
-        borderRadius: 8,
+        borderRadius: 14,
         gap: 6,
     },
     quickActionText: {
@@ -731,8 +737,8 @@ const styles = StyleSheet.create({
     },
     messageBubble: {
         maxWidth: '80%',
-        padding: 12,
-        borderRadius: 16,
+        padding: 14,
+        borderRadius: 20,
         marginBottom: 12,
     },
     userBubble: {
@@ -822,9 +828,7 @@ const styles = StyleSheet.create({
     recipeBubble: {
         width: 120,
         marginRight: 12,
-        borderRadius: 16,
         padding: 8,
-        borderWidth: 1,
     },
     recipeBubbleImage: {
         width: '100%',
