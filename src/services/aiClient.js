@@ -2,6 +2,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
     DEFAULT_IMAGE_MODELS,
     DEFAULT_MODELS,
+    MISSING_KEY_MESSAGE,
+    getActiveCredentials,
+    getApiKey,
     getCachedModels,
     requireAiConfigured,
     setCachedModels,
@@ -368,9 +371,12 @@ async function listGeminiModels(apiKey) {
 }
 
 export async function listProviderModels({ provider, apiKey, force = false } = {}) {
-    const creds = provider && apiKey ? { provider, apiKey } : await requireAiConfigured();
+    const creds = await getActiveCredentials();
     const resolvedProvider = provider || creds.provider;
-    const resolvedKey = apiKey || creds.apiKey;
+    const resolvedKey = apiKey || (await getApiKey(resolvedProvider));
+    if (!resolvedKey) {
+        throw new Error(MISSING_KEY_MESSAGE);
+    }
 
     if (!force) {
         const cached = await getCachedModels(resolvedProvider);

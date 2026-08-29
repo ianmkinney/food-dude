@@ -103,6 +103,9 @@ const AiProviderSettings = ({ theme }) => {
             await setSelectedProvider(providerId);
             const state = await getAccountAiState();
             applyState(state);
+            if (state.hasKey && !state.cachedModels?.length) {
+                refreshModels(providerId, { force: false, currentModel: state.model });
+            }
         } catch (error) {
             setStatus(error.message || 'Could not switch provider');
         }
