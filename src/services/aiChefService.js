@@ -1,7 +1,8 @@
-import * as FileSystem from 'expo-file-system/legacy';
 import { groceryOperations, pantryOperations, recipeOperations } from '../database/operations';
 import { generateImage, generateMultimodal, generateText } from './aiClient';
 import { requireAiConfigured } from './aiSettings';
+import { prepareImageForAi, prepareVideoForAi } from './mediaPrep';
+import { friendlyMediaErrorMessage } from './mediaTypes';
 
 /**
  * Multi-modal AI Chef service
@@ -492,13 +493,11 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
     /**
      * Analyze image (ingredient, dish, cooking technique)
      */
-    async analyzeImage(imageUri, question = null) {
+    async analyzeImage(imageAsset, question = null) {
         await requireAiConfigured();
 
         try {
-            const base64 = await FileSystem.readAsStringAsync(imageUri, {
-                encoding: 'base64',
-            });
+            const image = await prepareImageForAi(imageAsset);
 
             const prompt = question ||
                 'Analyze this food/ingredient image. Identify what it is, suggest recipes, or provide cooking tips.';
@@ -506,7 +505,7 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
             const text = await this.retryOperation(async () =>
                 generateMultimodal({
                     prompt,
-                    images: [{ data: base64, mimeType: 'image/jpeg' }],
+                    images: [{ data: image.base64, mimeType: image.mimeType }],
                 })
             );
 
@@ -518,7 +517,7 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
             console.error('Error analyzing image:', error);
             return {
                 success: false,
-                error: error.message,
+                error: friendlyMediaErrorMessage(error),
             };
         }
     }
@@ -526,13 +525,11 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
     /**
      * Analyze video (cooking technique, recipe demonstration)
      */
-    async analyzeVideo(videoUri, question = null) {
+    async analyzeVideo(videoAsset, question = null) {
         await requireAiConfigured();
 
         try {
-            const base64 = await FileSystem.readAsStringAsync(videoUri, {
-                encoding: 'base64',
-            });
+            const video = await prepareVideoForAi(videoAsset);
 
             const prompt = question ||
                 'Analyze this cooking video. Describe the technique, identify the dish, or provide tips and suggestions.';
@@ -540,7 +537,7 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
             const text = await this.retryOperation(async () =>
                 generateMultimodal({
                     prompt,
-                    video: { data: base64, mimeType: 'video/mp4' },
+                    video: { data: video.base64, mimeType: video.mimeType },
                 })
             );
 
@@ -552,7 +549,7 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
             console.error('Error analyzing video:', error);
             return {
                 success: false,
-                error: error.message,
+                error: friendlyMediaErrorMessage(error),
             };
         }
     }

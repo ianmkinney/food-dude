@@ -9,6 +9,8 @@ import {
     requireAiConfigured,
     setCachedModels,
 } from './aiSettings';
+import { assertVideoSupported, coerceImagesForProvider } from './mediaPrep';
+import { describeMimeType, isImageMimeSupportedBy, normalizeMimeType } from './mediaTypes';
 
 const ANTHROPIC_VERSION = '2023-06-01';
 
@@ -119,6 +121,22 @@ function defaultModelFor(provider) {
     return DEFAULT_MODELS[provider] || DEFAULT_MODELS.openai;
 }
 
+/**
+ * Providers compare the declared media type against the bytes, so never guess.
+ */
+function requireImageMimeType(provider, image) {
+    const mimeType = normalizeMimeType(image?.mimeType);
+    if (!mimeType) {
+        throw new Error("Couldn't tell what format that image is. Try a screenshot or photo (PNG/JPEG).");
+    }
+    if (!isImageMimeSupportedBy(provider, mimeType)) {
+        throw new Error(
+            `${describeMimeType(mimeType)} images aren't supported by the selected model. Try a screenshot or photo (PNG/JPEG).`
+        );
+    }
+    return mimeType;
+}
+
 async function anthropicMessages({ apiKey, model, prompt, images }) {
     const content = [];
     if (images?.length) {
@@ -127,7 +145,7 @@ async function anthropicMessages({ apiKey, model, prompt, images }) {
                 type: 'image',
                 source: {
                     type: 'base64',
-                    media_type: image.mimeType || 'image/jpeg',
+                    media_type: requireImageMimeType('anthropic', image),
                     data: image.data,
                 },
             });
@@ -160,7 +178,7 @@ async function anthropicMessages({ apiKey, model, prompt, images }) {
     return text;
 }
 
-async function openAiCompatibleChat({ baseUrl, apiKey, model, prompt, images }) {
+async function openAiCompatibleChat({ baseUrl, apiKey, model, prompt, images, provider }) {
     let content;
     if (images?.length) {
         content = [
@@ -168,7 +186,7 @@ async function openAiCompatibleChat({ baseUrl, apiKey, model, prompt, images }) 
             ...images.map((image) => ({
                 type: 'image_url',
                 image_url: {
-                    url: `data:${image.mimeType || 'image/jpeg'};base64,${image.data}`,
+                    url: `data:${requireImageMimeType(provider, image)};base64,${image.data}`,
                 },
             })),
         ];
@@ -209,17 +227,18 @@ async function geminiGenerate({ apiKey, model, prompt, images, video }) {
             parts.push({
                 inlineData: {
                     data: image.data,
-                    mimeType: image.mimeType || 'image/jpeg',
+                    mimeType: requireImageMimeType('gemini', image),
                 },
             });
         }
     }
 
     if (video) {
+        assertVideoSupported('gemini', video.mimeType);
         parts.push({
             inlineData: {
                 data: video.data,
-                mimeType: video.mimeType || 'video/mp4',
+                mimeType: normalizeMimeType(video.mimeType),
             },
         });
     }
@@ -242,6 +261,7 @@ export async function generateText(prompt, options = {}) {
             return anthropicMessages({ apiKey: creds.apiKey, model, prompt });
         case 'openai':
             return openAiCompatibleChat({
+                provider: 'openai',
                 baseUrl: 'https://api.openai.com/v1',
                 apiKey: creds.apiKey,
                 model,
@@ -249,6 +269,7 @@ export async function generateText(prompt, options = {}) {
             });
         case 'xai':
             return openAiCompatibleChat({
+                provider: 'xai',
                 baseUrl: 'https://api.x.ai/v1',
                 apiKey: creds.apiKey,
                 model,
@@ -269,27 +290,31 @@ export async function generateMultimodal({ prompt, images, video }) {
         throw new Error('Video analysis is only available with Google Gemini. Switch provider in Account.');
     }
 
+    const readyImages = await coerceImagesForProvider(images, creds.provider);
+
     switch (creds.provider) {
         case 'anthropic':
-            return anthropicMessages({ apiKey: creds.apiKey, model, prompt, images });
+            return anthropicMessages({ apiKey: creds.apiKey, model, prompt, images: readyImages });
         case 'openai':
             return openAiCompatibleChat({
+                provider: 'openai',
                 baseUrl: 'https://api.openai.com/v1',
                 apiKey: creds.apiKey,
                 model,
                 prompt,
-                images,
+                images: readyImages,
             });
         case 'xai':
             return openAiCompatibleChat({
+                provider: 'xai',
                 baseUrl: 'https://api.x.ai/v1',
                 apiKey: creds.apiKey,
                 model,
                 prompt,
-                images,
+                images: readyImages,
             });
         case 'gemini':
-            return geminiGenerate({ apiKey: creds.apiKey, model, prompt, images, video });
+            return geminiGenerate({ apiKey: creds.apiKey, model, prompt, images: readyImages, video });
         default:
             throw new Error('Unknown AI provider. Pick one in Account.');
     }

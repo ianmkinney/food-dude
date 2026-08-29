@@ -1,11 +1,15 @@
-import * as FileSystem from 'expo-file-system/legacy';
 import { generateMultimodal, generateText, stripCodeFences } from './aiClient';
 import { isAiConfigured, requireAiConfigured } from './aiSettings';
+import { prepareImagesForAi } from './mediaPrep';
+import { friendlyMediaErrorMessage } from './mediaTypes';
 
 /**
- * Extract recipe from images (screenshots)
+ * Extract recipe from images (screenshots).
+ *
+ * Accepts plain URIs or picker/share-intent assets shaped like
+ * `{ uri, mimeType, fileName }` — the extra fields help identify the real format.
  */
-export const parseRecipeFromImages = async (imageUris) => {
+export const parseRecipeFromImages = async (imageAssets) => {
     await requireAiConfigured();
 
     try {
@@ -56,14 +60,13 @@ For nutritional info:
 - All values should be per serving, not for the entire recipe.
 - If you cannot make a reasonable estimate, use null for that field.`;
 
-        // Prepare images for Gemini
-        const images = await Promise.all(imageUris.map(async (uri) => {
-            const data = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-            return {
-                data,
-                mimeType: 'image/jpeg',
-            };
-        }));
+        const assets = Array.isArray(imageAssets) ? imageAssets : [imageAssets];
+        const imageUris = assets.map((asset) =>
+            typeof asset === 'string' ? asset : asset?.uri || asset?.path || asset?.filePath
+        );
+
+        const prepared = await prepareImagesForAi(assets);
+        const images = prepared.map((image) => ({ data: image.base64, mimeType: image.mimeType }));
 
         const text = await retryOperation(() => generateMultimodal({ prompt, images }));
         const cleanedText = stripCodeFences(text);
@@ -100,7 +103,7 @@ For nutritional info:
         console.error('Error parsing recipe from images:', error);
         return {
             success: false,
-            error: error.message,
+            error: friendlyMediaErrorMessage(error),
         };
     }
 };

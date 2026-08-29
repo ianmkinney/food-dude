@@ -42,7 +42,13 @@ const AddRecipeScreen = ({ navigation }) => {
             });
 
             if (!result.canceled) {
-                setSelectedImages(result.assets.map(asset => asset.uri));
+                // Carry the asset's own mime type through — screenshots are PNG and
+                // camera roll photos can be HEIC, so the AI layer must not assume JPEG.
+                setSelectedImages(result.assets.map(asset => ({
+                    uri: asset.uri,
+                    mimeType: asset.mimeType,
+                    fileName: asset.fileName,
+                })));
             }
         } catch (error) {
             console.error('ImagePicker Error:', error);
@@ -147,8 +153,8 @@ const AddRecipeScreen = ({ navigation }) => {
 
                         {selectedImages.length > 0 && (
                             <ScrollView horizontal style={styles.previewScroll} contentContainerStyle={{ gap: 8 }}>
-                                {selectedImages.map((uri, index) => (
-                                    <Image key={index} source={{ uri }} style={styles.previewImage} />
+                                {selectedImages.map((asset, index) => (
+                                    <Image key={asset.uri || index} source={{ uri: asset.uri }} style={styles.previewImage} />
                                 ))}
                             </ScrollView>
                         )}
