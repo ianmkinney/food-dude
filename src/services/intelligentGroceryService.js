@@ -1,16 +1,12 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { pantryOperations } from '../database/operations';
-
-const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-const genAI = API_KEY && API_KEY !== 'your_api_key_here' ? new GoogleGenerativeAI(API_KEY) : null;
+import { generateText, stripCodeFences } from './aiClient';
+import { isAiConfigured, requireAiConfigured } from './aiSettings';
 
 /**
  * Parse grocery items with AI to determine appropriate packaging
  */
 export const parseGroceryItemsWithAI = async (items) => {
-    if (!genAI) {
-        console.warn('Gemini API not configured. Returning items as-is.');
-        // Return items without AI enhancement if API not configured
+    if (!(await isAiConfigured())) {
         return items.map(item => ({
             name: item.name || item,
             quantity: item.quantity || '1',
@@ -21,8 +17,6 @@ export const parseGroceryItemsWithAI = async (items) => {
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
-
         // Build the items list for the prompt
         const itemsList = items.map(item => {
             if (typeof item === 'string') {
@@ -57,17 +51,7 @@ Return ONLY a JSON array (no markdown, no code blocks) in this exact format:
   }
 ]`;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let text = response.text().trim();
-
-        // Clean up response
-        if (text.startsWith('```json')) {
-            text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-        } else if (text.startsWith('```')) {
-            text = text.replace(/```\n?/g, '');
-        }
-
+        const text = stripCodeFences(await generateText(prompt));
         const parsedItems = JSON.parse(text);
 
         // Merge with original item data if available
@@ -194,13 +178,9 @@ const calculateSimilarity = (str1, str2) => {
  * Simplify grocery list by consolidating items and providing brand recommendations
  */
 export const simplifyGroceryList = async (groceryItems, storeName = '', storeLocation = '') => {
-    if (!genAI) {
-        throw new Error('Gemini API not configured. Please add your API key to .env file.');
-    }
+    await requireAiConfigured();
 
     try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
-
         // Filter out checked items
         const uncheckedItems = groceryItems.filter(item => !item.is_checked);
 
@@ -275,17 +255,7 @@ Return ONLY a JSON object (no markdown, no code blocks) in this exact format:
   }
 }`;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let text = response.text().trim();
-
-        // Clean up response
-        if (text.startsWith('```json')) {
-            text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-        } else if (text.startsWith('```')) {
-            text = text.replace(/```\n?/g, '');
-        }
-
+        const text = stripCodeFences(await generateText(prompt));
         const simplificationResult = JSON.parse(text);
 
         return {

@@ -9,7 +9,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { getTheme } from './src/theme';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 
-import { ShareIntentProvider } from 'expo-share-intent';
+import { ShareIntentProvider } from './src/platform/shareIntent';
 
 function AppContent() {
   const [isReady, setIsReady] = useState(false);

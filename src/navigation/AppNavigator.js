@@ -122,7 +122,7 @@ const TabNavigator = () => {
     );
 };
 
-import { useShareIntent } from 'expo-share-intent';
+import { useShareIntent } from '../platform/shareIntent';
 import { useEffect } from 'react';
 
 const AppNavigator = () => {

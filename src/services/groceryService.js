@@ -1,8 +1,6 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { groceryOperations } from '../database/operations';
-
-const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-const genAI = API_KEY && API_KEY !== 'your_api_key_here' ? new GoogleGenerativeAI(API_KEY) : null;
+import { generateText, stripCodeFences } from './aiClient';
+import { requireAiConfigured } from './aiSettings';
 
 /**
  * Generate grocery list from meal plan
@@ -66,13 +64,9 @@ export const generateGroceryListFromMealPlan = async (mealPlans, recipes) => {
  * Estimate grocery cost using AI
  */
 export const estimateGroceryCost = async (groceryItems, storeName) => {
-    if (!genAI) {
-        throw new Error('Gemini API not configured. Please add your API key to .env file.');
-    }
+    await requireAiConfigured();
 
     try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
         const itemsList = groceryItems
             .filter(item => !item.is_checked)
             .map(item => `- ${item.quantity || ''} ${item.unit || ''} ${item.name}`)
@@ -105,17 +99,8 @@ Return your response in this JSON format (no markdown, no code blocks):
   "savingsTips": ["tip 1", "tip 2", ...]
 }`;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
-
-        // Clean up response
-        let cleanedText = text.trim();
-        if (cleanedText.startsWith('```json')) {
-            cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-        } else if (cleanedText.startsWith('```')) {
-            cleanedText = cleanedText.replace(/```\n?/g, '');
-        }
+        const text = await generateText(prompt);
+        const cleanedText = stripCodeFences(text);
 
         const estimate = JSON.parse(cleanedText);
 

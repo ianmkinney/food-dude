@@ -41,14 +41,9 @@ npx expo start
 # 4. Press 'a' to open in Android Emulator
 ```
 
-## ⚙️ Before Running: Configure API Key
+## ⚙️ AI keys (optional)
 
-Edit `.env` and add your Google Gemini API key:
-```
-EXPO_PUBLIC_GEMINI_API_KEY=your_actual_api_key_here
-```
-
-Get a free API key: https://makersuite.google.com/app/apikey
+Recipes, planner, pantry, and grocery work with no key. For AI Chef / import, open **Account** in the app and paste a Claude, OpenAI, Grok, or Gemini key. Keys stay on the device — do not put them in `.env`.
 
 ## 📱 What You'll See
 
@@ -67,11 +62,11 @@ Once running, you'll have access to:
 **"Android SDK not found"**
 → Install Android Studio and set up an emulator
 
-**"Gemini API not configured"**
-→ Add your API key to the `.env` file
+**"Add an API key in Account"**
+→ Open Account, save a provider key on this device
 
 **Web bundling errors**
-→ This is expected! The app needs native features (SQLite, Camera) that don't work on web. Use a phone or simulator instead.
+→ Use a real browser at the Expo web URL (not a vscode-file preview). Metro treats `.wasm` as an asset and sets COOP/COEP for SQLite. Camera/barcode degrade on web; use Expo Go for scanning.
 
 ---
 

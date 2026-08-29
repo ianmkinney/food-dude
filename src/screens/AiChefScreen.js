@@ -397,7 +397,7 @@ const AiChefScreen = () => {
             console.error('[AI Chef] Error in handleSendMessage:', error);
             console.error('[AI Chef] Error message:', error.message);
             console.error('[AI Chef] Error stack:', error.stack);
-            Alert.alert('Error', `Failed to send message: ${error.message}. Please check your API key in .env file.`);
+            Alert.alert('Error', error.message || 'Failed to send message.');
         } finally {
             if (!cancelledRef.current) {
                 console.log('[AI Chef] Setting loading to false');
@@ -486,7 +486,7 @@ const AiChefScreen = () => {
             console.error('[AI Chef] Error in handleGenerateFromPantry:', error);
             console.error('[AI Chef] Error message:', error.message);
             console.error('[AI Chef] Error stack:', error.stack);
-            Alert.alert('Error', `Failed to generate recipe: ${error.message}. Please check your API key.`);
+            Alert.alert('Error', error.message || 'Failed to generate recipe.');
         } finally {
             if (!cancelledRef.current) {
                 console.log('[AI Chef] Setting loading to false');

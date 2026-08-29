@@ -48,6 +48,7 @@
     "plugins": [
       "expo-barcode-scanner",
       "expo-sqlite",
+      "expo-secure-store",
       [
         "expo-camera",
         {

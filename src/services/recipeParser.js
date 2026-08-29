@@ -1,21 +1,14 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as FileSystem from 'expo-file-system/legacy';
-
-// ... (existing imports and code)
+import { generateMultimodal, generateText, stripCodeFences } from './aiClient';
+import { isAiConfigured, requireAiConfigured } from './aiSettings';
 
 /**
  * Extract recipe from images (screenshots)
  */
 export const parseRecipeFromImages = async (imageUris) => {
-    if (!genAI) {
-        throw new Error('Gemini API not configured. Please add your API key to .env file.');
-    }
+    await requireAiConfigured();
 
     try {
-        // Use gemini-1.5-flash which supports multimodal input (images)
-        // Note: 2.5-flash might also support it, but 1.5-flash is standard for multimodal
-        // Let's try 2.5-flash first as we are using it elsewhere, if it fails we might need 1.5-flash
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
         const prompt = `You are a recipe extraction expert. Analyze these images (screenshots of a recipe) and extract the structured recipe data.
         
@@ -64,28 +57,16 @@ For nutritional info:
 - If you cannot make a reasonable estimate, use null for that field.`;
 
         // Prepare images for Gemini
-        const imageParts = await Promise.all(imageUris.map(async (uri) => {
-            // Read file as base64
-            const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+        const images = await Promise.all(imageUris.map(async (uri) => {
+            const data = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
             return {
-                inlineData: {
-                    data: base64,
-                    mimeType: 'image/jpeg', // Assuming jpeg/png, Gemini is flexible
-                },
+                data,
+                mimeType: 'image/jpeg',
             };
         }));
 
-        const result = await retryOperation(() => model.generateContent([prompt, ...imageParts]));
-        const response = await result.response;
-        const text = response.text();
-
-        // Clean up response
-        let cleanedText = text.trim();
-        if (cleanedText.startsWith('```json')) {
-            cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-        } else if (cleanedText.startsWith('```')) {
-            cleanedText = cleanedText.replace(/```\n?/g, '');
-        }
+        const text = await retryOperation(() => generateMultimodal({ prompt, images }));
+        const cleanedText = stripCodeFences(text);
 
         const parsedRecipe = JSON.parse(cleanedText);
 
@@ -124,25 +105,6 @@ For nutritional info:
     }
 };
 
-const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-
-console.log('RecipeParser: API Key present?', !!API_KEY);
-console.log('RecipeParser: GoogleGenerativeAI imported?', !!GoogleGenerativeAI);
-
-if (!API_KEY || API_KEY === 'your_api_key_here') {
-    console.warn('⚠️ Gemini API key not configured. Please add EXPO_PUBLIC_GEMINI_API_KEY to your .env file');
-}
-
-let genAI = null;
-try {
-    if (API_KEY && API_KEY !== 'your_api_key_here') {
-        genAI = new GoogleGenerativeAI(API_KEY);
-        console.log('RecipeParser: Gemini API initialized successfully');
-    }
-} catch (e) {
-    console.error('RecipeParser: Error initializing Gemini API:', e);
-}
-
 // Helper function for retrying operations
 const retryOperation = async (operation, maxRetries = 5, delay = 2000) => {
     for (let i = 0; i < maxRetries; i++) {
@@ -167,14 +129,9 @@ const retryOperation = async (operation, maxRetries = 5, delay = 2000) => {
  * Extracts structured recipe data including ingredients, instructions, etc.
  */
 export const parseRecipe = async (input) => {
-    if (!genAI) {
-        throw new Error('Gemini API not configured. Please add your API key to .env file.');
-    }
+    await requireAiConfigured();
 
     try {
-        // Use 2.5-flash (it exists, just overloaded sometimes)
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
         const prompt = `You are a recipe extraction expert. Your task is to extract a structured recipe from the provided text, which may be a social media caption (Instagram, TikTok, etc.).
 
 RULES:
@@ -245,17 +202,8 @@ For nutritional info:
 Recipe content to parse:
 ${input}`;
 
-        const result = await retryOperation(() => model.generateContent(prompt));
-        const response = await result.response;
-        const text = response.text();
-
-        // Clean up the response - remove markdown code blocks if present
-        let cleanedText = text.trim();
-        if (cleanedText.startsWith('```json')) {
-            cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-        } else if (cleanedText.startsWith('```')) {
-            cleanedText = cleanedText.replace(/```\n?/g, '');
-        }
+        const text = await retryOperation(() => generateText(prompt));
+        const cleanedText = stripCodeFences(text);
 
         const parsedRecipe = JSON.parse(cleanedText);
 
@@ -276,17 +224,12 @@ ${input}`;
  * Extract recipe from a URL (web scraping via AI)
  */
 export const parseRecipeFromUrl = async (url) => {
-    if (!genAI) {
-        throw new Error('Gemini API not configured. Please add your API key to .env file.');
-    }
+    await requireAiConfigured();
 
     try {
         // Fetch the webpage content
         const fetchResponse = await fetch(url);
         const html = await fetchResponse.text();
-
-        // Use AI to extract recipe from HTML
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
         const prompt = `Extract the recipe from this webpage HTML and return ONLY a valid JSON object (no markdown, no code blocks):
 
@@ -327,17 +270,8 @@ For nutritional info:
 HTML content (truncated to first 10000 chars):
 ${html.substring(0, 10000)}`;
 
-        const result = await retryOperation(() => model.generateContent(prompt));
-        const aiResponse = await result.response;
-        const text = aiResponse.text();
-
-        // Clean up the response
-        let cleanedText = text.trim();
-        if (cleanedText.startsWith('```json')) {
-            cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-        } else if (cleanedText.startsWith('```')) {
-            cleanedText = cleanedText.replace(/```\n?/g, '');
-        }
+        const text = await retryOperation(() => generateText(prompt));
+        const cleanedText = stripCodeFences(text);
 
         const parsedRecipe = JSON.parse(cleanedText);
 
@@ -362,12 +296,10 @@ ${html.substring(0, 10000)}`;
  * Validate if text contains a recipe
  */
 export const isRecipeContent = async (text) => {
-    if (!genAI) {
-        return false;
-    }
-
     try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        if (!(await isAiConfigured())) {
+            return false;
+        }
 
         const prompt = `Does the following text contain a recipe with ingredients and cooking instructions? 
 Answer with only "YES" or "NO".
@@ -375,9 +307,7 @@ Answer with only "YES" or "NO".
 Text:
 ${text.substring(0, 1000)}`;
 
-        const result = await retryOperation(() => model.generateContent(prompt));
-        const validationResponse = await result.response;
-        const answer = validationResponse.text().trim().toUpperCase();
+        const answer = (await retryOperation(() => generateText(prompt))).trim().toUpperCase();
 
         return answer === 'YES';
     } catch (error) {

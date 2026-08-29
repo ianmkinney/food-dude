@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { userOperations, partyStatsOperations, recipeCookingHistoryOperations } from '../database/operations';
+import AiProviderSettings from '../components/AiProviderSettings';
 
 const AccountScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -230,6 +231,10 @@ const AccountScreen = ({ navigation }) => {
                         </TouchableOpacity>
                     </View>
                 )}
+            </View>
+
+            <View style={styles.settingsContainer}>
+                <AiProviderSettings theme={theme} />
             </View>
 
             {/* Settings Section */}
