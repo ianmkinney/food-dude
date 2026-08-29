@@ -51,6 +51,7 @@ const AiChefScreen = () => {
     const [aiStatus, setAiStatus] = useState('');
     const [generatingRecipeStatus, setGeneratingRecipeStatus] = useState('');
     const [helpersCollapsed, setHelpersCollapsed] = useState(false);
+    const [helpersMeasured, setHelpersMeasured] = useState(false);
     // 1 = fully expanded, 0 = fully collapsed. Height is driven off a measured
     // shared value instead of a layout animation so web behaves like native.
     const helpersProgress = useSharedValue(1);
@@ -89,7 +90,11 @@ const AiChefScreen = () => {
     }, [helpersCollapsed, reduceMotion]);
 
     const handleHelpersLayout = useCallback((event) => {
-        helpersHeight.value = event.nativeEvent.layout.height;
+        const { height } = event.nativeEvent.layout;
+        helpersHeight.value = height;
+        if (height > 0) {
+            setHelpersMeasured(true);
+        }
     }, []);
 
     const helpersBodyStyle = useAnimatedStyle(() => ({
@@ -138,11 +143,10 @@ const AiChefScreen = () => {
         try {
             setLoadingRecipes(true);
             const allRecipes = await recipeOperations.getAll();
-            // Filter to only recipes with images
-            const recipesWithImages = allRecipes.filter(recipe => recipe.image_uri);
-            setRecipes(recipesWithImages);
+            setRecipes(allRecipes);
         } catch (error) {
             console.error('Error loading recipes:', error);
+            setRecipes([]);
         } finally {
             setLoadingRecipes(false);
         }
@@ -672,7 +676,15 @@ const AiChefScreen = () => {
                 </AnimatedPressable>
 
                 <Animated.View
-                    style={[styles.helpersBody, helpersBodyStyle]}
+                    style={[
+                        styles.helpersBody,
+                        // Until a layout pass reports a real height, never clamp the
+                        // panel to a measured 0 — a missed measure would hide the
+                        // content outright. Only the collapsed case pins it shut.
+                        helpersMeasured
+                            ? helpersBodyStyle
+                            : helpersCollapsed && styles.helpersBodyShut,
+                    ]}
                     pointerEvents={helpersCollapsed ? 'none' : 'auto'}
                 >
                     <View onLayout={handleHelpersLayout}>
@@ -700,7 +712,21 @@ const AiChefScreen = () => {
                             </AnimatedPressable>
                         </View>
 
-                        {recipes.length > 0 && (
+                        {loadingRecipes && recipes.length === 0 ? (
+                            <View style={styles.recipeSelectorNotice}>
+                                <ActivityIndicator size="small" color={theme.primary[500]} />
+                                <Text style={[styles.recipeSelectorNoticeText, { color: theme.colors.text.tertiary }]}>
+                                    Loading your recipes...
+                                </Text>
+                            </View>
+                        ) : recipes.length === 0 ? (
+                            <View style={styles.recipeSelectorNotice}>
+                                <Ionicons name="book-outline" size={18} color={theme.colors.text.tertiary} />
+                                <Text style={[styles.recipeSelectorNoticeText, { color: theme.colors.text.tertiary }]}>
+                                    No recipes yet — import or add one to cook along here.
+                                </Text>
+                            </View>
+                        ) : (
                             <ScrollView
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
@@ -719,8 +745,16 @@ const AiChefScreen = () => {
                                                 style={styles.recipeBubbleImage}
                                             />
                                         ) : (
-                                            <View style={[styles.recipeBubblePlaceholder, { backgroundColor: theme.primary[100] }]}>
-                                                <Ionicons name="restaurant" size={24} color={theme.primary[500]} />
+                                            <View
+                                                style={[
+                                                    styles.recipeBubblePlaceholder,
+                                                    {
+                                                        backgroundColor: theme.primary[100],
+                                                        borderColor: theme.colors.borderSoft,
+                                                    },
+                                                ]}
+                                            >
+                                                <Ionicons name="restaurant-outline" size={26} color={theme.primary[500]} />
                                             </View>
                                         )}
                                         <Text 
@@ -825,6 +859,10 @@ const styles = StyleSheet.create({
     helpersBody: {
         overflow: 'hidden',
     },
+    helpersBodyShut: {
+        height: 0,
+        opacity: 0,
+    },
     quickActions: {
         flexDirection: 'row',
         paddingHorizontal: 12,
@@ -927,6 +965,17 @@ const styles = StyleSheet.create({
         paddingBottom: 12,
         gap: 12,
     },
+    recipeSelectorNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+        gap: 8,
+    },
+    recipeSelectorNoticeText: {
+        fontSize: 13,
+        flexShrink: 1,
+    },
     recipeBubble: {
         width: 120,
         marginRight: 12,
@@ -946,6 +995,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 1,
     },
     recipeBubbleTitle: {
         fontSize: 12,
