@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 6;
+export const CURRENT_SCHEMA_VERSION = 7;
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
@@ -52,6 +52,7 @@ const addColumnIfMissing = async (db, table, column, type, defaultValue) => {
 const LEGACY_USER_COLUMNS = [
     { name: 'username', type: 'TEXT' },
     { name: 'recipes_cooked', type: 'INTEGER', defaultValue: '0' },
+    { name: 'flavor_preferences', type: 'TEXT' },
 ];
 
 const LEGACY_RECIPE_COLUMNS = [
@@ -318,7 +319,27 @@ export const MIGRATIONS = [
             ]);
         },
     },
+    {
+        version: 7,
+        name: 'users_flavor_preferences',
+        up: async (db) => {
+            // Existing Expo Go DBs created the users table before this column
+            // existed. CREATE TABLE IF NOT EXISTS will not add it.
+            await addColumnIfMissing(db, 'users', 'flavor_preferences', 'TEXT');
+        },
+    },
 ];
+
+// Cheap PRAGMA check on every boot so Expo Go installs that already sit at
+// user_version >= 6 still get the column even if a versioned step was skipped.
+export const ensureRequiredColumns = async (db) => {
+    if (!db) {
+        throw new Error('ensureRequiredColumns requires an open database handle');
+    }
+    for (const col of LEGACY_USER_COLUMNS) {
+        await addColumnIfMissing(db, 'users', col.name, col.type, col.defaultValue);
+    }
+};
 
 export const getSchemaVersion = async (db) => {
     try {

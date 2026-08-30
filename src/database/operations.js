@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { runMigrations } from './migrations';
+import { runMigrations, ensureRequiredColumns } from './migrations';
 
 let db = null;
 
@@ -9,6 +9,7 @@ export const initDatabase = async () => {
         db = await SQLite.openDatabaseAsync('fooddude.db');
         await db.execAsync('PRAGMA foreign_keys = ON;');
         const version = await runMigrations(db);
+        await ensureRequiredColumns(db);
         console.log(`Galaxy Health database ready at schema v${version}`);
         return db;
     } catch (error) {

@@ -251,7 +251,13 @@ const AiProviderSettings = ({ theme }) => {
         <View style={styles.wrap}>
             <Text style={[styles.title, { color: theme.colors.text.primary }]}>AI provider</Text>
             <Text style={[styles.help, { color: theme.colors.text.secondary }]}>
-                Your key stays on this device (Keychain / Keystore, or this browser). Food Dude never ships a shared key and does not send yours to our servers. Claude, OpenAI, and Grok live model lists work in Expo Go; the web app may fall back to defaults if the provider blocks browser calls.
+                BYOK: paste your own Anthropic, OpenAI, xAI, or Gemini key. It is saved in the OS
+                encrypted keychain (or this browser on web). Food Dude never embeds a shared key and
+                has no server that stores yours. Requests go only to the provider you pick.
+            </Text>
+            <Text style={[styles.help, { color: theme.colors.text.secondary }]}>
+                Claude, OpenAI, and Grok live model lists work in Expo Go; the web app may fall back
+                to defaults if the provider blocks browser calls.
             </Text>
 
             <View style={styles.providerGrid}>
