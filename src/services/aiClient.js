@@ -2,11 +2,14 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
     DEFAULT_IMAGE_MODELS,
     DEFAULT_MODELS,
+    FALLBACK_IMAGE_MODELS,
     MISSING_KEY_MESSAGE,
     getActiveCredentials,
     getApiKey,
+    getCachedImageModels,
     getCachedModels,
     requireAiConfigured,
+    setCachedImageModels,
     setCachedModels,
 } from './aiSettings';
 import { assertVideoSupported, coerceImagesForProvider } from './mediaPrep';
@@ -107,14 +110,38 @@ function isChattyOpenAiModel(id) {
     return /^(gpt|o[1-9]|chatgpt|grok)/.test(lower) || lower.includes('chat');
 }
 
+function isGeminiImageModel(model) {
+    const name = (model.name || '').replace(/^models\//, '');
+    const lower = name.toLowerCase();
+    const methods = model.supportedGenerationMethods || [];
+    if (!methods.includes('generateContent')) return false;
+    return /(image-generation|-image$|-image-preview|flash-image|pro-image)/.test(lower);
+}
+
 function isChattyGeminiModel(model) {
     const name = (model.name || '').replace(/^models\//, '');
     const lower = name.toLowerCase();
-    if (/(embedding|imagen|aqa|tts|robotics|computer-use|veo)/.test(lower)) {
+    if (/(embedding|imagen|aqa|tts|robotics|computer-use|veo|image-generation|-image$|-image-preview|flash-image|pro-image)/.test(lower)) {
         return false;
     }
     const methods = model.supportedGenerationMethods || [];
     return methods.includes('generateContent');
+}
+
+function imageRank(id) {
+    const lower = (id || '').toLowerCase();
+    if (/(lite|flash)/.test(lower) && /lite/.test(lower)) return 0;
+    if (/flash/.test(lower)) return 1;
+    if (/pro/.test(lower)) return 2;
+    return 3;
+}
+
+function sortImageModels(models) {
+    return [...models].sort((a, b) => {
+        const rank = imageRank(a.id) - imageRank(b.id);
+        if (rank !== 0) return rank;
+        return a.id.localeCompare(b.id);
+    });
 }
 
 function defaultModelFor(provider) {
@@ -323,31 +350,34 @@ export async function generateMultimodal({ prompt, images, video }) {
 export async function generateImage(prompt) {
     const creds = await requireAiConfigured();
     if (creds.provider !== 'gemini') {
-        throw new Error('Recipe image generation needs Google Gemini. Switch provider in Account or skip this step.');
+        throw new Error('Recipe image generation needs Google Gemini. Switch provider in Account and pick an image model.');
     }
 
-    const model = (creds.model || '').toLowerCase().includes('image')
-        ? creds.model
-        : DEFAULT_IMAGE_MODELS.gemini;
+    const model = creds.imageModel || DEFAULT_IMAGE_MODELS.gemini;
+    const json = await fetchJson(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(creds.apiKey)}`,
+        {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE'],
+                },
+            }),
+        }
+    );
 
-    const genAI = geminiClient(creds.apiKey);
-    const generativeModel = genAI.getGenerativeModel({ model });
-    const result = await generativeModel.generateContent(prompt);
-    const response = await result.response;
-    const candidates = response.candidates;
-    if (!candidates?.length) {
-        throw new Error('No image candidates returned');
-    }
-
-    const imagePart = candidates[0]?.content?.parts?.find((part) => part.inlineData);
-    if (!imagePart?.inlineData) {
-        throw new Error('No image data found in response');
+    const parts = json.candidates?.[0]?.content?.parts || [];
+    const imagePart = parts.find((part) => part.inlineData);
+    if (!imagePart?.inlineData?.data) {
+        throw new Error('The image model returned no photo. Try another image model in Account.');
     }
 
     const mimeType = imagePart.inlineData.mimeType || 'image/png';
     return {
         imageUri: `data:${mimeType};base64,${imagePart.inlineData.data}`,
-        response,
+        response: json,
     };
 }
 
@@ -377,7 +407,8 @@ async function listOpenAiCompatibleModels(baseUrl, apiKey) {
 }
 
 async function listGeminiModels(apiKey) {
-    const models = [];
+    const chat = [];
+    const image = [];
     let pageToken = '';
     do {
         const params = new URLSearchParams({ key: apiKey, pageSize: '100' });
@@ -386,13 +417,17 @@ async function listGeminiModels(apiKey) {
             `https://generativelanguage.googleapis.com/v1beta/models?${params.toString()}`
         );
         for (const model of json.models || []) {
-            if (!isChattyGeminiModel(model)) continue;
             const id = (model.name || '').replace(/^models\//, '');
-            models.push({ id, name: model.displayName || id });
+            const entry = { id, name: model.displayName || id };
+            if (isGeminiImageModel(model)) {
+                image.push(entry);
+            } else if (isChattyGeminiModel(model)) {
+                chat.push(entry);
+            }
         }
         pageToken = json.nextPageToken || '';
     } while (pageToken);
-    return models;
+    return { chat, image };
 }
 
 export async function listProviderModels({ provider, apiKey, force = false } = {}) {
@@ -405,12 +440,19 @@ export async function listProviderModels({ provider, apiKey, force = false } = {
 
     if (!force) {
         const cached = await getCachedModels(resolvedProvider);
+        const imageCached = await getCachedImageModels(resolvedProvider);
         if (cached?.models?.length) {
-            return { models: cached.models, fromCache: true, fetchedAt: cached.fetchedAt };
+            return {
+                models: cached.models,
+                imageModels: imageCached?.models || [],
+                fromCache: true,
+                fetchedAt: cached.fetchedAt,
+            };
         }
     }
 
     let models = [];
+    let imageModels = [];
     switch (resolvedProvider) {
         case 'anthropic':
             models = await listAnthropicModels(resolvedKey);
@@ -421,19 +463,37 @@ export async function listProviderModels({ provider, apiKey, force = false } = {
         case 'xai':
             models = await listOpenAiCompatibleModels('https://api.x.ai/v1', resolvedKey);
             break;
-        case 'gemini':
-            models = await listGeminiModels(resolvedKey);
+        case 'gemini': {
+            const listed = await listGeminiModels(resolvedKey);
+            models = listed.chat;
+            imageModels = listed.image;
             break;
+        }
         default:
             throw new Error('Unknown AI provider.');
     }
 
     const sorted = sortModels(models);
+    const sortedImage = sortImageModels(imageModels);
     const cache = await setCachedModels(resolvedProvider, sorted);
-    return { models: sorted, fromCache: false, fetchedAt: cache.fetchedAt };
+    await setCachedImageModels(resolvedProvider, sortedImage);
+    return {
+        models: sorted,
+        imageModels: sortedImage,
+        fromCache: false,
+        fetchedAt: cache.fetchedAt,
+    };
 }
 
 export function fallbackModels(provider) {
     const id = defaultModelFor(provider);
     return [{ id, name: id, isFallback: true }];
+}
+
+export function fallbackImageModels(provider) {
+    const listed = FALLBACK_IMAGE_MODELS[provider] || [];
+    return listed.map((item, index) => ({
+        ...item,
+        isFallback: index === 0,
+    }));
 }

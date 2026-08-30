@@ -49,15 +49,40 @@ export const DEFAULT_MODELS = {
 };
 
 export const DEFAULT_IMAGE_MODELS = {
-    gemini: 'gemini-2.0-flash-preview-image-generation',
+    gemini: 'gemini-2.5-flash-image',
 };
+
+export const FALLBACK_IMAGE_MODELS = {
+    gemini: [
+        { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash Image' },
+        { id: 'gemini-3.1-flash-image', name: 'Gemini 3.1 Flash Image' },
+        { id: 'gemini-3.1-flash-lite-image', name: 'Gemini 3.1 Flash Lite Image' },
+        { id: 'gemini-3-pro-image', name: 'Gemini 3 Pro Image' },
+    ],
+};
+
+const RETIRED_IMAGE_MODELS = new Set([
+    'gemini-2.0-flash-preview-image-generation',
+    'gemini-2.0-flash-exp-image-generation',
+]);
+
+export function isImageModelId(id) {
+    const lower = (id || '').toLowerCase();
+    return /(image-generation|-image$|-image-preview|flash-image|pro-image|dall-e|gpt-image)/.test(lower);
+}
+
+export function providerSupportsImageGen(providerId) {
+    return providerId === 'gemini';
+}
 
 export const MISSING_KEY_MESSAGE = 'Add an API key in Account to use AI features.';
 
 const PROVIDER_KEY = 'fooddude.ai.provider';
 const keySlot = (provider) => `fooddude.ai.key.${provider}`;
 const modelSlot = (provider) => `fooddude.ai.model.${provider}`;
+const imageModelSlot = (provider) => `fooddude.ai.imageModel.${provider}`;
 const cacheSlot = (provider) => `fooddude.ai.modelsCache.${provider}`;
+const imageCacheSlot = (provider) => `fooddude.ai.imageModelsCache.${provider}`;
 
 const WEB_SECRET_PREFIX = 'fooddude.secure.';
 
@@ -146,8 +171,10 @@ export async function saveApiKey(providerId, apiKey) {
 export async function clearApiKey(providerId) {
     await secureDelete(keySlot(providerId));
     await secureDelete(modelSlot(providerId));
+    await secureDelete(imageModelSlot(providerId));
     try {
         await AsyncStorage.removeItem(cacheSlot(providerId));
+        await AsyncStorage.removeItem(imageCacheSlot(providerId));
     } catch {
         // cache is non-secret; ignore
     }
@@ -155,12 +182,32 @@ export async function clearApiKey(providerId) {
 
 export async function getSelectedModel(providerId) {
     const stored = await secureGet(modelSlot(providerId));
-    return stored || DEFAULT_MODELS[providerId] || null;
+    if (stored && !isImageModelId(stored)) {
+        return stored;
+    }
+    return DEFAULT_MODELS[providerId] || null;
 }
 
 export async function setSelectedModel(providerId, modelId) {
     if (!modelId) return;
     await secureSet(modelSlot(providerId), modelId);
+}
+
+export async function getSelectedImageModel(providerId) {
+    const stored = await secureGet(imageModelSlot(providerId));
+    if (stored && !RETIRED_IMAGE_MODELS.has(stored)) {
+        return stored;
+    }
+    const chatStored = await secureGet(modelSlot(providerId));
+    if (chatStored && isImageModelId(chatStored) && !RETIRED_IMAGE_MODELS.has(chatStored)) {
+        return chatStored;
+    }
+    return DEFAULT_IMAGE_MODELS[providerId] || null;
+}
+
+export async function setSelectedImageModel(providerId, modelId) {
+    if (!modelId) return;
+    await secureSet(imageModelSlot(providerId), modelId);
 }
 
 export async function getCachedModels(providerId) {
@@ -184,11 +231,33 @@ export async function setCachedModels(providerId, models) {
     return payload;
 }
 
+export async function getCachedImageModels(providerId) {
+    try {
+        const raw = await AsyncStorage.getItem(imageCacheSlot(providerId));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed?.models || !Array.isArray(parsed.models)) return null;
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
+export async function setCachedImageModels(providerId, models) {
+    const payload = {
+        fetchedAt: Date.now(),
+        models,
+    };
+    await AsyncStorage.setItem(imageCacheSlot(providerId), JSON.stringify(payload));
+    return payload;
+}
+
 export async function getActiveCredentials() {
     const provider = await getSelectedProvider();
     const apiKey = await getApiKey(provider);
     const model = await getSelectedModel(provider);
-    return { provider, apiKey, model };
+    const imageModel = await getSelectedImageModel(provider);
+    return { provider, apiKey, model, imageModel };
 }
 
 export async function isAiConfigured() {
@@ -208,13 +277,18 @@ export async function getAccountAiState() {
     const provider = await getSelectedProvider();
     const apiKey = await getApiKey(provider);
     const model = await getSelectedModel(provider);
+    const imageModel = await getSelectedImageModel(provider);
     const cache = await getCachedModels(provider);
+    const imageCache = await getCachedImageModels(provider);
     return {
         provider,
         hasKey: Boolean(apiKey),
         keyLast4: apiKey ? maskKey(apiKey) : '',
         model,
+        imageModel,
         cachedModels: cache?.models || [],
+        cachedImageModels: imageCache?.models || [],
         cacheFetchedAt: cache?.fetchedAt || null,
+        imageCacheFetchedAt: imageCache?.fetchedAt || null,
     };
 }

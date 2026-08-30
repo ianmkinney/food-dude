@@ -15,6 +15,11 @@ import { userOperations, partyStatsOperations, recipeCookingHistoryOperations } 
 import AiProviderSettings from '../components/AiProviderSettings';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
+import {
+    USER_SAFETY_DETAILS,
+    USER_SAFETY_SUMMARY,
+    USER_SAFETY_TITLE,
+} from '../constants/userSafety';
 
 const AccountScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -232,6 +237,23 @@ const AccountScreen = ({ navigation }) => {
                 )}
             </View>
 
+            <ElevatedCard theme={theme} variant="card" style={styles.safetyCard}>
+                <View style={styles.safetyHeader}>
+                    <Ionicons name="shield-checkmark-outline" size={22} color={theme.primary[500]} />
+                    <Text style={[styles.safetyTitle, { color: theme.colors.text.primary }]}>
+                        {USER_SAFETY_TITLE}
+                    </Text>
+                </View>
+                <Text style={[styles.safetyBody, { color: theme.colors.text.secondary }]}>
+                    {USER_SAFETY_SUMMARY}
+                </Text>
+                <Text style={[styles.safetyBody, { color: theme.colors.text.secondary }]}>
+                    Keys never go to Food Dude servers (there are none for keys). Profile and flavor
+                    preferences stay in the on-device SQLite database. AI calls go only to the
+                    provider you pick in Account.
+                </Text>
+            </ElevatedCard>
+
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                 <AiProviderSettings theme={theme} />
             </ElevatedCard>
@@ -253,7 +275,7 @@ const AccountScreen = ({ navigation }) => {
                 <ElevatedCard
                     theme={theme}
                     style={styles.settingItem}
-                    onPress={() => Alert.alert('Coming Soon', 'This feature will be available soon')}
+                    onPress={() => Alert.alert(USER_SAFETY_TITLE, USER_SAFETY_DETAILS)}
                 >
                     <Ionicons name="shield-outline" size={24} color={theme.colors.text.primary} />
                     <Text style={[styles.settingText, { color: theme.colors.text.primary }]}>Privacy</Text>
@@ -263,7 +285,12 @@ const AccountScreen = ({ navigation }) => {
                 <ElevatedCard
                     theme={theme}
                     style={styles.settingItem}
-                    onPress={() => Alert.alert('About', 'Food Dude v1.0.0\n\nYour personal cooking assistant!')}
+                    onPress={() =>
+                        Alert.alert(
+                            'About Food Dude',
+                            'Food Dude v1.0.0\n\nA BYOK cooking assistant. Your keys and account data stay on this device.\n\nSee USER_SAFETY.md in the project for the full storage map.'
+                        )
+                    }
                 >
                     <Ionicons name="information-circle-outline" size={24} color={theme.colors.text.primary} />
                     <Text style={[styles.settingText, { color: theme.colors.text.primary }]}>About</Text>
@@ -360,6 +387,27 @@ const styles = StyleSheet.create({
         marginHorizontal: 16,
         marginBottom: 8,
         padding: 20,
+    },
+    safetyCard: {
+        marginHorizontal: 16,
+        marginBottom: 12,
+        padding: 20,
+    },
+    safetyHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 10,
+    },
+    safetyTitle: {
+        flex: 1,
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    safetyBody: {
+        fontSize: 13,
+        lineHeight: 19,
+        marginBottom: 8,
     },
     settingsContainer: {
         padding: 24,
