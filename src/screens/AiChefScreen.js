@@ -108,9 +108,19 @@ const AiChefScreen = () => {
         if (height <= 0) {
             return;
         }
-        // The animated parent is overflow:hidden with a shrinking height.
-        // Mid-collapse onLayout values must not replace the full measure.
-        if (helpersProgress.value < 1 && helpersHeightRef.current > 0) {
+        const stored = helpersHeightRef.current;
+        // First pass is often just the pantry pill (recipes still loading, or
+        // the carousel has not finished layout). Always grow so we do not
+        // freeze that short height and clip the cards.
+        if (height > stored) {
+            helpersHeightRef.current = height;
+            helpersHeight.value = height;
+            setHelpersMeasured(true);
+            return;
+        }
+        // Ignore shrinks while the panel is not fully open so collapse cannot
+        // write a mid-clamp leftover over the real height.
+        if (helpersProgress.value < 1 && stored > 0) {
             return;
         }
         helpersHeightRef.current = height;
@@ -708,7 +718,15 @@ const AiChefScreen = () => {
                     ]}
                     pointerEvents={helpersCollapsed ? 'none' : 'auto'}
                 >
-                    <View onLayout={handleHelpersLayout} collapsable={false}>
+                    <View
+                        onLayout={handleHelpersLayout}
+                        collapsable={false}
+                        // After the first measure, take the inner out of the
+                        // clipped parent's height constraint so later passes
+                        // (carousel, images) can report a larger natural size.
+                        // The animated parent height still drives chat layout.
+                        style={helpersMeasured ? styles.helpersMeasure : undefined}
+                    >
                         <View style={styles.quickActions}>
                             <AnimatedPressable
                                 style={[styles.quickActionButton, { backgroundColor: theme.primary[100] }]}
@@ -879,10 +897,17 @@ const styles = StyleSheet.create({
     },
     helpersBody: {
         overflow: 'hidden',
+        position: 'relative',
     },
     helpersBodyShut: {
         height: 0,
         opacity: 0,
+    },
+    helpersMeasure: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        top: 0,
     },
     quickActions: {
         flexDirection: 'row',
