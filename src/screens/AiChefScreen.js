@@ -74,9 +74,23 @@ const AiChefScreen = () => {
         };
     }, []);
 
+    const helpersHeightRef = useRef(0);
+
     const toggleHelpers = useCallback(() => {
         const next = !helpersCollapsed;
         setHelpersCollapsed(next);
+        // Parent height goes to 0 when collapsed; the inner onLayout can then
+        // report 0 (or a mid-clamp leftover) and wipe the shared value. Restore
+        // the last good height before animating open so the panel can grow.
+        // If we never captured a height, drop the clamp so content remounts
+        // at its natural size and onLayout can measure again.
+        if (!next) {
+            if (helpersHeightRef.current > 0) {
+                helpersHeight.value = helpersHeightRef.current;
+            } else {
+                setHelpersMeasured(false);
+            }
+        }
         const target = next ? 0 : 1;
         helpersProgress.value = reduceMotion
             ? target
@@ -91,10 +105,27 @@ const AiChefScreen = () => {
 
     const handleHelpersLayout = useCallback((event) => {
         const { height } = event.nativeEvent.layout;
-        helpersHeight.value = height;
-        if (height > 0) {
-            setHelpersMeasured(true);
+        if (height <= 0) {
+            return;
         }
+        const stored = helpersHeightRef.current;
+        // First pass is often just the pantry pill (recipes still loading, or
+        // the carousel has not finished layout). Always grow so we do not
+        // freeze that short height and clip the cards.
+        if (height > stored) {
+            helpersHeightRef.current = height;
+            helpersHeight.value = height;
+            setHelpersMeasured(true);
+            return;
+        }
+        // Ignore shrinks while the panel is not fully open so collapse cannot
+        // write a mid-clamp leftover over the real height.
+        if (helpersProgress.value < 1 && stored > 0) {
+            return;
+        }
+        helpersHeightRef.current = height;
+        helpersHeight.value = height;
+        setHelpersMeasured(true);
     }, []);
 
     const helpersBodyStyle = useAnimatedStyle(() => ({
@@ -687,7 +718,15 @@ const AiChefScreen = () => {
                     ]}
                     pointerEvents={helpersCollapsed ? 'none' : 'auto'}
                 >
-                    <View onLayout={handleHelpersLayout}>
+                    <View
+                        onLayout={handleHelpersLayout}
+                        collapsable={false}
+                        // After the first measure, take the inner out of the
+                        // clipped parent's height constraint so later passes
+                        // (carousel, images) can report a larger natural size.
+                        // The animated parent height still drives chat layout.
+                        style={helpersMeasured ? styles.helpersMeasure : undefined}
+                    >
                         <View style={styles.quickActions}>
                             <AnimatedPressable
                                 style={[styles.quickActionButton, { backgroundColor: theme.primary[100] }]}
@@ -858,10 +897,17 @@ const styles = StyleSheet.create({
     },
     helpersBody: {
         overflow: 'hidden',
+        position: 'relative',
     },
     helpersBodyShut: {
         height: 0,
         opacity: 0,
+    },
+    helpersMeasure: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        top: 0,
     },
     quickActions: {
         flexDirection: 'row',

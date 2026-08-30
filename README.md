@@ -175,10 +175,14 @@ Food Dude features a modern, vibrant design with:
 
 ## 🔐 Privacy & Data
 
-- **Local Storage**: All data is stored locally on your device using SQLite
-- **No Account Required**: Use the app without signing up
-- **API Keys**: Your provider key is stored on-device in SecureStore, never in the binary or our servers
-- **No Tracking**: We don't collect any usage data
+Food Dude is a Bring Your Own Key app. Your data stays on this device. API keys are stored in the OS encrypted keychain. Recipes, pantry, and preferences live in a local database that never leaves your phone.
+
+- **Local storage**: Profile, recipes, pantry, and preferences live in on-device SQLite. Theme and UI prefs use AsyncStorage. There is no Food Dude account server.
+- **API keys**: Stored in SecureStore (Keychain / Keystore). Never in the binary, never in SQLite, never on our servers (there are none for keys).
+- **No shared keys**: Do not put provider secrets in `.env`. `EXPO_PUBLIC_*` values are compiled into the JS bundle.
+- **No tracking**: The app does not collect usage analytics.
+
+Full map: [USER_SAFETY.md](./USER_SAFETY.md). The same disclaimer is shown in **Account**.
 
 ## 🐛 Troubleshooting
 
