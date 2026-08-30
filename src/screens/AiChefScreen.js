@@ -74,9 +74,23 @@ const AiChefScreen = () => {
         };
     }, []);
 
+    const helpersHeightRef = useRef(0);
+
     const toggleHelpers = useCallback(() => {
         const next = !helpersCollapsed;
         setHelpersCollapsed(next);
+        // Parent height goes to 0 when collapsed; the inner onLayout can then
+        // report 0 (or a mid-clamp leftover) and wipe the shared value. Restore
+        // the last good height before animating open so the panel can grow.
+        // If we never captured a height, drop the clamp so content remounts
+        // at its natural size and onLayout can measure again.
+        if (!next) {
+            if (helpersHeightRef.current > 0) {
+                helpersHeight.value = helpersHeightRef.current;
+            } else {
+                setHelpersMeasured(false);
+            }
+        }
         const target = next ? 0 : 1;
         helpersProgress.value = reduceMotion
             ? target
@@ -91,10 +105,17 @@ const AiChefScreen = () => {
 
     const handleHelpersLayout = useCallback((event) => {
         const { height } = event.nativeEvent.layout;
-        helpersHeight.value = height;
-        if (height > 0) {
-            setHelpersMeasured(true);
+        if (height <= 0) {
+            return;
         }
+        // The animated parent is overflow:hidden with a shrinking height.
+        // Mid-collapse onLayout values must not replace the full measure.
+        if (helpersProgress.value < 1 && helpersHeightRef.current > 0) {
+            return;
+        }
+        helpersHeightRef.current = height;
+        helpersHeight.value = height;
+        setHelpersMeasured(true);
     }, []);
 
     const helpersBodyStyle = useAnimatedStyle(() => ({
@@ -687,7 +708,7 @@ const AiChefScreen = () => {
                     ]}
                     pointerEvents={helpersCollapsed ? 'none' : 'auto'}
                 >
-                    <View onLayout={handleHelpersLayout}>
+                    <View onLayout={handleHelpersLayout} collapsable={false}>
                         <View style={styles.quickActions}>
                             <AnimatedPressable
                                 style={[styles.quickActionButton, { backgroundColor: theme.primary[100] }]}

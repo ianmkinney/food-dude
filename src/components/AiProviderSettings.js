@@ -12,13 +12,16 @@ import { Ionicons } from '@expo/vector-icons';
 import {
     PROVIDERS,
     DEFAULT_MODELS,
+    DEFAULT_IMAGE_MODELS,
     clearApiKey,
     getAccountAiState,
+    providerSupportsImageGen,
     saveApiKey,
+    setSelectedImageModel,
     setSelectedModel,
     setSelectedProvider,
 } from '../services/aiSettings';
-import { fallbackModels, listProviderModels } from '../services/aiClient';
+import { fallbackImageModels, fallbackModels, listProviderModels } from '../services/aiClient';
 
 const AiProviderSettings = ({ theme }) => {
     const [provider, setProvider] = useState(PROVIDERS[0].id);
@@ -27,7 +30,9 @@ const AiProviderSettings = ({ theme }) => {
     const [keyDraft, setKeyDraft] = useState('');
     const [showKey, setShowKey] = useState(false);
     const [model, setModel] = useState(DEFAULT_MODELS[PROVIDERS[0].id]);
+    const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODELS.gemini);
     const [models, setModels] = useState([]);
+    const [imageModels, setImageModels] = useState([]);
     const [modelsError, setModelsError] = useState('');
     const [modelsFromCache, setModelsFromCache] = useState(false);
     const [loadingState, setLoadingState] = useState(true);
@@ -40,7 +45,9 @@ const AiProviderSettings = ({ theme }) => {
         setHasKey(state.hasKey);
         setKeyLast4(state.keyLast4);
         setModel(state.model);
+        setImageModel(state.imageModel || DEFAULT_IMAGE_MODELS[state.provider] || '');
         setModels(state.cachedModels || []);
+        setImageModels(state.cachedImageModels || []);
         setModelsFromCache(Boolean(state.cachedModels?.length));
     }, []);
 
@@ -49,8 +56,16 @@ const AiProviderSettings = ({ theme }) => {
             const state = await getAccountAiState();
             applyState(state);
             setModelsError('');
-            if (state.hasKey && !state.cachedModels?.length) {
-                refreshModels(state.provider, { force: false, currentModel: state.model });
+            if (
+                state.hasKey &&
+                (!state.cachedModels?.length ||
+                    (providerSupportsImageGen(state.provider) && !state.cachedImageModels?.length))
+            ) {
+                refreshModels(state.provider, {
+                    force: !state.cachedImageModels?.length,
+                    currentModel: state.model,
+                    currentImageModel: state.imageModel,
+                });
             }
         } catch (error) {
             setStatus(error.message || 'Could not load AI settings');
@@ -63,12 +78,13 @@ const AiProviderSettings = ({ theme }) => {
         load();
     }, [load]);
 
-    const refreshModels = async (providerId, { force = true, currentModel } = {}) => {
+    const refreshModels = async (providerId, { force = true, currentModel, currentImageModel } = {}) => {
         setListing(true);
         setModelsError('');
         try {
             const result = await listProviderModels({ provider: providerId, force });
             setModels(result.models);
+            setImageModels(result.imageModels || []);
             setModelsFromCache(result.fromCache);
             const selected = currentModel || model;
             const stillValid = result.models.some((item) => item.id === selected);
@@ -76,16 +92,30 @@ const AiProviderSettings = ({ theme }) => {
                 await setSelectedModel(providerId, result.models[0].id);
                 setModel(result.models[0].id);
             }
+            const listedImage = result.imageModels || [];
+            const selectedImage = currentImageModel || imageModel;
+            const imageStillValid = listedImage.some((item) => item.id === selectedImage);
+            if (listedImage.length && !imageStillValid) {
+                await setSelectedImageModel(providerId, listedImage[0].id);
+                setImageModel(listedImage[0].id);
+            }
             setStatus(result.fromCache ? 'Showing cached models' : 'Loaded models from provider');
         } catch (error) {
             const fallback = fallbackModels(providerId);
+            const imageFallback = fallbackImageModels(providerId);
             setModels(fallback);
+            setImageModels(imageFallback);
             setModelsFromCache(false);
             setModelsError(error.message || 'Could not list models');
             const fallbackId = fallback[0]?.id;
             if (fallbackId) {
                 await setSelectedModel(providerId, fallbackId);
                 setModel(fallbackId);
+            }
+            const imageFallbackId = imageFallback[0]?.id;
+            if (imageFallbackId) {
+                await setSelectedImageModel(providerId, imageFallbackId);
+                setImageModel(imageFallbackId);
             }
         } finally {
             setListing(false);
@@ -103,8 +133,16 @@ const AiProviderSettings = ({ theme }) => {
             await setSelectedProvider(providerId);
             const state = await getAccountAiState();
             applyState(state);
-            if (state.hasKey && !state.cachedModels?.length) {
-                refreshModels(providerId, { force: false, currentModel: state.model });
+            if (
+                state.hasKey &&
+                (!state.cachedModels?.length ||
+                    (providerSupportsImageGen(providerId) && !state.cachedImageModels?.length))
+            ) {
+                refreshModels(providerId, {
+                    force: !state.cachedImageModels?.length,
+                    currentModel: state.model,
+                    currentImageModel: state.imageModel,
+                });
             }
         } catch (error) {
             setStatus(error.message || 'Could not switch provider');
@@ -125,7 +163,11 @@ const AiProviderSettings = ({ theme }) => {
             setShowKey(false);
             setHasKey(true);
             setKeyLast4(`••••${trimmed.slice(-4)}`);
-            await refreshModels(provider, { force: true, currentModel: model });
+            await refreshModels(provider, {
+                force: true,
+                currentModel: model,
+                currentImageModel: imageModel,
+            });
         } catch (error) {
             Alert.alert('Could not save key', error.message || 'Try again.');
         } finally {
@@ -149,8 +191,10 @@ const AiProviderSettings = ({ theme }) => {
                             setKeyLast4('');
                             setKeyDraft('');
                             setModels([]);
+                            setImageModels([]);
                             setModelsError('');
                             setModel(DEFAULT_MODELS[provider]);
+                            setImageModel(DEFAULT_IMAGE_MODELS[provider] || '');
                             setStatus('Key removed from this device');
                         } catch (error) {
                             Alert.alert('Could not remove key', error.message || 'Try again.');
@@ -171,6 +215,16 @@ const AiProviderSettings = ({ theme }) => {
         }
     };
 
+    const handleSelectImageModel = async (modelId) => {
+        try {
+            await setSelectedImageModel(provider, modelId);
+            setImageModel(modelId);
+            setStatus(`Recipe photos use ${modelId}`);
+        } catch (error) {
+            Alert.alert('Could not save image model', error.message || 'Try again.');
+        }
+    };
+
     const handleRefreshPress = async () => {
         if (!hasKey) {
             const draft = keyDraft.trim();
@@ -181,11 +235,17 @@ const AiProviderSettings = ({ theme }) => {
             await handleSaveKey();
             return;
         }
-        await refreshModels(provider, { force: true, currentModel: model });
+        await refreshModels(provider, {
+            force: true,
+            currentModel: model,
+            currentImageModel: imageModel,
+        });
     };
 
     const currentProvider = PROVIDERS.find((item) => item.id === provider) || PROVIDERS[0];
     const visibleModels = models.length ? models : fallbackModels(provider);
+    const visibleImageModels = imageModels.length ? imageModels : fallbackImageModels(provider);
+    const showImagePicker = providerSupportsImageGen(provider);
 
     return (
         <View style={styles.wrap}>
@@ -362,6 +422,59 @@ const AiProviderSettings = ({ theme }) => {
                     );
                 })}
             </View>
+
+            <View style={styles.modelHeader}>
+                <Text style={[styles.label, { color: theme.colors.text.secondary, marginBottom: 0 }]}>
+                    Image model
+                </Text>
+            </View>
+            {showImagePicker ? (
+                <>
+                    <Text style={[styles.help, { color: theme.colors.text.secondary }]}>
+                        Used for recipe photos. The old preview image model is retired — pick a current Gemini image model, then tap the camera on a recipe.
+                    </Text>
+                    <View style={styles.modelList}>
+                        {visibleImageModels.map((item) => {
+                            const selected = item.id === imageModel;
+                            return (
+                                <TouchableOpacity
+                                    key={item.id}
+                                    style={[
+                                        styles.modelRow,
+                                        {
+                                            backgroundColor: selected ? theme.primary[100] : theme.colors.surface,
+                                            borderColor: selected ? theme.primary[500] : theme.colors.border,
+                                        },
+                                    ]}
+                                    onPress={() => handleSelectImageModel(item.id)}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.modelId,
+                                            { color: theme.colors.text.primary },
+                                        ]}
+                                        numberOfLines={1}
+                                    >
+                                        {item.id}
+                                    </Text>
+                                    {item.isFallback ? (
+                                        <Text style={[styles.fallbackTag, { color: theme.colors.text.secondary }]}>
+                                            default
+                                        </Text>
+                                    ) : null}
+                                    {selected ? (
+                                        <Ionicons name="checkmark-circle" size={18} color={theme.primary[500]} />
+                                    ) : null}
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                </>
+            ) : (
+                <Text style={[styles.help, { color: theme.colors.text.secondary }]}>
+                    Recipe photos need Google Gemini. Switch provider above, then pick an image model.
+                </Text>
+            )}
 
             {status ? (
                 <Text style={[styles.status, { color: theme.colors.text.secondary }]}>{status}</Text>
