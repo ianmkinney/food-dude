@@ -268,8 +268,55 @@ export const getSurfaceStyle = (theme, variant = 'card') => {
   };
 };
 
+/**
+ * One ramp per world, keyed by the planet ids in `galaxy/planets`. Screens read
+ * theirs through `PlanetScaffold`, which hands it to the render prop as
+ * `accent`, so a planet's colour never has to be passed down by hand.
+ *
+ * Galley keeps Food Dude's amber at 500 so the food screens look untouched by
+ * the rebrand. The other three take hues far enough apart to stay legible as
+ * small glowing dots on the Bridge.
+ */
+export const planetAccents = {
+  galley: {
+    50: '#FFF8ED', 100: '#FFEFD4', 200: '#FFDCA5', 300: '#FCC46E', 400: '#F9AE42',
+    500: '#F5A623', 600: '#D2860F', 700: '#A5650C', 800: '#7A4A12', 900: '#4A2C0B',
+    glow: '#F5A623',
+  },
+  atlas: {
+    50: '#FFF3F0', 100: '#FFE1DA', 200: '#FFC0B2', 300: '#FF9C86', 400: '#FF8264',
+    500: '#FF6B4A', 600: '#E04A28', 700: '#B0361B', 800: '#7E2916', 900: '#4A170D',
+    glow: '#FF6B4A',
+  },
+  lumen: {
+    50: '#F5F2FF', 100: '#E9E1FF', 200: '#D3C4FF', 300: '#B9A2FA', 400: '#A187F6',
+    500: '#8B6BF2', 600: '#6E4BD8', 700: '#5638AC', 800: '#3E2880', 900: '#241748',
+    glow: '#8B6BF2',
+  },
+  observatory: {
+    50: '#EFFAFF', 100: '#D8F3FF', 200: '#ADE6FF', 300: '#82D8FA', 400: '#6BD0F8',
+    500: '#5AC8F5', 600: '#2FA5D6', 700: '#1E7FA8', 800: '#175C79', 900: '#0E3648',
+    glow: '#5AC8F5',
+  },
+};
+
+export const getAccent = (accentId) => planetAccents[accentId] || planetAccents.galley;
+
+/**
+ * A coloured bloom rather than a drop shadow: no offset, so the light reads as
+ * coming from the element itself. Android ignores `shadowColor` on most views,
+ * which is why the glow is always decorative and never the only thing marking
+ * a control as active.
+ */
+export const glowFor = (color, opacity = 0.35) => ({
+  shadowColor: color,
+  shadowOpacity: opacity,
+  shadowRadius: 18,
+  shadowOffset: { width: 0, height: 0 },
+});
+
 // Helper function to get theme based on color scheme
-export const getTheme = (isDark, platform) => ({
+export const getTheme = (isDark, platform, accentId = 'galley') => ({
   colors: isDark ? colors.dark : colors.light,
   primary: colors.primary,
   secondary: colors.secondary,
@@ -283,6 +330,9 @@ export const getTheme = (isDark, platform) => ({
   motion,
   isDark,
   platform,
+  planetAccents,
+  planetAccent: getAccent(accentId),
+  glowFor,
 });
 
 export default {
@@ -293,6 +343,9 @@ export default {
   shadows,
   animations,
   motion,
+  planetAccents,
+  getAccent,
+  glowFor,
   getSurfaceStyle,
   getTheme,
 };
