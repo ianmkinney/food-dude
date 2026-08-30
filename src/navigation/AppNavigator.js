@@ -2,10 +2,11 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { getTheme } from '../theme';
+import { getSurfaceStyle, getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import AnimatedPressable from '../components/AnimatedPressable';
 
 // Import screens
 import RecipeBookScreen from '../screens/RecipeBookScreen';
@@ -27,13 +28,30 @@ import HeaderTitle from '../components/HeaderTitle';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+const TabBarButton = (props) => {
+    const { children, style, onPress, onLongPress, accessibilityState, ...rest } = props;
+    return (
+        <AnimatedPressable
+            {...rest}
+            accessibilityState={accessibilityState}
+            onPress={onPress}
+            onLongPress={onLongPress}
+            tilt
+            style={[style, styles.tabButton]}
+        >
+            {children}
+        </AnimatedPressable>
+    );
+};
+
 const TabNavigator = () => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const glass = getSurfaceStyle({ ...theme, platform: Platform.OS }, 'glass');
 
     return (
         <Tab.Navigator
-            screenOptions={({ route, navigation }) => {
+            screenOptions={({ route }) => {
                 return {
                     headerTitle: (props) => (
                         <HeaderTitle
@@ -43,6 +61,7 @@ const TabNavigator = () => {
                         />
                     ),
                     headerTitleAlign: 'center',
+                    tabBarButton: (props) => <TabBarButton {...props} />,
                 tabBarIcon: ({ focused, color, size }) => {
                     let iconName;
 
@@ -66,24 +85,33 @@ const TabNavigator = () => {
                             iconName = 'help-outline';
                     }
 
-                    return <Ionicons name={iconName} size={size} color={color} />;
+                    return (
+                        <Ionicons
+                            name={iconName}
+                            size={focused ? size + 1 : size}
+                            color={color}
+                        />
+                    );
                 },
                 tabBarActiveTintColor: theme.primary[500],
                 tabBarInactiveTintColor: theme.colors.text.tertiary,
                 tabBarStyle: {
-                    backgroundColor: theme.colors.surface,
-                    borderTopColor: theme.colors.border,
+                    backgroundColor: glass.backgroundColor,
+                    borderTopColor: theme.colors.borderSoft,
+                    borderTopWidth: 1,
                     paddingBottom: 30,
                     paddingTop: 10,
                     height: 90,
+                    ...theme.shadows.tabBar,
                 },
                 tabBarLabelStyle: {
                     fontSize: 12,
-                    fontWeight: '600',
+                    fontWeight: '700',
                 },
                 headerStyle: {
                     backgroundColor: theme.colors.background,
-                    borderBottomColor: theme.colors.border,
+                    borderBottomColor: theme.colors.borderSoft,
+                    ...theme.shadows.sm,
                 },
                     headerTintColor: theme.colors.text.primary,
                     headerTitleStyle: {
@@ -122,7 +150,7 @@ const TabNavigator = () => {
     );
 };
 
-import { useShareIntent } from 'expo-share-intent';
+import { useShareIntent } from '../platform/shareIntent';
 import { useEffect } from 'react';
 
 const AppNavigator = () => {
@@ -399,5 +427,13 @@ const AppNavigator = () => {
         </Stack.Navigator>
     );
 };
+
+const styles = StyleSheet.create({
+    tabButton: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+});
 
 export default AppNavigator;

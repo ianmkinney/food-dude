@@ -13,6 +13,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import ElevatedCard from '../components/ElevatedCard';
+import AnimatedPressable from '../components/AnimatedPressable';
 import { formatDisplayDate, getStartOfWeek, getWeekDates, addDays, subtractDays } from '../utils/dateHelpers';
 import { mealPlanOperations, recipeOperations, partyMealOperations, partyOperations } from '../database/operations';
 
@@ -264,11 +266,12 @@ const MealPlannerScreen = ({ route, navigation }) => {
         const isSelected = selectedItem && selectedItem.date === dateStr && selectedItem.mealType === mealType;
 
         return (
-            <TouchableOpacity
+            <AnimatedPressable
                 style={[
                     styles.mealSlot,
+                    theme.shadows.sm,
                     {
-                        backgroundColor: isSelected ? theme.primary[100] : theme.colors.surface,
+                        backgroundColor: isSelected ? theme.primary[100] : theme.colors.surfaceElevated,
                         borderColor: isSelected ? theme.primary[500] : theme.colors.border,
                         borderWidth: isSelected ? 2 : 1,
                     }
@@ -292,7 +295,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
                 ) : (
                     <Ionicons name="add-circle-outline" size={24} color={theme.colors.text.tertiary} />
                 )}
-            </TouchableOpacity>
+            </AnimatedPressable>
         );
     };
 
@@ -300,14 +303,16 @@ const MealPlannerScreen = ({ route, navigation }) => {
         const isSelected = selectedItem && selectedItem.item && selectedItem.item.id === item.id;
         
         return (
-            <TouchableOpacity
+            <ElevatedCard
+                theme={theme}
+                variant={isSelected ? 'elevated' : 'card'}
                 style={[
                     styles.draggableItem,
-                    {
-                        backgroundColor: isSelected ? theme.primary[100] : theme.colors.surface,
-                        borderColor: isSelected ? theme.primary[500] : theme.colors.border,
-                        borderWidth: isSelected ? 2 : 1,
-                    }
+                    isSelected && {
+                        backgroundColor: theme.primary[100],
+                        borderColor: theme.primary[500],
+                        borderWidth: 2,
+                    },
                 ]}
                 onPress={() => {
                     if (isSelected) {
@@ -336,28 +341,28 @@ const MealPlannerScreen = ({ route, navigation }) => {
                 <Text style={[styles.draggableItemTitle, { color: theme.colors.text.primary }]} numberOfLines={1}>
                     {item.title}
                 </Text>
-            </TouchableOpacity>
+            </ElevatedCard>
         );
     };
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {/* Week Navigation */}
-            <View style={[styles.weekNav, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-                <TouchableOpacity onPress={goToPreviousWeek} style={styles.navButton}>
+            <View style={[styles.weekNav, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
+                <AnimatedPressable onPress={goToPreviousWeek} style={styles.navButton}>
                     <Ionicons name="chevron-back" size={24} color={theme.primary[500]} />
-                </TouchableOpacity>
+                </AnimatedPressable>
                 <Text style={[styles.weekTitle, { color: theme.colors.text.primary }]}>
                     {formatDisplayDate(weekDates[0])} - {formatDisplayDate(weekDates[6])}
                 </Text>
-                <TouchableOpacity onPress={goToNextWeek} style={styles.navButton}>
+                <AnimatedPressable onPress={goToNextWeek} style={styles.navButton}>
                     <Ionicons name="chevron-forward" size={24} color={theme.primary[500]} />
-                </TouchableOpacity>
+                </AnimatedPressable>
             </View>
 
             {/* Draggable Items Bar */}
             {draggableItems.length > 0 && (
-                <View style={[styles.draggableBar, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+                <View style={[styles.draggableBar, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
                     <Text style={[styles.draggableBarTitle, { color: theme.colors.text.secondary }]}>
                         {selectedItem ? 'Tap a meal slot to schedule' : 'Tap to select, then tap a meal slot'}
                     </Text>
@@ -392,7 +397,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
 
                     {/* Breakfast Row */}
                     <View style={styles.mealRow}>
-                        <View style={[styles.mealTypeCell, { backgroundColor: theme.colors.surface }]}>
+                        <View style={[styles.mealTypeCell, { backgroundColor: theme.colors.surfaceElevated }, theme.shadows.sm]}>
                             <Ionicons name="sunny-outline" size={20} color={theme.accent.yellow} />
                             <Text style={[styles.mealTypeText, { color: theme.colors.text.primary }]}>Breakfast</Text>
                         </View>
@@ -405,7 +410,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
 
                     {/* Lunch Row */}
                     <View style={styles.mealRow}>
-                        <View style={[styles.mealTypeCell, { backgroundColor: theme.colors.surface }]}>
+                        <View style={[styles.mealTypeCell, { backgroundColor: theme.colors.surfaceElevated }, theme.shadows.sm]}>
                             <Ionicons name="partly-sunny-outline" size={20} color={theme.primary[500]} />
                             <Text style={[styles.mealTypeText, { color: theme.colors.text.primary }]}>Lunch</Text>
                         </View>
@@ -418,7 +423,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
 
                     {/* Dinner Row */}
                     <View style={styles.mealRow}>
-                        <View style={[styles.mealTypeCell, { backgroundColor: theme.colors.surface }]}>
+                        <View style={[styles.mealTypeCell, { backgroundColor: theme.colors.surfaceElevated }, theme.shadows.sm]}>
                             <Ionicons name="moon-outline" size={20} color={theme.secondary[500]} />
                             <Text style={[styles.mealTypeText, { color: theme.colors.text.primary }]}>Dinner</Text>
                         </View>
@@ -558,7 +563,7 @@ const styles = StyleSheet.create({
         padding: 8,
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: 8,
+        borderRadius: 14,
         marginRight: 8,
     },
     mealTypeText: {
@@ -581,7 +586,7 @@ const styles = StyleSheet.create({
     },
     mealSlot: {
         minHeight: 60,
-        borderRadius: 8,
+        borderRadius: 14,
         borderWidth: 1,
         padding: 8,
         justifyContent: 'center',
@@ -662,9 +667,9 @@ const styles = StyleSheet.create({
     draggableItem: {
         width: 100,
         marginRight: 12,
-        borderRadius: 12,
+        borderRadius: 16,
         padding: 8,
-        borderWidth: 1,
+        borderWidth: 0,
         alignItems: 'center',
     },
     draggableItemImage: {

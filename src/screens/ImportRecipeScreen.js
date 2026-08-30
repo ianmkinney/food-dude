@@ -17,6 +17,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { parseRecipe, parseRecipeFromUrl, parseRecipeFromImages } from '../services/recipeParser';
+import { friendlyMediaErrorMessage } from '../services/mediaTypes';
 import { recipeOperations } from '../database/operations';
 import FunLoader from '../components/FunLoader';
 
@@ -40,9 +41,16 @@ const ImportRecipeScreen = () => {
         }
         if (route.params?.sharedFiles) {
             const files = route.params.sharedFiles;
-            // Extract URIs (expo-share-intent usually provides 'path' or 'uri')
-            const imageUris = files.map(f => f.path || f.uri || f.filePath).filter(Boolean);
-            setImages(imageUris);
+            // Keep the shared mime type and file name — the AI layer needs them to
+            // declare the real format (iPhone screenshots are PNG, photos can be HEIC).
+            const assets = files
+                .map((f) => ({
+                    uri: f.path || f.uri || f.filePath,
+                    mimeType: f.mimeType || f.type,
+                    fileName: f.fileName || f.name,
+                }))
+                .filter((asset) => Boolean(asset.uri));
+            setImages(assets);
         }
     }, [route.params]);
 
@@ -103,10 +111,12 @@ const ImportRecipeScreen = () => {
             if (result.success) {
                 setParsedRecipe(result.recipe);
             } else {
-                setError(result.error || 'Failed to parse recipe');
+                console.error('[Import Recipe] Import failed:', result.error);
+                setError(friendlyMediaErrorMessage(result.error) || 'Failed to parse recipe');
             }
         } catch (e) {
-            setError(e.message);
+            console.error('[Import Recipe] Import threw:', e);
+            setError(friendlyMediaErrorMessage(e));
         } finally {
             setIsLoading(false);
             setImportStatus('');
@@ -180,8 +190,8 @@ const ImportRecipeScreen = () => {
 
                 {images.length > 0 && (
                     <ScrollView horizontal style={styles.imagePreviewContainer} contentContainerStyle={{ paddingHorizontal: 4 }}>
-                        {images.map((uri, index) => (
-                            <Image key={index} source={{ uri }} style={styles.previewImage} />
+                        {images.map((asset, index) => (
+                            <Image key={asset.uri || index} source={{ uri: asset.uri }} style={styles.previewImage} />
                         ))}
                     </ScrollView>
                 )}

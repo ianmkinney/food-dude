@@ -4,7 +4,6 @@ import {
     Text,
     StyleSheet,
     FlatList,
-    TouchableOpacity,
     TextInput,
     Alert,
     Image,
@@ -14,6 +13,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { recipeOperations } from '../database/operations';
+import ElevatedCard from '../components/ElevatedCard';
+import AnimatedPressable from '../components/AnimatedPressable';
+import FloatingActionButton from '../components/FloatingActionButton';
 
 const RecipeBookScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -76,12 +78,13 @@ const RecipeBookScreen = ({ navigation }) => {
         }
     };
 
-    const renderRecipeCard = ({ item }) => (
-        <TouchableOpacity
+    const renderRecipeCard = ({ item, index }) => (
+        <ElevatedCard
+            theme={theme}
+            index={index}
             style={[
-                styles.recipeCard, 
-                { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
-                (item.is_cooked === 1 || item.is_cooked === true) && { opacity: 0.7 }
+                styles.recipeCard,
+                (item.is_cooked === 1 || item.is_cooked === true) && { opacity: 0.72 },
             ]}
             onPress={() => {
                 navigation.navigate('RecipeDetail', { recipeId: item.id });
@@ -129,7 +132,7 @@ const RecipeBookScreen = ({ navigation }) => {
                     </View>
                 </View>
             </View>
-        </TouchableOpacity>
+        </ElevatedCard>
     );
 
     const renderEmptyState = () => (
@@ -147,8 +150,8 @@ const RecipeBookScreen = ({ navigation }) => {
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {/* Filter Buttons */}
-            <View style={[styles.filterContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-                <TouchableOpacity
+            <View style={[styles.filterContainer, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
+                <AnimatedPressable
                     style={[
                         styles.filterButton,
                         filter === 'all' && { backgroundColor: theme.primary[100] },
@@ -162,8 +165,8 @@ const RecipeBookScreen = ({ navigation }) => {
                     ]}>
                         All
                     </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </AnimatedPressable>
+                <AnimatedPressable
                     style={[
                         styles.filterButton,
                         filter === 'cooked' && { backgroundColor: theme.colors.success + '20' },
@@ -182,8 +185,8 @@ const RecipeBookScreen = ({ navigation }) => {
                     ]}>
                         Cooked
                     </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </AnimatedPressable>
+                <AnimatedPressable
                     style={[
                         styles.filterButton,
                         filter === 'uncooked' && { backgroundColor: theme.accent.green + '20' },
@@ -202,11 +205,11 @@ const RecipeBookScreen = ({ navigation }) => {
                     ]}>
                         Uncooked
                     </Text>
-                </TouchableOpacity>
+                </AnimatedPressable>
             </View>
 
             {/* Search Bar */}
-            <View style={[styles.searchContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={[styles.searchContainer, { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border }, theme.shadows.sm]}>
                 <Ionicons name="search" size={20} color={theme.colors.text.tertiary} />
                 <TextInput
                     style={[styles.searchInput, { color: theme.colors.text.primary }]}
@@ -228,13 +231,14 @@ const RecipeBookScreen = ({ navigation }) => {
                 onRefresh={loadRecipes}
             />
 
-            {/* Add Recipe Button */}
-            <TouchableOpacity
-                style={[styles.fab, { backgroundColor: theme.primary[500] }]}
+            <FloatingActionButton
+                theme={theme}
+                style={styles.fab}
+                accessibilityLabel="Add recipe"
                 onPress={() => navigation.navigate('AddRecipe')}
             >
                 <Ionicons name="add" size={28} color="#FFFFFF" />
-            </TouchableOpacity>
+            </FloatingActionButton>
         </View>
     );
 };
@@ -269,7 +273,7 @@ const styles = StyleSheet.create({
         margin: 16,
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderRadius: 12,
+        borderRadius: 18,
         borderWidth: 1,
     },
     searchInput: {
@@ -282,10 +286,8 @@ const styles = StyleSheet.create({
         paddingTop: 0,
     },
     recipeCard: {
-        borderRadius: 12,
         padding: 16,
-        marginBottom: 12,
-        borderWidth: 1,
+        marginBottom: 14,
     },
     recipeCardContent: {
         flexDirection: 'row',
@@ -344,27 +346,17 @@ const styles = StyleSheet.create({
         position: 'absolute',
         right: 20,
         bottom: 20,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
     },
     recipeImage: {
         width: 80,
         height: 80,
-        borderRadius: 8,
+        borderRadius: 14,
         backgroundColor: '#f0f0f0',
     },
     placeholderImage: {
         width: 80,
         height: 80,
-        borderRadius: 8,
+        borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
     },

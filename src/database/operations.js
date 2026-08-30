@@ -1,97 +1,15 @@
 import * as SQLite from 'expo-sqlite';
-import { createTablesSQL } from './schema';
+import { runMigrations } from './migrations';
 
 let db = null;
-
-// Helper function to check if a column exists in a table
-const columnExists = async (tableName, columnName) => {
-    try {
-        const tableInfo = await db.getAllAsync(`PRAGMA table_info(${tableName})`);
-        return tableInfo.some(col => col.name === columnName);
-    } catch (error) {
-        console.error(`Error checking column ${columnName} in ${tableName}:`, error);
-        return false;
-    }
-};
-
-// Migrate database schema - add missing columns
-const migrateDatabase = async () => {
-    try {
-        // Check and add missing columns to users table
-        const userColumns = [
-            { name: 'username', type: 'TEXT' },
-            { name: 'recipes_cooked', type: 'INTEGER', defaultValue: '0' },
-        ];
-
-        for (const col of userColumns) {
-            if (!(await columnExists('users', col.name))) {
-                console.log(`Adding ${col.name} column to users table...`);
-                const defaultClause = col.defaultValue ? ` DEFAULT ${col.defaultValue}` : '';
-                await db.execAsync(`ALTER TABLE users ADD COLUMN ${col.name} ${col.type}${defaultClause};`);
-                
-                // If there's a default value and existing rows, update them
-                if (col.defaultValue) {
-                    try {
-                        await db.execAsync(`UPDATE users SET ${col.name} = ${col.defaultValue} WHERE ${col.name} IS NULL;`);
-                    } catch (updateError) {
-                        console.log(`Note: Could not set default for ${col.name} (this is OK if table is empty)`);
-                    }
-                }
-            }
-        }
-
-        // Check and add missing columns to recipes table
-        const recipeColumns = [
-            { name: 'is_cooked', type: 'INTEGER', defaultValue: '0' },
-            { name: 'date_added', type: 'TEXT' },
-            { name: 'calories', type: 'REAL' },
-            { name: 'protein', type: 'REAL' },
-            { name: 'carbohydrates', type: 'REAL' },
-            { name: 'fat', type: 'REAL' },
-            { name: 'fiber', type: 'REAL' },
-            { name: 'sugar', type: 'REAL' },
-            { name: 'sodium', type: 'REAL' },
-        ];
-
-        for (const col of recipeColumns) {
-            if (!(await columnExists('recipes', col.name))) {
-                console.log(`Adding ${col.name} column to recipes table...`);
-                const defaultClause = col.defaultValue ? ` DEFAULT ${col.defaultValue}` : '';
-                await db.execAsync(`ALTER TABLE recipes ADD COLUMN ${col.name} ${col.type}${defaultClause};`);
-                
-                // If there's a default value and existing rows, update them
-                if (col.defaultValue) {
-                    try {
-                        await db.execAsync(`UPDATE recipes SET ${col.name} = ${col.defaultValue} WHERE ${col.name} IS NULL;`);
-                    } catch (updateError) {
-                        console.log(`Note: Could not set default for ${col.name} (this is OK if table is empty)`);
-                    }
-                }
-            }
-        }
-
-        console.log('Database migration completed successfully');
-    } catch (error) {
-        console.error('Error migrating database:', error);
-        // Don't throw - allow app to continue even if migration fails
-    }
-};
 
 // Initialize database
 export const initDatabase = async () => {
     try {
         db = await SQLite.openDatabaseAsync('fooddude.db');
-
-        // Enable foreign keys
         await db.execAsync('PRAGMA foreign_keys = ON;');
-
-        // Create tables
-        await db.execAsync(createTablesSQL);
-
-        // Run migrations for existing databases
-        await migrateDatabase();
-
-        console.log('Database initialized successfully');
+        const version = await runMigrations(db);
+        console.log(`Galaxy Health database ready at schema v${version}`);
         return db;
     } catch (error) {
         console.error('Error initializing database:', error);
@@ -122,7 +40,7 @@ export const recipeOperations = {
                 `INSERT INTO recipes (title, description, source_url, source_platform, image_uri, 
          servings, prep_time, cook_time, total_time, difficulty, cuisine, notes, is_cooked, date_added,
          calories, protein, carbohydrates, fat, fiber, sugar, sodium, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     recipe.title,
                     recipe.description || null,

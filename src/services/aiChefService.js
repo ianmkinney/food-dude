@@ -1,9 +1,8 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as FileSystem from 'expo-file-system/legacy';
 import { groceryOperations, pantryOperations, recipeOperations } from '../database/operations';
-
-const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-const genAI = API_KEY && API_KEY !== 'your_api_key_here' ? new GoogleGenerativeAI(API_KEY) : null;
+import { generateImage, generateMultimodal, generateText } from './aiClient';
+import { requireAiConfigured } from './aiSettings';
+import { prepareImageForAi, prepareVideoForAi } from './mediaPrep';
+import { friendlyMediaErrorMessage } from './mediaTypes';
 
 /**
  * Multi-modal AI Chef service
@@ -57,16 +56,9 @@ export class AiChefService {
         console.log('[AI Chef Service] generateRecipeFromPantry called');
         console.log('[AI Chef Service] Pantry items count:', pantryItems.length);
         
-        if (!genAI) {
-            console.error('[AI Chef Service] genAI is null - API key not configured');
-            throw new Error('Gemini API not configured. Please add your API key to .env file.');
-        }
+        await requireAiConfigured();
 
         try {
-            console.log('[AI Chef Service] Getting generative model...');
-            const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
-            console.log('[AI Chef Service] Model obtained');
-
             const itemsList = pantryItems.map(item => `- ${item.name}${item.quantity ? ` (${item.quantity} ${item.unit || ''})` : ''}`).join('\n');
             console.log('[AI Chef Service] Items list length:', itemsList.length);
 
@@ -124,26 +116,10 @@ For nutritional info:
 - If you cannot make a reasonable estimate, use null for that field.${flavorContext}`;
 
             console.log('[AI Chef Service] Prompt length:', prompt.length);
-            console.log('[AI Chef Service] Calling generateContent...');
-            
             const startTime = Date.now();
-            const result = await this.retryOperation(async () => {
-                console.log('[AI Chef Service] Retry operation - calling model.generateContent');
-                const result = await model.generateContent(prompt);
-                console.log('[AI Chef Service] generateContent returned');
-                return result;
-            });
-            const endTime = Date.now();
-            console.log(`[AI Chef Service] generateContent completed in ${endTime - startTime}ms`);
-
-            console.log('[AI Chef Service] Getting response object...');
-            const response = await result.response;
-            console.log('[AI Chef Service] Response object obtained');
-            
-            console.log('[AI Chef Service] Calling response.text()...');
-            const text = response.text();
+            const text = await this.retryOperation(async () => generateText(prompt));
+            console.log(`[AI Chef Service] generateText completed in ${Date.now() - startTime}ms`);
             console.log('[AI Chef Service] Text extracted, length:', text?.length || 0);
-            console.log('[AI Chef Service] Raw text preview:', text?.substring(0, 300) || 'No text');
 
             // Clean up response
             let cleanedText = text.trim();
@@ -364,16 +340,9 @@ For nutritional info:
         console.log('[AI Chef Service] Message:', message);
         console.log('[AI Chef Service] Context:', JSON.stringify(context, null, 2));
 
-        if (!genAI) {
-            console.error('[AI Chef Service] genAI is null - API key not configured');
-            throw new Error('Gemini API not configured. Please add your API key to .env file.');
-        }
+        await requireAiConfigured();
 
         try {
-            console.log('[AI Chef Service] Getting generative model...');
-            const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
-            console.log('[AI Chef Service] Model obtained');
-
             // Detect intent and fetch relevant data
             const lowerMessage = message.toLowerCase();
             let groceryContext = '';
@@ -488,27 +457,10 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
 
             const fullPrompt = `${systemPrompt}\n\nUser: ${message}`;
             console.log('[AI Chef Service] Full prompt length:', fullPrompt.length);
-            console.log('[AI Chef Service] Calling generateContent...');
-
             const startTime = Date.now();
-            const result = await this.retryOperation(async () => {
-                console.log('[AI Chef Service] Retry operation - calling model.generateContent');
-                const result = await model.generateContent(fullPrompt);
-                console.log('[AI Chef Service] generateContent returned');
-                return result;
-            });
-            const endTime = Date.now();
-            console.log(`[AI Chef Service] generateContent completed in ${endTime - startTime}ms`);
-
-            console.log('[AI Chef Service] Getting response object...');
-            const response = await result.response;
-            console.log('[AI Chef Service] Response object obtained');
-            console.log('[AI Chef Service] Response candidates:', response.candidates?.length || 0);
-            
-            console.log('[AI Chef Service] Calling response.text()...');
-            const text = response.text();
+            const text = await this.retryOperation(async () => generateText(fullPrompt));
+            console.log(`[AI Chef Service] generateText completed in ${Date.now() - startTime}ms`);
             console.log('[AI Chef Service] Text extracted, length:', text?.length || 0);
-            console.log('[AI Chef Service] Text preview:', text?.substring(0, 200) || 'No text');
 
             // Add to conversation history
             this.conversationHistory.push(
@@ -541,35 +493,21 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
     /**
      * Analyze image (ingredient, dish, cooking technique)
      */
-    async analyzeImage(imageUri, question = null) {
-        if (!genAI) {
-            throw new Error('Gemini API not configured. Please add your API key to .env file.');
-        }
+    async analyzeImage(imageAsset, question = null) {
+        await requireAiConfigured();
 
         try {
-            const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
-
-            // Read image as base64
-            const base64 = await FileSystem.readAsStringAsync(imageUri, {
-                encoding: 'base64',
-            });
-
-            const imagePart = {
-                inlineData: {
-                    data: base64,
-                    mimeType: 'image/jpeg',
-                },
-            };
+            const image = await prepareImageForAi(imageAsset);
 
             const prompt = question ||
                 'Analyze this food/ingredient image. Identify what it is, suggest recipes, or provide cooking tips.';
 
-            const result = await this.retryOperation(async () => {
-                return await model.generateContent([prompt, imagePart]);
-            });
-
-            const response = await result.response;
-            const text = response.text();
+            const text = await this.retryOperation(async () =>
+                generateMultimodal({
+                    prompt,
+                    images: [{ data: image.base64, mimeType: image.mimeType }],
+                })
+            );
 
             return {
                 success: true,
@@ -579,7 +517,7 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
             console.error('Error analyzing image:', error);
             return {
                 success: false,
-                error: error.message,
+                error: friendlyMediaErrorMessage(error),
             };
         }
     }
@@ -587,35 +525,21 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
     /**
      * Analyze video (cooking technique, recipe demonstration)
      */
-    async analyzeVideo(videoUri, question = null) {
-        if (!genAI) {
-            throw new Error('Gemini API not configured. Please add your API key to .env file.');
-        }
+    async analyzeVideo(videoAsset, question = null) {
+        await requireAiConfigured();
 
         try {
-            const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
-
-            // Read video as base64
-            const base64 = await FileSystem.readAsStringAsync(videoUri, {
-                encoding: 'base64',
-            });
-
-            const videoPart = {
-                inlineData: {
-                    data: base64,
-                    mimeType: 'video/mp4',
-                },
-            };
+            const video = await prepareVideoForAi(videoAsset);
 
             const prompt = question ||
                 'Analyze this cooking video. Describe the technique, identify the dish, or provide tips and suggestions.';
 
-            const result = await this.retryOperation(async () => {
-                return await model.generateContent([prompt, videoPart]);
-            });
-
-            const response = await result.response;
-            const text = response.text();
+            const text = await this.retryOperation(async () =>
+                generateMultimodal({
+                    prompt,
+                    video: { data: video.base64, mimeType: video.mimeType },
+                })
+            );
 
             return {
                 success: true,
@@ -625,7 +549,7 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
             console.error('Error analyzing video:', error);
             return {
                 success: false,
-                error: error.message,
+                error: friendlyMediaErrorMessage(error),
             };
         }
     }
@@ -634,13 +558,9 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
      * Get detailed cooking instructions for a recipe
      */
     async getDetailedInstructions(recipe) {
-        if (!genAI) {
-            throw new Error('Gemini API not configured. Please add your API key to .env file.');
-        }
+        await requireAiConfigured();
 
         try {
-            const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
-
             const prompt = `Provide detailed, step-by-step cooking instructions for this recipe.
             
 Recipe: ${recipe.title}
@@ -651,12 +571,7 @@ Example: ["Chop the onions.", "Sauté garlic."]
 
 Instructions:`;
 
-            const result = await this.retryOperation(async () => {
-                return await model.generateContent(prompt);
-            });
-
-            const response = await result.response;
-            const text = response.text();
+            const text = await this.retryOperation(async () => generateText(prompt));
 
             // Clean up response
             let cleanedText = text.trim();
@@ -685,13 +600,9 @@ Instructions:`;
      * Estimate grocery costs using AI
      */
     async estimateGroceryCost(groceryItems, storeName = null, location = null) {
-        if (!genAI) {
-            throw new Error('Gemini API not configured. Please add your API key to .env file.');
-        }
+        await requireAiConfigured();
 
         try {
-            const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
-
             // Build grocery list string
             const itemsList = groceryItems.map(item =>
                 `- ${item.name}${item.quantity ? ` (${item.quantity} ${item.unit || ''})` : ''}`
@@ -729,12 +640,7 @@ Return ONLY a valid JSON object with this structure (no markdown, no code blocks
   "disclaimer": "A note about estimation accuracy"
 }`;
 
-            const result = await this.retryOperation(async () => {
-                return await model.generateContent(prompt);
-            });
-
-            const response = await result.response;
-            const text = response.text();
+            const text = await this.retryOperation(async () => generateText(prompt));
 
             // Clean up response
             let cleanedText = text.trim();
@@ -763,13 +669,9 @@ Return ONLY a valid JSON object with this structure (no markdown, no code blocks
      * Enhance recipe with AI - fill missing data and verify existing data
      */
     async enhanceRecipe(recipe, customInstructions = null) {
-        if (!genAI) {
-            throw new Error('Gemini API not configured. Please add your API key to .env file.');
-        }
+        await requireAiConfigured();
 
         try {
-            const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
-
             // Build current recipe info
             const recipeInfo = `
 Title: ${recipe.title}
@@ -868,12 +770,7 @@ Important:
 - Nutritional values should be per serving, not for the entire recipe
 - Ingredients should maintain the same structure: ingredient name, quantity, unit, and optional section`;
 
-            const result = await this.retryOperation(async () => {
-                return await model.generateContent(prompt);
-            });
-
-            const response = await result.response;
-            const text = response.text();
+            const text = await this.retryOperation(async () => generateText(prompt));
 
             // Clean up response
             let cleanedText = text.trim();
@@ -902,15 +799,9 @@ Important:
      * Generate recipe image using AI
      */
     async generateRecipeImage(recipe) {
-        if (!genAI) {
-            throw new Error('Gemini API not configured. Please add your API key to .env file.');
-        }
+        await requireAiConfigured();
 
         try {
-            // Use the image generation model
-            const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-image-preview' });
-
-            // Build detailed prompt from recipe context
             const prompt = `Generate a professional, appetizing food photography image of this dish:
 
 Title: ${recipe.title}
@@ -930,35 +821,12 @@ Requirements:
 
 Create a beautiful, mouth-watering photo that makes viewers want to cook and eat this dish.`;
 
-            const result = await this.retryOperation(async () => {
-                return await model.generateContent(prompt);
-            });
-
-            const response = await result.response;
-
-            // Extract image from candidates
-            const candidates = response.candidates;
-            if (!candidates || candidates.length === 0) {
-                throw new Error('No image candidates returned');
-            }
-
-            // The image should be in the first candidate's content parts
-            const imagePart = candidates[0]?.content?.parts?.find(part => part.inlineData);
-
-            if (!imagePart || !imagePart.inlineData) {
-                console.log('Full response:', JSON.stringify(response, null, 2));
-                throw new Error('No image data found in response');
-            }
-
-            // Convert base64 image to data URI
-            const mimeType = imagePart.inlineData.mimeType || 'image/png';
-            const imageData = imagePart.inlineData.data;
-            const imageUri = `data:${mimeType};base64,${imageData}`;
+            const result = await this.retryOperation(async () => generateImage(prompt));
 
             return {
                 success: true,
-                imageUri: imageUri,
-                response: response
+                imageUri: result.imageUri,
+                response: result.response,
             };
         } catch (error) {
             console.error('Error generating recipe image:', error);
@@ -973,13 +841,9 @@ Create a beautiful, mouth-watering photo that makes viewers want to cook and eat
      * Intelligently match recipe ingredients with pantry items using AI
      */
     async matchIngredientsWithPantry(ingredientList, pantryList) {
-        if (!genAI) {
-            throw new Error('Gemini API not configured. Please add your API key to .env file.');
-        }
+        await requireAiConfigured();
 
         try {
-            const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
-
             const prompt = `You are a smart ingredient matcher. I need you to match recipe ingredients with items in a pantry.
 
 Recipe ingredients needed: ${ingredientList}
@@ -1006,12 +870,7 @@ Return ONLY a valid JSON object with this structure (no markdown, no code blocks
   ]
 }`;
 
-            const result = await this.retryOperation(async () => {
-                return await model.generateContent(prompt);
-            });
-
-            const response = await result.response;
-            const text = response.text();
+            const text = await this.retryOperation(async () => generateText(prompt));
 
             // Clean up response
             let cleanedText = text.trim();

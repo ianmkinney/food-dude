@@ -10,7 +10,7 @@ import {
     ActivityIndicator,
     Modal,
 } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, isCameraAvailable, useCameraPermissions } from '../platform/camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getTheme } from '../theme';
@@ -61,6 +61,13 @@ const EditPantryItemScreen = () => {
     }, [item]);
 
     const startScanning = async () => {
+        if (!isCameraAvailable) {
+            Alert.alert(
+                'Camera on the phone app',
+                'Barcode scanning needs the camera in Expo Go or a native build. Type the barcode below, or edit the item by name.'
+            );
+            return;
+        }
         if (!permission) {
             await requestPermission();
         }

@@ -55,14 +55,9 @@ A comprehensive cross-platform mobile recipe management app built with React Nat
    npm install
    ```
 
-3. **Configure API Keys**
+3. **Configure API keys in the app**
    
-   Edit the `.env` file and add your Google Gemini API key:
-   ```
-   EXPO_PUBLIC_GEMINI_API_KEY=your_actual_api_key_here
-   ```
-   
-   Get your free API key from: https://makersuite.google.com/app/apikey
+   Open **Account** and paste your own Anthropic (Claude), OpenAI, xAI (Grok), or Google Gemini key. It is stored on-device in SecureStore (Keychain / Keystore). Do not put provider keys in `.env` — `EXPO_PUBLIC_*` values are compiled into the JS bundle.
 
 4. **Start the development server**
    ```bash
@@ -182,14 +177,14 @@ Food Dude features a modern, vibrant design with:
 
 - **Local Storage**: All data is stored locally on your device using SQLite
 - **No Account Required**: Use the app without signing up
-- **API Keys**: Your Gemini API key is stored locally in `.env`
+- **API Keys**: Your provider key is stored on-device in SecureStore, never in the binary or our servers
 - **No Tracking**: We don't collect any usage data
 
 ## 🐛 Troubleshooting
 
-### "Gemini API not configured" error
-- Make sure you've added your API key to the `.env` file
-- Restart the Expo server after adding the key
+### "Add an API key in Account" error
+- Open Account, pick a provider, paste your key, and save
+- Refresh the model list after saving. Pantry, planner, and grocery work without a key.
 
 ### Barcode scanner not working
 - Grant camera permissions when prompted
