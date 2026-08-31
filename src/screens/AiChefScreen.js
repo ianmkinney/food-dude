@@ -18,6 +18,7 @@ import Animated, {
     useSharedValue,
     withTiming,
     Easing,
+    runOnJS,
 } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,10 +53,12 @@ const AiChefScreen = () => {
     const [generatingRecipeStatus, setGeneratingRecipeStatus] = useState('');
     const [helpersCollapsed, setHelpersCollapsed] = useState(false);
     const [helpersMeasured, setHelpersMeasured] = useState(false);
+    const [helpersAnimating, setHelpersAnimating] = useState(false);
     // 1 = fully expanded, 0 = fully collapsed. Height is driven off a measured
     // shared value instead of a layout animation so web behaves like native.
     const helpersProgress = useSharedValue(1);
     const helpersHeight = useSharedValue(0);
+    const helpersAnimGenRef = useRef(0);
 
     useEffect(() => {
         let mounted = true;
@@ -76,9 +79,16 @@ const AiChefScreen = () => {
 
     const helpersHeightRef = useRef(0);
 
+    const endHelpersAnim = useCallback((gen) => {
+        if (gen === helpersAnimGenRef.current) {
+            setHelpersAnimating(false);
+        }
+    }, []);
+
     const toggleHelpers = useCallback(() => {
         const next = !helpersCollapsed;
         setHelpersCollapsed(next);
+        const gen = ++helpersAnimGenRef.current;
         // Parent height goes to 0 when collapsed; the inner onLayout can then
         // report 0 (or a mid-clamp leftover) and wipe the shared value. Restore
         // the last good height before animating open so the panel can grow.
@@ -92,40 +102,45 @@ const AiChefScreen = () => {
             }
         }
         const target = next ? 0 : 1;
-        helpersProgress.value = reduceMotion
-            ? target
-            : withTiming(target, {
-                duration: motion.duration.normal,
-                easing: Easing.out(Easing.cubic),
-            });
+        const canAnimateHeight = !reduceMotion && helpersHeightRef.current > 0;
+        if (canAnimateHeight) {
+            setHelpersAnimating(true);
+            helpersProgress.value = withTiming(
+                target,
+                {
+                    duration: motion.duration.normal,
+                    easing: Easing.out(Easing.cubic),
+                },
+                (finished) => {
+                    if (finished) {
+                        runOnJS(endHelpersAnim)(gen);
+                    }
+                }
+            );
+        } else {
+            helpersProgress.value = target;
+            setHelpersAnimating(false);
+        }
         AsyncStorage.setItem(HELPERS_COLLAPSED_KEY, String(next)).catch((error) => {
             console.error('Error saving AI Chef helper state:', error);
         });
-    }, [helpersCollapsed, reduceMotion]);
+    }, [helpersCollapsed, reduceMotion, endHelpersAnim]);
 
     const handleHelpersLayout = useCallback((event) => {
         const { height } = event.nativeEvent.layout;
         if (height <= 0) {
             return;
         }
-        const stored = helpersHeightRef.current;
         // First pass is often just the pantry pill (recipes still loading, or
-        // the carousel has not finished layout). Always grow so we do not
-        // freeze that short height and clip the cards.
-        if (height > stored) {
+        // the carousel has not finished layout). Grow whenever we see a taller
+        // measure — including while fully expanded — so we never freeze a
+        // short height. Never shrink: collapse is progress, not a new measure,
+        // and a smaller onLayout is usually the overflow:hidden clamp.
+        if (height > helpersHeightRef.current) {
             helpersHeightRef.current = height;
             helpersHeight.value = height;
             setHelpersMeasured(true);
-            return;
         }
-        // Ignore shrinks while the panel is not fully open so collapse cannot
-        // write a mid-clamp leftover over the real height.
-        if (helpersProgress.value < 1 && stored > 0) {
-            return;
-        }
-        helpersHeightRef.current = height;
-        helpersHeight.value = height;
-        setHelpersMeasured(true);
     }, []);
 
     const helpersBodyStyle = useAnimatedStyle(() => ({
@@ -709,24 +724,19 @@ const AiChefScreen = () => {
                 <Animated.View
                     style={[
                         styles.helpersBody,
-                        // Until a layout pass reports a real height, never clamp the
-                        // panel to a measured 0 — a missed measure would hide the
-                        // content outright. Only the collapsed case pins it shut.
-                        helpersMeasured
-                            ? helpersBodyStyle
-                            : helpersCollapsed && styles.helpersBodyShut,
+                        // Clamp height only while collapsing/expanding or shut.
+                        // When open and idle, leave height unconstrained so the
+                        // pantry pill + carousel take flow space and push chat
+                        // down. A missed first measure must not hide content.
+                        helpersCollapsed || helpersAnimating
+                            ? (helpersMeasured
+                                ? helpersBodyStyle
+                                : helpersCollapsed && styles.helpersBodyShut)
+                            : null,
                     ]}
                     pointerEvents={helpersCollapsed ? 'none' : 'auto'}
                 >
-                    <View
-                        onLayout={handleHelpersLayout}
-                        collapsable={false}
-                        // After the first measure, take the inner out of the
-                        // clipped parent's height constraint so later passes
-                        // (carousel, images) can report a larger natural size.
-                        // The animated parent height still drives chat layout.
-                        style={helpersMeasured ? styles.helpersMeasure : undefined}
-                    >
+                    <View onLayout={handleHelpersLayout} collapsable={false}>
                         <View style={styles.quickActions}>
                             <AnimatedPressable
                                 style={[styles.quickActionButton, { backgroundColor: theme.primary[100] }]}
@@ -816,6 +826,7 @@ const AiChefScreen = () => {
                 data={messages}
                 renderItem={renderMessage}
                 keyExtractor={(item, index) => index.toString()}
+                style={styles.messages}
                 contentContainerStyle={styles.messagesList}
                 onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
                 onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
@@ -882,6 +893,7 @@ const styles = StyleSheet.create({
     },
     helpersPanel: {
         borderBottomWidth: 1,
+        flexShrink: 0,
     },
     helpersHeader: {
         flexDirection: 'row',
@@ -897,17 +909,10 @@ const styles = StyleSheet.create({
     },
     helpersBody: {
         overflow: 'hidden',
-        position: 'relative',
     },
     helpersBodyShut: {
         height: 0,
         opacity: 0,
-    },
-    helpersMeasure: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        top: 0,
     },
     quickActions: {
         flexDirection: 'row',
@@ -925,6 +930,9 @@ const styles = StyleSheet.create({
     quickActionText: {
         fontSize: 13,
         fontWeight: '600',
+    },
+    messages: {
+        flex: 1,
     },
     messagesList: {
         padding: 16,
