@@ -184,6 +184,17 @@ Food Dude is a Bring Your Own Key app. Your data stays on this device. API keys 
 
 Full map: [USER_SAFETY.md](./USER_SAFETY.md). The same disclaimer is shown in **Account**.
 
+## 📣 Reporting a problem
+
+**Account → Send Feedback** turns a complaint into a pull request.
+
+1. Describe what went wrong, optionally attach a screenshot, and press **Review report**. The screen shows the exact text that will be filed — nothing has left the device yet.
+2. **Open prefilled GitHub issue** opens a prefilled New Issue page in your browser. You press Submit. The app holds no GitHub credential; your own browser session does the authenticating.
+3. An issue labelled `user-feedback` starts a Cursor cloud agent, which reproduces the bug, fixes it on a branch, and opens a **draft** pull request with a demo video showing the bug and then the fix.
+4. The repo owner reviews that PR and merges it. Nothing merges itself.
+
+Anything resembling an API key, token, or email address is redacted before the report leaves the device. The loop needs one secret, `CURSOR_API_KEY`, set as a GitHub Actions repository secret — never in the app or in `EXPO_PUBLIC_*`. Agent behaviour lives in [.github/agent-instructions/feedback-fix-loop.md](./.github/agent-instructions/feedback-fix-loop.md).
+
 ## 🐛 Troubleshooting
 
 ### "Add an API key in Account" error
