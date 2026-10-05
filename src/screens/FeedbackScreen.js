@@ -520,6 +520,11 @@ const styles = StyleSheet.create({
         padding: 16,
         paddingBottom: 48,
         gap: 12,
+        // A form is easier to read as a column than stretched across a desktop
+        // browser. No effect at phone widths.
+        width: '100%',
+        maxWidth: 720,
+        alignSelf: 'center',
     },
     card: {
         padding: 20,
@@ -693,8 +698,8 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     previewBody: {
-        fontSize: 12,
-        lineHeight: 18,
+        fontSize: 13,
+        lineHeight: 19,
         fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
     stepRow: {
