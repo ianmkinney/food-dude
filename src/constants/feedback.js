@@ -31,7 +31,7 @@ export const FEEDBACK_MIN_PROBLEM_LENGTH = 12;
 
 // Shown verbatim in the UI so the attached context is never a surprise.
 export const FEEDBACK_CONTEXT_DISCLOSURE = [
-    'App version and the platform you are on',
+    'App version, and the platform or browser you are on',
     'Which screen you were on when you opened this form',
     'Light or dark mode',
     'Which AI provider is selected, and whether a key is saved — never the key itself',

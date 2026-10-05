@@ -19,6 +19,26 @@ const HISTORY_LIMIT = 10;
 
 export const APP_VERSION = appConfig?.expo?.version || '0.0.0';
 
+// `Platform.Version` is meaningless on web, where the browser is what a fix has
+// to be reproduced against. A short label beats a full user-agent string: it is
+// what a maintainer actually reads, and it carries less fingerprinting detail.
+function browserLabel(agent) {
+    const engine = agent.match(/(Edg|OPR|Chrome|Firefox|Safari)\/(\d+)/);
+    const system = agent.match(/\(([^)]*)\)/);
+    return (
+        [engine ? `${engine[1]} ${engine[2]}` : 'browser', system ? system[1] : null]
+            .filter(Boolean)
+            .join(' on ') || 'browser'
+    );
+}
+
+function platformVersion() {
+    if (Platform.OS === 'web') {
+        return typeof navigator === 'undefined' ? 'browser' : browserLabel(navigator.userAgent || '');
+    }
+    return String(Platform.Version ?? 'unknown');
+}
+
 export async function collectDeviceContext({ screen } = {}) {
     let provider = null;
     let hasKey = false;
@@ -32,7 +52,7 @@ export async function collectDeviceContext({ screen } = {}) {
     return {
         appVersion: APP_VERSION,
         platform: Platform.OS,
-        platformVersion: String(Platform.Version ?? 'unknown'),
+        platformVersion: platformVersion(),
         screen: screen || 'unknown',
         aiProvider: provider || 'none',
         aiKeySaved: hasKey,
