@@ -261,7 +261,24 @@ const AccountScreen = ({ navigation }) => {
             {/* Settings Section */}
             <View style={styles.settingsContainer}>
                 <Text style={[styles.settingsTitle, { color: theme.colors.text.primary }]}>Settings</Text>
-                
+
+                <ElevatedCard
+                    theme={theme}
+                    style={styles.settingItem}
+                    onPress={() => navigation.navigate('Feedback', { fromScreen: 'Account' })}
+                >
+                    <Ionicons name="megaphone-outline" size={24} color={theme.primary[500]} />
+                    <View style={styles.settingBody}>
+                        <Text style={[styles.settingText, { color: theme.colors.text.primary }]}>
+                            Send Feedback
+                        </Text>
+                        <Text style={[styles.settingHint, { color: theme.colors.text.secondary }]}>
+                            Report a bug and it becomes a reviewable pull request
+                        </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
+                </ElevatedCard>
+
                 <ElevatedCard
                     theme={theme}
                     style={styles.settingItem}
@@ -428,6 +445,14 @@ const styles = StyleSheet.create({
     settingText: {
         flex: 1,
         fontSize: 16,
+    },
+    settingBody: {
+        flex: 1,
+        gap: 2,
+    },
+    settingHint: {
+        fontSize: 12,
+        lineHeight: 16,
     },
     statsContainer: {
         flexDirection: 'row',
