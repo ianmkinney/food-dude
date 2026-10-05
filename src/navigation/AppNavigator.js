@@ -23,6 +23,7 @@ import AddGroceryItemScreen from '../screens/AddGroceryItemScreen';
 import EstimateCostScreen from '../screens/EstimateCostScreen';
 import PartyScreen from '../screens/PartyScreen';
 import AccountScreen from '../screens/AccountScreen';
+import FeedbackScreen from '../screens/FeedbackScreen';
 import HeaderTitle from '../components/HeaderTitle';
 
 const Tab = createBottomTabNavigator();
@@ -380,6 +381,31 @@ const AppNavigator = () => {
                 options={({ navigation }) => ({ 
                     title: 'Party',
                     headerBackTitle: 'Recipe Book',
+                    headerStyle: {
+                        backgroundColor: theme.colors.background,
+                        borderBottomColor: theme.colors.border,
+                    },
+                    headerTintColor: theme.colors.text.primary,
+                    headerTitleStyle: {
+                        fontWeight: 'bold',
+                        fontSize: 20,
+                    },
+                    headerLeft: () => (
+                        <TouchableOpacity
+                            onPress={() => navigation.goBack()}
+                            style={{ marginLeft: 16 }}
+                        >
+                            <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
+                        </TouchableOpacity>
+                    ),
+                })}
+            />
+            <Stack.Screen
+                name="Feedback"
+                component={FeedbackScreen}
+                options={({ navigation }) => ({
+                    title: 'Send Feedback',
+                    headerBackTitle: 'Account',
                     headerStyle: {
                         backgroundColor: theme.colors.background,
                         borderBottomColor: theme.colors.border,

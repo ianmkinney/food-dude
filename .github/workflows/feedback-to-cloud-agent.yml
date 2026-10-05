@@ -1,0 +1,110 @@
+name: Feedback to cloud agent
+
+# In-app feedback arrives as an issue labelled `user-feedback` (the Food Dude
+# app prefills that label in the New Issue link). This workflow is the only
+# place the Cursor API key exists — the app never holds a credential.
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: feedback-agent-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  launch:
+    # Only reports from people who can already push here may spend agent time.
+    if: >-
+      contains(github.event.issue.labels.*.name, 'user-feedback') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # `opened` and `labeled` both fire when an issue is created with a label,
+      # so the marker comment is what makes this idempotent. The secret is only
+      # tested for emptiness here; its value is never printed.
+      - name: Check launch preconditions
+        id: pre
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --paginate --jq '.[].body' \
+            | grep -q 'feedback-agent-launched'; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "${CURSOR_API_KEY:-}" ]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Explain the one-time setup when no API key is configured
+        if: steps.pre.outputs.already == 'false' && steps.pre.outputs.has_key == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file - <<'EOF'
+          Feedback received, but no cloud agent could be launched: the `CURSOR_API_KEY` repository secret is not set.
+
+          One-time setup for a repo admin: create a key at **cursor.com/dashboard → API Keys → New API Key**, then add it under **Settings → Secrets and variables → Actions → New repository secret** named `CURSOR_API_KEY`.
+
+          Until then the manual path works: comment `@cursor` on this issue to start an agent by hand.
+          EOF
+
+      - name: Launch the cloud agent
+        id: launch
+        if: steps.pre.outputs.already == 'false' && steps.pre.outputs.has_key == 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          CURSOR_MODEL: ${{ vars.CURSOR_FEEDBACK_MODEL }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          # Issue text is untrusted: passed through the environment so it is never
+          # interpolated into a shell command, and sanitized again in the script.
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          BASE_REF: ${{ github.event.repository.default_branch }}
+        run: node .github/scripts/launch-feedback-agent.mjs
+
+      - name: Link the agent run on the issue
+        if: steps.launch.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          AGENT_REF: ${{ steps.launch.outputs.agent_url || steps.launch.outputs.agent_id }}
+        run: |
+          set -euo pipefail
+          {
+            echo '<!-- feedback-agent-launched -->'
+            echo "A Cursor cloud agent is working on this report: $AGENT_REF"
+            echo
+            echo 'It will reproduce the problem, fix it on a branch, and open a **draft pull request** with a demo video showing the bug and then the fix. Review that PR and merge it when the video convinces you.'
+          } | gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file -
+
+      - name: Report a failed launch on the issue
+        if: failure() && steps.pre.outputs.already == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          printf 'Could not launch a cloud agent for this report. Workflow run: %s — comment `@cursor` here to start one manually.\n' "$RUN_URL" \
+            | gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file -

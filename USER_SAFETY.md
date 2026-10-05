@@ -16,6 +16,7 @@ That is the accurate line. The app does **not** encrypt every file on disk. SQLi
 | Selected provider + model ids | SecureStore (same path as keys) | Yes on native | No |
 | Cached model lists | AsyncStorage (not a secret) | No (on-device) | No |
 | Theme (`themeMode`) and AI Chef helper collapse | AsyncStorage | No (on-device) | No |
+| Feedback reports you have handed off (title and issue link only) | AsyncStorage | No (on-device) | No |
 | Account profile: name, username, email, avatar, flavor preferences, recipes cooked | On-device SQLite `users` table | No extra encryption | No |
 | Recipes, pantry, grocery, meal plans, parties, AI chat history, workouts, mood, lab panels | On-device SQLite (`fooddude.db`) | No extra encryption | No, except when you ask AI Chef to use them in a prompt |
 
@@ -35,6 +36,7 @@ Food Dude has no account server. The only network calls that carry your content 
 1. **Your chosen LLM provider** (Anthropic, OpenAI, xAI, or Google Gemini). Chat, recipe import, image analysis, cost estimates, and recipe photos go to that provider with the key stored on this device. Flavor preferences and pantry context are included in those prompts when you use AI Chef.
 2. **Open Food Facts** for barcode lookups. The request is a public product lookup, not your account profile.
 3. **A recipe URL you import**, fetched so the app can parse the page.
+4. **A feedback report you file.** Account → **Send Feedback** shows you the exact text first, then opens a prefilled GitHub issue in your browser. Nothing is sent until you press Submit there. The report carries what you typed, the app version, your platform or browser, which screen you were on, light/dark mode, and which AI provider is selected — never the key itself. Anything that looks like an API key, token, or email address is redacted before the report leaves the device. Your recipes, pantry, and profile are not attached.
 
 Labs and other health-style notes stay on device. If you later ask an LLM about them, only the text you send in that prompt leaves the phone.
 
@@ -54,6 +56,7 @@ Flavor preferences are a column on the local `users` table (`flavor_preferences`
 - Not full-disk encryption of recipes or pantry.
 - Not a cloud backup. If you lose the phone and have no OS backup, the local database is gone.
 - Not a Food Dude-hosted account. Email in Account is a local label only.
+- Not anonymous feedback. A report you submit becomes a public GitHub issue under your GitHub account.
 
 ## Further reading
 

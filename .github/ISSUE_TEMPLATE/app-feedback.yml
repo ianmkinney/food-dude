@@ -1,0 +1,46 @@
+name: App feedback
+description: Report something wrong in the Food Dude app. Normally filed for you by Account → Send Feedback.
+title: "[Something broke] "
+labels: ["user-feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The app's **Account → Send Feedback** screen fills this in for you,
+        including app version and device context. Filing by hand works too.
+
+        An issue with the `user-feedback` label starts a Cursor cloud agent,
+        which reproduces the problem and opens a **draft pull request** with a
+        demo video for the repo owner to review.
+
+        Please do not paste API keys, tokens, or anything private.
+  - type: textarea
+    id: report
+    attributes:
+      label: What went wrong
+      description: What you did, what happened, and what you expected instead.
+      placeholder: |
+        The pantry list went blank after I scanned a barcode.
+
+        1. Open Pantry
+        2. Tap scan
+        3. Point at a soup can
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version and platform
+      placeholder: 1.0.0, iOS 18.2
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: Paste or drag an image in. A picture of the broken screen helps a lot.
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before you submit
+      options:
+        - label: This report contains no API keys, tokens, or private information
+          required: true
