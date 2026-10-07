@@ -9,6 +9,7 @@ import { platformAi } from '../monetization/platformAi';
 import { CREDIT_COSTS, CREDIT_PACKS, PLUS_MONTHLY_CREDITS, PLUS_PLANS } from '../monetization/products';
 
 const PRIVACY_URL = 'https://amplifood.vercel.app/privacy';
+const TERMS_URL = 'https://amplifood.vercel.app/terms';
 
 // Selling credits before AmpliFood AI exists would take money for nothing, so
 // release builds keep the buy buttons off until the platform client is live.
@@ -185,11 +186,24 @@ export default function PaywallScreen() {
             <Text style={[styles.legal, { color: text.tertiary }]}>
                 {Platform.OS === 'ios'
                     ? 'Payment is charged to your Apple ID. Plus renews automatically unless cancelled at least 24 hours before the end of the period; manage or cancel it in Settings → Apple ID → Subscriptions.'
-                    : 'Plus renews automatically unless cancelled; manage or cancel it in Google Play → Payments & subscriptions.'}{' '}
-                <Text style={{ textDecorationLine: 'underline' }} onPress={() => Linking.openURL(PRIVACY_URL)}>
-                    Privacy policy
-                </Text>
+                    : 'Plus renews automatically unless cancelled; manage or cancel it in Google Play → Payments & subscriptions.'}
             </Text>
+            <View style={styles.legalLinks}>
+                <Text
+                    accessibilityRole="link"
+                    style={[styles.legalLink, { color: theme.primary[600] }]}
+                    onPress={() => Linking.openURL(TERMS_URL)}
+                >
+                    Terms of Use
+                </Text>
+                <Text
+                    accessibilityRole="link"
+                    style={[styles.legalLink, { color: theme.primary[600] }]}
+                    onPress={() => Linking.openURL(PRIVACY_URL)}
+                >
+                    Privacy Policy
+                </Text>
+            </View>
         </ScrollView>
     );
 }
@@ -216,4 +230,6 @@ const styles = StyleSheet.create({
     restoreText: { fontWeight: '800', fontSize: 16 },
     error: { textAlign: 'center', fontSize: 14 },
     legal: { fontSize: 12, lineHeight: 17, textAlign: 'center' },
+    legalLinks: { flexDirection: 'row', justifyContent: 'center', gap: 24 },
+    legalLink: { fontSize: 14, fontWeight: '700', textDecorationLine: 'underline', paddingVertical: 6 },
 });

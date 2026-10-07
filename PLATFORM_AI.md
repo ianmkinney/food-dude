@@ -86,4 +86,4 @@ There are no accounts today. The ledger needs a stable owner per purchaser:
 - Create the five products in App Store Connect and Play Console, both subscriptions in one subscription group / base plan.
 - Accept the Paid Apps agreement and banking/tax setup.
 - Test with sandbox / license-tester accounts on a **development build**. `expo-iap` is a native module and doesn't run in Expo Go.
-- Apple requires the renewal terms (shown on the paywall), links to privacy and terms (a Terms page doesn't exist yet), and a working Restore button.
+- Apple requires the renewal terms (shown on the paywall), links to Terms of Use and Privacy Policy (on the paywall, pointing to `/terms` and `/privacy`; `/terms` ships with PR #10), and a working Restore button.
