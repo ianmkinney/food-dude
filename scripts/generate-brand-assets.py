@@ -155,6 +155,11 @@ def main():
     save(scale_to_height(mark, 480), BRAND / "mark-color.png")
     save(scale_to_height(stamp, 240), BRAND / "mark-ink.png")
 
+    # Same art for the static /about, /privacy and /support pages.
+    for name in ("wordmark.png", "wordmark-dark.png", "mark-color.png"):
+        (PUBLIC / "brand").mkdir(parents=True, exist_ok=True)
+        (PUBLIC / "brand" / name).write_bytes((BRAND / name).read_bytes())
+
 
 if __name__ == "__main__":
     main()

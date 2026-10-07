@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy · AmpliFood</title>
+  <meta name="description" content="How AmpliFood handles your data: no account, data stays on your device, your AI key goes only to the provider you choose." />
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="stylesheet" href="/site.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="site">
+      <a href="/about"><picture><source srcset="/brand/wordmark-dark.png" media="(prefers-color-scheme: dark)" /><img src="/brand/wordmark.png" alt="AmpliFood" /></picture></a>
+      <nav><a href="/about">About</a><a href="/privacy" aria-current="page">Privacy</a><a href="/support">Support</a><a href="/">Open app</a></nav>
+    </header>
+    <div class="checker" aria-hidden="true"></div>
+
+    <main>
+      <h1>Privacy Policy</h1>
+      <p class="lede">The short version: AmpliFood has no accounts and no servers that collect your data. Your kitchen stays on your device, and your AI key goes only to the provider you choose.</p>
+      <p><em>Last updated: October 7, 2026</em></p>
+
+      <h2>No account</h2>
+      <p>You don't sign up or log in. The name, username, email, and flavor preferences on the Account screen are stored only on your device, as labels for your own use. They are never sent to us.</p>
+
+      <h2>Your data stays on your device</h2>
+      <ul>
+        <li>Recipes, meal plans, pantry items, grocery lists, parties, AI chat history, and your profile are saved in a local SQLite database on your device. In the web version, that database lives in your browser's storage for this site.</li>
+        <li>Theme and display settings are saved locally on your device.</li>
+        <li>We don't upload, back up, or sync any of it. If you delete the app or clear the site's data, it's gone.</li>
+      </ul>
+
+      <h2>Your AI key</h2>
+      <ul>
+        <li>On iPhone and Android, the API key you add is stored with SecureStore in the system's encrypted storage (iOS Keychain / Android Keystore).</li>
+        <li>In the web version, there is no system keychain, so the key is kept in your browser's local storage for this site. Anyone with access to that browser profile could read it, so use Account → Clear on shared computers.</li>
+        <li>The key is never sent to AmpliFood. It's only sent, with your requests, to the AI provider you picked.</li>
+      </ul>
+
+      <h2>What leaves your device, and where it goes</h2>
+      <ul>
+        <li><strong>AI requests go directly to your chosen provider</strong> (Anthropic, OpenAI, xAI, or Google Gemini), and only when you use an AI feature. A request can include the text, links, screenshots, or photos you submit, and, for AI chef features, relevant pantry items, recipes, and flavor preferences. That provider's own privacy policy and terms govern what it does with the request.</li>
+        <li><strong>Barcode numbers go to Open Food Facts</strong>, a public product database, so the app can look up the product name and details. Only the barcode number is sent, not your profile.</li>
+        <li><strong>Recipe links you import</strong> are fetched by your device so the recipe can be read.</li>
+        <li><strong>Web version:</strong> the site is hosted on Vercel, which, like any web host, receives standard request information (such as IP address and browser type) when it serves the pages. AmpliFood doesn't add tracking on top of that.</li>
+      </ul>
+
+      <h2>Camera and photos</h2>
+      <ul>
+        <li>The camera is used only to scan product barcodes when you add or edit pantry items. Frames are read on your device, and only the decoded barcode number is used.</li>
+        <li>When you add recipe screenshots or a recipe photo, AmpliFood uses the system photo picker. The app receives only the photos you select, never your whole library.</li>
+        <li>AmpliFood doesn't use the microphone or your location.</li>
+      </ul>
+
+      <h2>No analytics, no ads</h2>
+      <p>AmpliFood contains no analytics or tracking SDKs, no advertising, and no ad identifiers. We don't sell or share personal data, because we don't collect it.</p>
+
+      <h2>Children</h2>
+      <p>AmpliFood isn't directed at children under 13 and doesn't knowingly collect information from anyone.</p>
+
+      <h2>Deleting your data</h2>
+      <ul>
+        <li>Remove an AI key: Account → AI provider → Clear.</li>
+        <li>Remove everything: delete the app, or in the web version, clear this site's data in your browser settings.</li>
+      </ul>
+
+      <h2>Changes and contact</h2>
+      <p>If this policy changes, we'll update this page and the date above. Questions? See <a href="/support">Support</a>.</p>
+    </main>
+
+    <footer class="site">
+      <a href="/about">About</a><a href="/support">Support</a><a href="/">Open app</a>
+      <p>© AmpliFood</p>
+    </footer>
+  </div>
+</body>
+</html>
