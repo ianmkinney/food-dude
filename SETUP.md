@@ -1,8 +1,6 @@
-# 🚨 IMPORTANT: How to Run Food Dude
+# How to Run AmpliFood
 
-## The app is FULLY BUILT and ready to run! ✅
-
-However, **SQLite does not work on web browsers**. You need to run this on a mobile device or simulator.
+AmpliFood runs on iOS and Android (Expo Go, simulators, or builds) and in a web browser (`npm run web`). Barcode camera scanning and the share sheet are phone-only. For hosting the web build, see [WEB_DEPLOY.md](./WEB_DEPLOY.md).
 
 ## ✅ Recommended: Use Your Phone (Easiest!)
 
@@ -66,8 +64,11 @@ Once running, you'll have access to:
 → Open Account, save a provider key on this device
 
 **Web bundling errors**
-→ Use a real browser at the Expo web URL (not a vscode-file preview). Metro treats `.wasm` as an asset and sets COOP/COEP for SQLite. Camera/barcode degrade on web; use Expo Go for scanning.
+→ Use a real browser at the Expo web URL (not a vscode-file preview). Metro treats `.wasm` as an asset for SQLite. No COOP/COEP headers are needed because the app only uses the async SQLite API. Camera/barcode degrade on web; use Expo Go for scanning.
+
+**"AmpliFood is open in another tab" (web)**
+→ The browser database can only be open in one tab. Close the other tab and press Try again.
 
 ---
 
-**The app is complete and ready to use! Just run it on a mobile device.** 📱✨
+**Run it on a phone, a simulator, or in the browser.**

@@ -1,12 +1,12 @@
-# User safety — how Food Dude stores your data
+# User safety — how AmpliFood stores your data
 
-Food Dude is a **Bring Your Own Key (BYOK)** app. You paste an API key you already own. There is no Food Dude backend for accounts, keys, recipes, or preferences. Nothing in this document is a substitute for reading your AI provider’s own privacy policy.
+AmpliFood is a **Bring Your Own Key (BYOK)** app. You paste an API key you already own. There is no AmpliFood backend for accounts, keys, recipes, or preferences. Nothing in this document is a substitute for reading your AI provider’s own privacy policy.
 
 ## Honest storage model
 
 Your data stays on this device. API keys are stored in the OS encrypted keychain. Recipes, pantry, and preferences live in a local database that never leaves your phone.
 
-That is the accurate line. The app does **not** encrypt every file on disk. SQLite is sandboxed by iOS/Android and is never uploaded, but the database file itself is not extra-encrypted by Food Dude.
+That is the accurate line. The app does **not** encrypt every file on disk. SQLite is sandboxed by iOS/Android and is never uploaded, but the database file itself is not extra-encrypted by AmpliFood.
 
 ## What lives where
 
@@ -17,20 +17,22 @@ That is the accurate line. The app does **not** encrypt every file on disk. SQLi
 | Cached model lists | AsyncStorage (not a secret) | No (on-device) | No |
 | Theme (`themeMode`) and AI Chef helper collapse | AsyncStorage | No (on-device) | No |
 | Account profile: name, username, email, avatar, flavor preferences, recipes cooked | On-device SQLite `users` table | No extra encryption | No |
-| Recipes, pantry, grocery, meal plans, parties, AI chat history, workouts, mood, lab panels | On-device SQLite (`fooddude.db`) | No extra encryption | No, except when you ask AI Chef to use them in a prompt |
+| Recipes, pantry, grocery, meal plans, parties, AI chat history, workouts, mood, lab panels | On-device SQLite (`fooddude.db`, a file name kept from before the rebrand so existing data carries over). On web: the same database in this browser's Origin Private File System. | No extra encryption | No, except when you ask AI Chef to use them in a prompt |
 
 Secrets stay in SecureStore. Do not move API keys into SQLite.
 
+**On the web build**, there is no Keychain. Keys are saved in this browser's `localStorage` for the AmpliFood site and are not encrypted at rest. Anyone with access to this browser profile can read them. Use Account → Clear on shared computers. Storage keys keep the `fooddude.` prefix from before the rebrand so saved keys carry over.
+
 ## Bring Your Own Key
 
-- Food Dude does **not** ship a shared `EXPO_PUBLIC_` Gemini (or other) key. Those values are compiled into the JS bundle and would be public.
+- AmpliFood does **not** ship a shared `EXPO_PUBLIC_` Gemini (or other) key. Those values are compiled into the JS bundle and would be public.
 - You add a key in **Account → AI provider → Save key**.
 - Remove it with **Account → Clear**. That deletes the key, selected models, and cached model lists for that provider on this device.
 - Pantry, planner, grocery, and the recipe book keep working with no key.
 
 ## What leaves the device
 
-Food Dude has no account server. The only network calls that carry your content are ones you initiate:
+AmpliFood has no account server. The only network calls that carry your content are ones you initiate:
 
 1. **Your chosen LLM provider** (Anthropic, OpenAI, xAI, or Google Gemini). Chat, recipe import, image analysis, cost estimates, and recipe photos go to that provider with the key stored on this device. Flavor preferences and pantry context are included in those prompts when you use AI Chef.
 2. **Open Food Facts** for barcode lookups. The request is a public product lookup, not your account profile.
@@ -42,7 +44,7 @@ Labs and other health-style notes stay on device. If you later ask an LLM about 
 
 - **One provider key:** Account → AI provider → **Clear**.
 - **Profile / flavor preferences:** Account → Edit Profile and clear the fields, then Save. Rows stay local in SQLite.
-- **Everything:** uninstall the app, or clear the app’s storage. That removes SQLite, AsyncStorage, and Keychain/Keystore entries for Food Dude.
+- **Everything:** uninstall the app, or clear the app’s storage. That removes SQLite, AsyncStorage, and Keychain/Keystore entries for AmpliFood.
 
 ## Schema note (flavor preferences)
 
@@ -53,7 +55,7 @@ Flavor preferences are a column on the local `users` table (`flavor_preferences`
 - Not a medical device and not HIPAA-certified storage.
 - Not full-disk encryption of recipes or pantry.
 - Not a cloud backup. If you lose the phone and have no OS backup, the local database is gone.
-- Not a Food Dude-hosted account. Email in Account is a local label only.
+- Not a AmpliFood-hosted account. Email in Account is a local label only.
 
 ## Further reading
 
