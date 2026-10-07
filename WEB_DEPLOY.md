@@ -47,7 +47,7 @@ Open http://localhost:8080. Add a grocery item, reload the page, and it should s
 | Setting | Why |
 | --- | --- |
 | `buildCommand: npm run build:web` | Exports the web bundle, then makes `dist/` host-agnostic (renames `assets/node_modules` to `assets/nm` and rewrites the URLs). |
-| `rewrites` to `/index.html` | SPA fallback: refreshing `/pantry` or `/recipe/12` loads the app instead of a 404. `/_expo/*` and `/assets/*` are excluded, so a missing asset returns a real 404, not HTML. |
+| `rewrites` to `/index.html` (no `cleanUrls`: with it, Vercel only serves `index.html` at `/`, so the fallback 404s) | SPA fallback: refreshing `/pantry` or `/recipe/12` loads the app instead of a 404. `/_expo/*` and `/assets/*` are excluded, so a missing asset returns a real 404, not HTML. |
 | `Cache-Control: immutable` on `/_expo/static` and `/assets` | Those filenames are content-hashed, so browsers can cache them forever. `index.html` stays uncached, so new deploys show up right away. |
 | `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy` | Basic hardening. Nothing in the app needs to be framed. |
 
