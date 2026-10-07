@@ -80,7 +80,7 @@ const ImportRecipeScreen = () => {
                     if (input.includes('instagram.com') || input.includes('tiktok.com')) {
                         Alert.alert(
                             'Social Media Link Detected',
-                            'Instagram/TikTok links are hard to read. For best results, take a SCREENSHOT and share it to Food Dude, or paste the caption text.',
+                            'Instagram/TikTok links are hard to read. For best results, take a SCREENSHOT and share it to AmpliFood, or paste the caption text.',
                             [
                                 {
                                     text: 'Try URL Anyway', onPress: async () => {

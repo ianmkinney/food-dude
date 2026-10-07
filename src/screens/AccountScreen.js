@@ -15,11 +15,16 @@ import { userOperations, partyStatsOperations, recipeCookingHistoryOperations } 
 import AiProviderSettings from '../components/AiProviderSettings';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
+import { BrandMark } from '../components/Brand';
 import {
     USER_SAFETY_DETAILS,
     USER_SAFETY_SUMMARY,
     USER_SAFETY_TITLE,
 } from '../constants/userSafety';
+
+const DEFAULT_USER_NAME = 'AmpliFood Cook';
+// Untouched placeholder from before the rebrand; real names are left alone.
+const LEGACY_DEFAULT_USER_NAME = 'Food Dude User';
 
 const AccountScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -58,12 +63,24 @@ const AccountScreen = ({ navigation }) => {
     const loadUser = async () => {
         try {
             let currentUser = await userOperations.getCurrent();
+            if (currentUser?.name === LEGACY_DEFAULT_USER_NAME) {
+                await userOperations.upsert({
+                    userId: currentUser.user_id,
+                    name: DEFAULT_USER_NAME,
+                    username: currentUser.username,
+                    email: currentUser.email,
+                    avatarUri: currentUser.avatar_uri,
+                    recipesCooked: currentUser.recipes_cooked,
+                    flavorPreferences: currentUser.flavor_preferences,
+                });
+                currentUser = await userOperations.getByUserId(currentUser.user_id);
+            }
             if (!currentUser) {
                 // Create default user
                 const userId = 'user_' + Date.now();
                 await userOperations.upsert({
                     userId,
-                    name: 'Food Dude User',
+                    name: DEFAULT_USER_NAME,
                     email: null,
                 });
                 currentUser = await userOperations.getByUserId(userId);
@@ -248,7 +265,7 @@ const AccountScreen = ({ navigation }) => {
                     {USER_SAFETY_SUMMARY}
                 </Text>
                 <Text style={[styles.safetyBody, { color: theme.colors.text.secondary }]}>
-                    Keys never go to Food Dude servers (there are none for keys). Profile and flavor
+                    Keys never go to AmpliFood servers (there are none for keys). Profile and flavor
                     preferences stay in the on-device SQLite database. AI calls go only to the
                     provider you pick in Account.
                 </Text>
@@ -287,8 +304,8 @@ const AccountScreen = ({ navigation }) => {
                     style={styles.settingItem}
                     onPress={() =>
                         Alert.alert(
-                            'About Food Dude',
-                            'Food Dude v1.0.0\n\nA BYOK cooking assistant. Your keys and account data stay on this device.\n\nSee USER_SAFETY.md in the project for the full storage map.'
+                            'About AmpliFood',
+                            'AmpliFood v1.0.0\n\nA kitchen companion with a little attitude. Bring your own AI key; your keys and kitchen data stay on this device.\n\nSee USER_SAFETY.md in the project for the full storage map.'
                         )
                     }
                 >
@@ -297,11 +314,30 @@ const AccountScreen = ({ navigation }) => {
                     <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
                 </ElevatedCard>
             </View>
+
+            <View style={styles.stamp}>
+                <BrandMark variant="ink" size={56} />
+                <Text style={[styles.stampText, { color: theme.colors.text.tertiary }]}>
+                    AmpliFood v1.0.0 · cooking, turned up
+                </Text>
+            </View>
         </ScrollView>
     );
 };
 
 const styles = StyleSheet.create({
+    stamp: {
+        alignItems: 'center',
+        paddingTop: 8,
+        paddingBottom: 40,
+        opacity: 0.85,
+    },
+    stampText: {
+        marginTop: 10,
+        fontSize: 12,
+        fontWeight: '600',
+        letterSpacing: 0.4,
+    },
     container: {
         flex: 1,
     },

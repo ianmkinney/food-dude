@@ -4,7 +4,7 @@
  */
 
 const OPEN_FOOD_FACTS_API = 'https://world.openfoodfacts.org/api/v0/product';
-const USER_AGENT = process.env.EXPO_PUBLIC_FOOD_API_USER_AGENT || 'FoodDude/1.0';
+const USER_AGENT = process.env.EXPO_PUBLIC_FOOD_API_USER_AGENT || 'AmpliFood/1.0';
 
 /**
  * Look up product information by barcode

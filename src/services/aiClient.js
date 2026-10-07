@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
     DEFAULT_IMAGE_MODELS,
@@ -16,6 +17,15 @@ import { assertVideoSupported, coerceImagesForProvider } from './mediaPrep';
 import { describeMimeType, isImageMimeSupportedBy, normalizeMimeType } from './mediaTypes';
 
 const ANTHROPIC_VERSION = '2023-06-01';
+
+// Anthropic rejects the CORS preflight from a browser unless the caller opts in.
+// That opt-in is what a bring-your-own-key web app is: the user's key, the
+// user's browser, no shared secret in the bundle.
+const anthropicHeaders = (apiKey) => ({
+    'x-api-key': apiKey,
+    'anthropic-version': ANTHROPIC_VERSION,
+    ...(Platform.OS === 'web' ? { 'anthropic-dangerous-direct-browser-access': 'true' } : null),
+});
 
 function httpErrorMessage(status, bodyText) {
     const snippet = (bodyText || '').replace(/\s+/g, ' ').slice(0, 180);
@@ -184,8 +194,7 @@ async function anthropicMessages({ apiKey, model, prompt, images }) {
         method: 'POST',
         headers: {
             'content-type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': ANTHROPIC_VERSION,
+            ...anthropicHeaders(apiKey),
         },
         body: JSON.stringify({
             model,
@@ -383,10 +392,7 @@ export async function generateImage(prompt) {
 
 async function listAnthropicModels(apiKey) {
     const json = await fetchJson('https://api.anthropic.com/v1/models', {
-        headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': ANTHROPIC_VERSION,
-        },
+        headers: anthropicHeaders(apiKey),
     });
     return (json.data || []).map((item) => ({
         id: item.id,

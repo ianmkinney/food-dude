@@ -1,6 +1,8 @@
-# Food Dude 🍳
+# AmpliFood
 
-A comprehensive cross-platform mobile recipe management app built with React Native and Expo. Import recipes from social media, plan your meals, manage your pantry, create smart grocery lists, and get AI-powered cooking assistance.
+<img src="./assets/brand/source/logo-color.png" alt="AmpliFood logo" width="180" />
+
+A kitchen companion with a little attitude: graphic, delicious, warm, and built for real-life cooking. AmpliFood is a cross-platform recipe app built with React Native and Expo, for iOS, Android and the web. Import recipes from social media, plan your meals, manage your pantry, create smart grocery lists, and get AI-powered cooking assistance.
 
 ## ✨ Features
 
@@ -47,7 +49,7 @@ A comprehensive cross-platform mobile recipe management app built with React Nat
 
 1. **Clone or navigate to the project directory**
    ```bash
-   cd /Users/macbaby/Desktop/food_dude
+   cd food-dude
    ```
 
 2. **Install dependencies** (already done)
@@ -83,18 +85,18 @@ Once the Expo server is running, you have several options:
 2. Set up an Android Virtual Device (AVD)
 3. In the Expo terminal, press `a` to open in Android Emulator
 
-#### Option 4: Web Browser (Limited functionality)
-1. Install web dependencies:
+#### Option 4: Web Browser
+1. Press `w` in the Expo terminal, or run `npm run web`
+2. Data is stored in the browser (SQLite on OPFS). Barcode camera scanning and the share sheet are phone-only; everything else works.
+3. To build and host the static site, see [WEB_DEPLOY.md](./WEB_DEPLOY.md):
    ```bash
-   npx expo install react-dom react-native-web
+   npm run build:web && npm run preview:web
    ```
-2. Press `w` in the Expo terminal
-3. Note: Camera and some native features won't work on web
 
 ## 📱 App Structure
 
 ```
-food_dude/
+food-dude/
 ├── App.js                          # Main app entry point
 ├── app.json                        # Expo configuration
 ├── src/
@@ -114,20 +116,39 @@ food_dude/
 │   │   ├── aiChefService.js        # Multi-modal AI chef
 │   │   ├── barcodeService.js       # Barcode lookup
 │   │   └── groceryService.js       # Grocery list generation
+│   ├── components/
+│   │   └── Brand.js                # Wordmark, logo mark, checkerboard strip
+│   ├── platform/                   # Native vs. web shims (camera, share, alert)
 │   ├── theme/
 │   │   └── index.js                # Design system & colors
 │   └── utils/
 │       └── dateHelpers.js          # Date utilities
+├── assets/brand/                   # Logo sources + generated in-app artwork
+├── public/                         # Web index.html, manifest, PWA icons
+├── scripts/
+│   ├── generate-brand-assets.py    # Rebuild icons/splash/favicon from the logos
+│   └── web-postexport.js           # Make dist/ safe for any static host
+└── vercel.json                     # Static web hosting config
 ```
 
 ## 🎨 Design System
 
-Food Dude features a modern, vibrant design with:
-- **Primary Color**: Orange (#FF6B35) - warm and appetizing
-- **Dark Mode Support**: Automatic theme switching
-- **Smooth Animations**: Polished user experience
-- **Consistent Spacing**: 8px grid system
-- **Accessible Colors**: WCAG compliant contrast ratios
+AmpliFood's palette comes from the logo and the brand mood board:
+
+| Role | Hex |
+| --- | --- |
+| Burnt orange (primary) | `#EB6A1C` |
+| Tomato red | `#E2261F` |
+| Butter yellow | `#F6C445` |
+| Cream (light background) | `#FBF4E8` |
+| Ink black (text, dark background `#1A1216`) | `#2A1424` |
+| Garden green (success) | `#4F802F` |
+
+- **Logo system**: the colour food-guitar mark for warm moments (app icon, splash, loading, empty states); the black-and-white mark for small stamps and editorial spots (Account footer, notices).
+- **Type**: Fredoka (heavy, rounded) for headers, tab labels and brand moments; the system font for body copy.
+- **Pattern**: a small ink checkerboard strip, used sparingly.
+- **Dark mode**: automatic, with a cream-on-ink wordmark.
+- Regenerate icons and logo art after changing a source logo: `npm run brand:assets` (needs Python with Pillow and NumPy).
 
 ## 🔧 Technologies Used
 
@@ -175,9 +196,9 @@ Food Dude features a modern, vibrant design with:
 
 ## 🔐 Privacy & Data
 
-Food Dude is a Bring Your Own Key app. Your data stays on this device. API keys are stored in the OS encrypted keychain. Recipes, pantry, and preferences live in a local database that never leaves your phone.
+AmpliFood is a Bring Your Own Key app. Your data stays on this device. API keys are stored in the OS encrypted keychain. Recipes, pantry, and preferences live in a local database that never leaves your phone.
 
-- **Local storage**: Profile, recipes, pantry, and preferences live in on-device SQLite. Theme and UI prefs use AsyncStorage. There is no Food Dude account server.
+- **Local storage**: Profile, recipes, pantry, and preferences live in on-device SQLite. Theme and UI prefs use AsyncStorage. There is no AmpliFood account server.
 - **API keys**: Stored in SecureStore (Keychain / Keystore). Never in the binary, never in SQLite, never on our servers (there are none for keys).
 - **No shared keys**: Do not put provider secrets in `.env`. `EXPO_PUBLIC_*` values are compiled into the JS bundle.
 - **No tracking**: The app does not collect usage analytics.
@@ -222,4 +243,4 @@ This project is for personal use. Built with ❤️ using React Native and Expo.
 
 ---
 
-**Enjoy cooking with Food Dude! 🍳👨‍🍳**
+**Turn it up in the kitchen with AmpliFood.**

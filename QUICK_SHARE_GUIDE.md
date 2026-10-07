@@ -1,4 +1,4 @@
-# Quick Guide: Sharing Food Dude with Others 🚀
+# Quick Guide: Sharing AmpliFood with Others 🚀
 
 ## 🎯 Choose Your Method
 
@@ -58,6 +58,18 @@ eas build --platform android --profile development
 1. Build: `eas build --platform ios --profile production`
 2. Submit: `eas submit -p ios`
 3. Add testers in App Store Connect → TestFlight
+
+---
+
+### 🌐 Web: A link anyone can open
+**Perfect for:** People who just want to try it in a browser
+
+```bash
+npm run build:web     # static site in dist/
+npm run preview:web   # check it on http://localhost:8080
+```
+
+Host it on Vercel; the steps are in `WEB_DEPLOY.md`. No keys or secrets are involved; each visitor brings their own AI key.
 
 ---
 

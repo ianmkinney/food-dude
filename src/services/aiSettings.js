@@ -77,6 +77,8 @@ export function providerSupportsImageGen(providerId) {
 
 export const MISSING_KEY_MESSAGE = 'Add an API key in Account to use AI features.';
 
+// Storage keys keep the pre-rebrand `fooddude.` prefix so saved API keys and
+// model choices survive the rename to AmpliFood.
 const PROVIDER_KEY = 'fooddude.ai.provider';
 const keySlot = (provider) => `fooddude.ai.key.${provider}`;
 const modelSlot = (provider) => `fooddude.ai.model.${provider}`;

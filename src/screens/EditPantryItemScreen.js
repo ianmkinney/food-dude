@@ -414,5 +414,22 @@ const styles = StyleSheet.create({
     },
 });
 
-export default EditPantryItemScreen;
+// A refreshed /pantry/edit URL arrives without the item object; send the user
+// back to the list instead of rendering a form with nothing in it.
+const EditPantryItemRoute = () => {
+    const navigation = useNavigation();
+    const route = useRoute();
+    const item = route.params?.item;
+    const hasItem = !!item && typeof item === 'object';
+
+    useEffect(() => {
+        if (!hasItem) {
+            navigation.navigate('Main', { screen: 'Pantry' });
+        }
+    }, [hasItem, navigation]);
+
+    return hasItem ? <EditPantryItemScreen /> : null;
+};
+
+export default EditPantryItemRoute;
 

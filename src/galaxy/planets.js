@@ -59,10 +59,10 @@ export const PLANETS = [
         spin: 0.35,
         ring: null,
         colors: {
-            core: '#FFE2B0',
-            mid: '#F5A623',
-            edge: '#7A4110',
-            glow: '#F5A623',
+            core: '#FFD9A8',
+            mid: '#EB6A1C',
+            edge: '#7E340F',
+            glow: '#EB6A1C',
         },
     },
     {

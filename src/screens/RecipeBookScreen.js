@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useLayoutEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -16,6 +16,7 @@ import { recipeOperations } from '../database/operations';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
+import { BrandMark, CheckerStrip } from '../components/Brand';
 
 const RecipeBookScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -26,12 +27,6 @@ const RecipeBookScreen = ({ navigation }) => {
     const [filter, setFilter] = useState('all'); // 'all', 'cooked', 'uncooked'
 
     // Header customization removed as per user request
-    useLayoutEffect(() => {
-        navigation.setOptions({
-            headerRight: null,
-        });
-    }, [navigation]);
-
     useFocusEffect(
         useCallback(() => {
             loadRecipes();
@@ -137,8 +132,9 @@ const RecipeBookScreen = ({ navigation }) => {
 
     const renderEmptyState = () => (
         <View style={styles.emptyState}>
-            <Ionicons name="book-outline" size={80} color={theme.colors.text.tertiary} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
+            <BrandMark size={128} />
+            <CheckerStrip squares={8} size={6} style={styles.emptyChecker} />
+            <Text style={[styles.emptyTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fonts.display }]}>
                 No Recipes Yet
             </Text>
             <Text style={[styles.emptyDescription, { color: theme.colors.text.secondary }]}>
@@ -329,11 +325,13 @@ const styles = StyleSheet.create({
     emptyState: {
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 80,
+        paddingVertical: 64,
+    },
+    emptyChecker: {
+        marginTop: 18,
     },
     emptyTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
+        fontSize: 26,
         marginTop: 16,
         marginBottom: 8,
     },

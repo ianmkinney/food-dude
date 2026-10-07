@@ -1,6 +1,6 @@
 import { generateMultimodal, generateText, stripCodeFences } from './aiClient';
 import { isAiConfigured, requireAiConfigured } from './aiSettings';
-import { prepareImagesForAi } from './mediaPrep';
+import { prepareImagesForAi, toPersistentImageUri } from './mediaPrep';
 import { friendlyMediaErrorMessage } from './mediaTypes';
 
 /**
@@ -76,7 +76,7 @@ For nutritional info:
         // Determine which image to use
         let finalImageUri = null;
         if (parsedRecipe.mainImageIndex !== undefined && parsedRecipe.mainImageIndex >= 0 && parsedRecipe.mainImageIndex < imageUris.length) {
-            finalImageUri = imageUris[parsedRecipe.mainImageIndex];
+            finalImageUri = await toPersistentImageUri(imageUris[parsedRecipe.mainImageIndex]);
         } else if (parsedRecipe.mainImageIndex === -1) {
             finalImageUri = null; // Explicitly no image
         } else {

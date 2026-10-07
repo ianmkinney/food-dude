@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import {
@@ -24,7 +25,25 @@ function saveFormatFor(mimeType) {
     return { format: SaveFormat.JPEG, mimeType: FALLBACK_IMAGE_MIME_TYPE };
 }
 
+// expo-file-system has no web implementation; the web image picker hands back
+// blob: URLs (and some flows pass data: URIs), which the browser can read itself.
+async function readBase64Web(uri) {
+    if (uri.startsWith('data:')) {
+        return uri.slice(uri.indexOf(',') + 1);
+    }
+    const blob = await (await fetch(uri)).blob();
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+        reader.onerror = () => reject(reader.error || new Error('Could not read the image'));
+        reader.readAsDataURL(blob);
+    });
+}
+
 async function readBase64(uri) {
+    if (Platform.OS === 'web') {
+        return readBase64Web(uri);
+    }
     return FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
 }
 
@@ -98,6 +117,19 @@ export async function prepareImageForAi(asset) {
         }
         return { base64: originalBase64, mimeType: detected, uri };
     }
+}
+
+/**
+ * A URI that still points at the image after a reload. Browser blob: URLs die
+ * with the tab, so on web they are re-encoded into a (downscaled) data URI
+ * before being stored. Native file URIs are returned unchanged.
+ */
+export async function toPersistentImageUri(uri) {
+    if (Platform.OS !== 'web' || typeof uri !== 'string' || !uri.startsWith('blob:')) {
+        return uri;
+    }
+    const { base64, mimeType } = await reencode(uri, FALLBACK_IMAGE_MIME_TYPE);
+    return `data:${mimeType};base64,${base64}`;
 }
 
 export async function prepareImagesForAi(assets) {

@@ -6,6 +6,7 @@ let db = null;
 // Initialize database
 export const initDatabase = async () => {
     try {
+        // Pre-rebrand file name; renaming it would orphan every existing install's data.
         db = await SQLite.openDatabaseAsync('fooddude.db');
         await db.execAsync('PRAGMA foreign_keys = ON;');
         const version = await runMigrations(db);

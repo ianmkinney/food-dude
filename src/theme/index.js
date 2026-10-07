@@ -1,99 +1,106 @@
-// Food Dude Design System
-// Modern, layered surfaces with dark mode — brand orange stays #FF6B35
+// AmpliFood Design System
+// Burnt orange, tomato red, butter yellow, cream and ink black, sampled from the
+// AmpliFood logos and mood board.
+
+export const brand = {
+  burntOrange: '#EB6A1C',
+  tomato: '#E2261F',
+  butter: '#F6C445',
+  cream: '#FFF8EC',
+  ink: '#2A1424',
+  garden: '#4F802F',
+};
 
 export const colors = {
-  // Primary brand colors
+  // Burnt orange ramp; 500 is the brand colour.
   primary: {
-    50: '#FFF5F2',
-    100: '#FFE8E0',
-    200: '#FFD1C1',
-    300: '#FFB8A1',
-    400: '#FF9F82',
-    500: '#FF6B35', // Main brand color
-    600: '#E65A2B',
-    700: '#CC4921',
-    800: '#B33817',
-    900: '#99270D',
+    50: '#FFF4EA',
+    100: '#FFE5CC',
+    200: '#FDC897',
+    300: '#F9A862',
+    400: '#F48A38',
+    500: '#EB6A1C',
+    600: '#CC5512',
+    700: '#A6430F',
+    800: '#7E340F',
+    900: '#57250C',
   },
 
-  // Secondary colors
+  // Tomato ramp
   secondary: {
-    50: '#F0F9FF',
-    100: '#E0F2FE',
-    200: '#BAE6FD',
-    300: '#7DD3FC',
-    400: '#38BDF8',
-    500: '#0EA5E9',
-    600: '#0284C7',
-    700: '#0369A1',
-    800: '#075985',
-    900: '#0C4A6E',
+    50: '#FFF1EF',
+    100: '#FFDCD7',
+    200: '#FDB5AC',
+    300: '#F7867A',
+    400: '#EE5548',
+    500: '#E2261F',
+    600: '#C01A15',
+    700: '#981512',
+    800: '#701211',
+    900: '#4A0D0C',
   },
 
-  // Accent colors
   accent: {
-    green: '#10B981',
-    yellow: '#F59E0B',
-    red: '#EF4444',
+    green: '#4F802F',
+    yellow: '#F6C445',
+    red: '#E2261F',
     purple: '#8B5CF6',
   },
 
-  // Neutral colors
+  // Warm greys tinted toward the ink so neutrals sit with the cream.
   gray: {
-    50: '#F9FAFB',
-    100: '#F3F4F6',
-    200: '#E5E7EB',
-    300: '#D1D5DB',
-    400: '#9CA3AF',
-    500: '#6B7280',
-    600: '#4B5563',
-    700: '#374151',
-    800: '#1F2937',
-    900: '#111827',
+    50: '#FAF7F2',
+    100: '#F3EEE6',
+    200: '#E7DFD3',
+    300: '#D3C8BA',
+    400: '#A99C92',
+    500: '#7D6F6C',
+    600: '#5E5054',
+    700: '#45363D',
+    800: '#31232B',
+    900: '#21141C',
   },
 
-  // Semantic colors (light mode)
   light: {
-    background: '#F4F0EB',
-    surface: '#FFFDFB',
-    surfaceElevated: '#FFFFFF',
-    surfaceMuted: '#EDE7E0',
-    surfaceGlass: 'rgba(255, 253, 251, 0.78)',
-    border: '#E8DFD6',
-    borderSoft: 'rgba(255, 255, 255, 0.7)',
-    overlay: 'rgba(28, 18, 12, 0.45)',
-    glow: 'rgba(255, 107, 53, 0.35)',
+    background: '#FBF4E8',
+    surface: '#FFFBF4',
+    surfaceElevated: '#FFFDF9',
+    surfaceMuted: '#F3EADB',
+    surfaceGlass: 'rgba(255, 251, 244, 0.86)',
+    border: '#E9DCC8',
+    borderSoft: 'rgba(42, 20, 36, 0.08)',
+    overlay: 'rgba(42, 20, 36, 0.45)',
+    glow: 'rgba(235, 106, 28, 0.35)',
     text: {
-      primary: '#111827',
-      secondary: '#6B7280',
-      tertiary: '#9CA3AF',
+      primary: '#2A1424',
+      secondary: '#6A5560',
+      tertiary: '#9A8A8C',
     },
-    success: '#10B981',
-    warning: '#F59E0B',
-    error: '#EF4444',
-    info: '#0EA5E9',
+    success: '#4F802F',
+    warning: '#C98A0B',
+    error: '#D3221B',
+    info: '#2F7FA8',
   },
 
-  // Semantic colors (dark mode)
   dark: {
-    background: '#0B0F14',
-    surface: '#141A24',
-    surfaceElevated: '#1C2433',
-    surfaceMuted: '#10151E',
-    surfaceGlass: 'rgba(28, 36, 51, 0.72)',
-    border: '#2A3344',
-    borderSoft: 'rgba(255, 255, 255, 0.08)',
-    overlay: 'rgba(0, 0, 0, 0.55)',
-    glow: 'rgba(255, 107, 53, 0.4)',
+    background: '#1A1216',
+    surface: '#241A1F',
+    surfaceElevated: '#2E2228',
+    surfaceMuted: '#150E12',
+    surfaceGlass: 'rgba(36, 26, 31, 0.86)',
+    border: '#3F2F37',
+    borderSoft: 'rgba(255, 248, 236, 0.08)',
+    overlay: 'rgba(0, 0, 0, 0.6)',
+    glow: 'rgba(235, 106, 28, 0.4)',
     text: {
-      primary: '#F9FAFB',
-      secondary: '#D1D5DB',
-      tertiary: '#9CA3AF',
+      primary: '#FFF4E3',
+      secondary: '#E3D4C8',
+      tertiary: '#A8968F',
     },
-    success: '#10B981',
-    warning: '#F59E0B',
-    error: '#EF4444',
-    info: '#38BDF8',
+    success: '#7DB356',
+    warning: '#F6C445',
+    error: '#FF5A4E',
+    info: '#7CC3E3',
   },
 };
 
@@ -103,6 +110,10 @@ export const typography = {
     medium: 'System',
     semibold: 'System',
     bold: 'System',
+    // Heavy, rounded display face for headers and brand moments; body copy
+    // stays on the system font. Loaded in App.js.
+    display: 'Fredoka_700Bold',
+    displayMedium: 'Fredoka_600SemiBold',
   },
 
   sizes: {
@@ -163,25 +174,25 @@ export const shadows = {
     shadowRadius: 0,
     elevation: 0,
   },
-  sm: shadowBase('#1C120C', 1, 0.06, 3, 2),
-  md: shadowBase('#1C120C', 4, 0.1, 10, 5),
-  lg: shadowBase('#1C120C', 8, 0.14, 18, 10),
-  xl: shadowBase('#1C120C', 14, 0.18, 28, 16),
+  sm: shadowBase('#2A1424', 1, 0.06, 3, 2),
+  md: shadowBase('#2A1424', 4, 0.1, 10, 5),
+  lg: shadowBase('#2A1424', 8, 0.14, 18, 10),
+  xl: shadowBase('#2A1424', 14, 0.18, 28, 16),
   card: {
-    ...shadowBase('#1C120C', 6, 0.1, 14, 6),
+    ...shadowBase('#2A1424', 6, 0.1, 14, 6),
   },
   layered: {
-    ...shadowBase('#1C120C', 10, 0.12, 22, 12),
+    ...shadowBase('#2A1424', 10, 0.12, 22, 12),
   },
   glow: {
-    shadowColor: '#FF6B35',
+    shadowColor: '#EB6A1C',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.38,
     shadowRadius: 16,
     elevation: 10,
   },
   tabBar: {
-    ...shadowBase('#1C120C', -4, 0.08, 16, 12),
+    ...shadowBase('#2A1424', -4, 0.08, 16, 12),
   },
 };
 
@@ -273,15 +284,15 @@ export const getSurfaceStyle = (theme, variant = 'card') => {
  * theirs through `PlanetScaffold`, which hands it to the render prop as
  * `accent`, so a planet's colour never has to be passed down by hand.
  *
- * Galley keeps Food Dude's amber at 500 so the food screens look untouched by
- * the rebrand. The other three take hues far enough apart to stay legible as
- * small glowing dots on the Bridge.
+ * Galley carries the AmpliFood burnt orange so the food screens match the
+ * brand. The other three take hues far enough apart to stay legible as small
+ * glowing dots on the Bridge.
  */
 export const planetAccents = {
   galley: {
-    50: '#FFF8ED', 100: '#FFEFD4', 200: '#FFDCA5', 300: '#FCC46E', 400: '#F9AE42',
-    500: '#F5A623', 600: '#D2860F', 700: '#A5650C', 800: '#7A4A12', 900: '#4A2C0B',
-    glow: '#F5A623',
+    50: '#FFF4EA', 100: '#FFE5CC', 200: '#FDC897', 300: '#F9A862', 400: '#F48A38',
+    500: '#EB6A1C', 600: '#CC5512', 700: '#A6430F', 800: '#7E340F', 900: '#57250C',
+    glow: '#EB6A1C',
   },
   atlas: {
     50: '#FFF3F0', 100: '#FFE1DA', 200: '#FFC0B2', 300: '#FF9C86', 400: '#FF8264',
@@ -318,6 +329,7 @@ export const glowFor = (color, opacity = 0.35) => ({
 // Helper function to get theme based on color scheme
 export const getTheme = (isDark, platform, accentId = 'galley') => ({
   colors: isDark ? colors.dark : colors.light,
+  brand,
   primary: colors.primary,
   secondary: colors.secondary,
   accent: colors.accent,
@@ -336,6 +348,7 @@ export const getTheme = (isDark, platform, accentId = 'galley') => ({
 });
 
 export default {
+  brand,
   colors,
   typography,
   spacing,
