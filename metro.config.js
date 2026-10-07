@@ -10,18 +10,9 @@ if (!config.resolver.assetExts.includes('wasm')) {
 config.resolver.sourceExts = config.resolver.sourceExts.filter((ext) => ext !== 'wasm');
 config.resolver.unstable_enablePackageExports = true;
 
-// SharedArrayBuffer for wa-sqlite / OPFS
-const previousEnhance = config.server?.enhanceMiddleware;
-config.server = {
-  ...config.server,
-  enhanceMiddleware: (middleware, server) => {
-    const inner = previousEnhance ? previousEnhance(middleware, server) : middleware;
-    return (req, res, next) => {
-      res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
-      res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-      return inner(req, res, next);
-    };
-  },
-};
+// No COOP/COEP headers here, on purpose: the app only uses expo-sqlite's async
+// API, which works without SharedArrayBuffer, and the production host does not
+// send them either (Safari has no COEP `credentialless`). Calling any *Sync
+// SQLite method would need cross-origin isolation on both. See WEB_DEPLOY.md.
 
 module.exports = config;
