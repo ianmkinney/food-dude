@@ -9,6 +9,7 @@ import {
     Alert,
     ActivityIndicator,
     Modal,
+    Platform,
 } from 'react-native';
 import { CameraView, isCameraAvailable, useCameraPermissions } from '../platform/camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -63,23 +64,31 @@ const EditPantryItemScreen = () => {
     const startScanning = async () => {
         if (!isCameraAvailable) {
             Alert.alert(
-                'Camera on the phone app',
-                'Barcode scanning needs the camera in Expo Go or a native build. Type the barcode below, or edit the item by name.'
+                'Camera not available',
+                "This browser can't open a camera here (scanning needs HTTPS and a camera). Type the barcode below, or edit the item by name."
             );
             return;
-        }
-        if (!permission) {
-            await requestPermission();
         }
         if (!permission?.granted) {
             const result = await requestPermission();
             if (!result.granted) {
-                Alert.alert('Permission Required', 'Camera permission is needed to scan barcodes');
+                Alert.alert(
+                    'Permission Required',
+                    Platform.OS === 'web'
+                        ? 'Allow camera access for this site in your browser settings, or type the barcode or product name instead.'
+                        : 'Camera permission is needed to scan barcodes'
+                );
                 return;
             }
         }
         setScanned(false);
         setIsScanning(true);
+    };
+
+    const handleCameraError = ({ message }) => {
+        setIsScanning(false);
+        setScanned(false);
+        Alert.alert('Camera unavailable', message);
     };
 
     const handleBarCodeScanned = async ({ type, data }) => {
@@ -298,6 +307,7 @@ const EditPantryItemScreen = () => {
                         style={styles.camera}
                         facing="back"
                         onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                        onMountError={Platform.OS === 'web' ? handleCameraError : undefined}
                     >
                         <View style={styles.overlay}>
                             <View style={styles.scanArea} />
