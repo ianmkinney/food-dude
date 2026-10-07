@@ -27,13 +27,8 @@ const AddRecipeScreen = ({ navigation }) => {
 
     const handlePickImages = async () => {
         try {
-            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-            if (permissionResult.granted === false) {
-                Alert.alert('Permission Required', 'You need to allow access to your photos to upload screenshots.');
-                return;
-            }
-
+            // The system photo picker needs no library permission; the app
+            // deliberately declares none (see USER_SAFETY.md).
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ['images'], // Use array of strings as suggested
                 allowsMultipleSelection: true,

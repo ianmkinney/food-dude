@@ -93,16 +93,10 @@ const RecipeDetailScreen = ({ route, navigation }) => {
     const handlePickImage = async () => {
         console.log('handlePickImage called');
         try {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            console.log('Permission status:', status);
-            if (status !== 'granted') {
-                Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to make this work!');
-                return;
-            }
-
+            // The system photo picker needs no library permission.
             console.log('Launching image library...');
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsEditing: true,
                 aspect: [4, 3],
                 quality: 0.8,
