@@ -99,7 +99,7 @@ Return your response in this JSON format (no markdown, no code blocks):
   "savingsTips": ["tip 1", "tip 2", ...]
 }`;
 
-        const text = await generateText(prompt);
+        const text = await generateText(prompt, { feature: 'costEstimate' });
         const cleanedText = stripCodeFences(text);
 
         const estimate = JSON.parse(cleanedText);

@@ -26,6 +26,7 @@ import AddGroceryItemScreen from '../screens/AddGroceryItemScreen';
 import EstimateCostScreen from '../screens/EstimateCostScreen';
 import PartyScreen from '../screens/PartyScreen';
 import AccountScreen from '../screens/AccountScreen';
+import PaywallScreen from '../screens/PaywallScreen';
 import HeaderTitle, { HeaderAccountActions, HeaderPartyButton } from '../components/HeaderTitle';
 
 const Tab = createBottomTabNavigator();
@@ -451,6 +452,22 @@ const AppNavigator = () => {
                             style={{ marginLeft: 16 }}
                         >
                             <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
+                        </TouchableOpacity>
+                    ),
+                })}
+            />
+            <Stack.Screen
+                name="Paywall"
+                component={PaywallScreen}
+                options={({ navigation }) => ({
+                    title: 'AmpliFood Plus',
+                    presentation: 'modal',
+                    headerStyle: { backgroundColor: theme.colors.background },
+                    headerTintColor: theme.colors.text.primary,
+                    headerTitleStyle: { fontFamily: theme.typography.fonts.display, fontSize: 20 },
+                    headerLeft: () => (
+                        <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginLeft: 16 }}>
+                            <Ionicons name="close" size={24} color={theme.colors.text.primary} />
                         </TouchableOpacity>
                     ),
                 })}
