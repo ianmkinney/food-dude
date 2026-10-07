@@ -302,7 +302,7 @@ const PartyScreen = ({ navigation }) => {
             // Get current user for the invite message
             const currentUser = await userOperations.getCurrent();
             const userName = currentUser?.name || currentUser?.username || 'A friend';
-            const appName = 'Food Dude';
+            const appName = 'AmpliFood';
             
             // Create email subject and body
             const subject = `Join my party "${selectedParty.name}" on ${appName}!`;

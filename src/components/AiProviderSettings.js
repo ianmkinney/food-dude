@@ -252,7 +252,7 @@ const AiProviderSettings = ({ theme }) => {
             <Text style={[styles.title, { color: theme.colors.text.primary }]}>AI provider</Text>
             <Text style={[styles.help, { color: theme.colors.text.secondary }]}>
                 BYOK: paste your own Anthropic, OpenAI, xAI, or Gemini key. It is saved in the OS
-                encrypted keychain (or this browser on web). Food Dude never embeds a shared key and
+                encrypted keychain (or this browser on web). AmpliFood never embeds a shared key and
                 has no server that stores yours. Requests go only to the provider you pick.
             </Text>
             <Text style={[styles.help, { color: theme.colors.text.secondary }]}>

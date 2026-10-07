@@ -1,4 +1,4 @@
-// SQLite Database Schema for Food Dude
+// SQLite Database Schema for AmpliFood
 
 export const createTablesSQL = `
   -- Recipes table

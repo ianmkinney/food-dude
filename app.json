@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Food Dude",
+    "name": "AmpliFood",
     "slug": "food-dude",
     "version": "1.0.0",
     "scheme": "fooddude",
@@ -11,22 +11,22 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FF6B35"
+      "backgroundColor": "#FEFCF7"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.fooddude.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Food Dude needs access to your camera to scan barcodes and take photos of ingredients.",
-        "NSPhotoLibraryUsageDescription": "Food Dude needs access to your photo library to save and share recipe images.",
-        "NSPhotoLibraryAddUsageDescription": "Food Dude needs permission to save photos to your library.",
+        "NSCameraUsageDescription": "AmpliFood needs access to your camera to scan barcodes and take photos of ingredients.",
+        "NSPhotoLibraryUsageDescription": "AmpliFood needs access to your photo library to save and share recipe images.",
+        "NSPhotoLibraryAddUsageDescription": "AmpliFood needs permission to save photos to your library.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FF6B35"
+        "backgroundColor": "#FEFCF7"
       },
       "package": "com.fooddude.app",
       "permissions": [
@@ -43,7 +43,14 @@
       "edgeToEdgeEnabled": true
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "AmpliFood",
+      "shortName": "AmpliFood",
+      "description": "A kitchen companion with a little attitude: recipes, meal plans, pantry, grocery lists and an AI chef.",
+      "themeColor": "#EB6A1C",
+      "backgroundColor": "#FBF4E8"
     },
     "plugins": [
       "expo-barcode-scanner",
@@ -52,21 +59,21 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Food Dude to access your camera to scan barcodes and take photos."
+          "cameraPermission": "Allow AmpliFood to access your camera to scan barcodes and take photos."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Food Dude to access your photos to share recipe images.",
-          "cameraPermission": "Allow Food Dude to use your camera to take photos of ingredients."
+          "photosPermission": "Allow AmpliFood to access your photos to share recipe images.",
+          "cameraPermission": "Allow AmpliFood to use your camera to take photos of ingredients."
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow Food Dude to save photos to your library.",
-          "savePhotosPermission": "Allow Food Dude to save photos.",
+          "photosPermission": "Allow AmpliFood to save photos to your library.",
+          "savePhotosPermission": "Allow AmpliFood to save photos.",
           "isAccessMediaLocationEnabled": true
         }
       ],
@@ -103,7 +110,8 @@
             ]
           }
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {
