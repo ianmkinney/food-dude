@@ -18,6 +18,10 @@
       "destination": "/support.html"
     },
     {
+      "source": "/terms",
+      "destination": "/terms.html"
+    },
+    {
       "source": "/((?!_expo/|assets/).*)",
       "destination": "/index.html"
     }
