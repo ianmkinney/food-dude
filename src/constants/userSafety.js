@@ -9,4 +9,5 @@ export const USER_SAFETY_DETAILS = [
     'Secrets use iOS Keychain / Android Keystore via expo-secure-store. On web, keys stay in this browser only.',
     'Profile, flavor preferences, recipes, and pantry live in on-device SQLite. Theme and UI prefs use on-device AsyncStorage.',
     'The local database is sandboxed on your phone; it is not uploaded. SQLite itself is not extra-encrypted by the app.',
+    'Permissions: camera only, and only when you scan a pantry barcode. Photos are chosen through the system picker, so AmpliFood never gets access to your whole library. No microphone, location, or storage access.',
 ].join('\n\n');

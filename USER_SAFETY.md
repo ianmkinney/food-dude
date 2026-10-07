@@ -23,6 +23,23 @@ Secrets stay in SecureStore. Do not move API keys into SQLite.
 
 **On the web build**, there is no Keychain. Keys are saved in this browser's `localStorage` for the AmpliFood site and are not encrypted at rest. Anyone with access to this browser profile can read them. Use Account → Clear on shared computers. Storage keys keep the `fooddude.` prefix from before the rebrand so saved keys carry over.
 
+## Device permissions
+
+AmpliFood asks for as little as possible. Each permission maps to one feature:
+
+| Permission | Platform | Feature | When it's asked |
+| --- | --- | --- | --- |
+| Camera (`CAMERA` / `NSCameraUsageDescription`) | Android, iOS | Scanning a barcode in Pantry → Add / Edit item (`expo-camera`) | The first time you tap Scan |
+| Photo library (`NSPhotoLibraryUsageDescription`) | iOS | Picking recipe screenshots or a recipe photo (`expo-image-picker`) | iOS shows the system photo picker; only the photos you pick are shared with the app |
+| Internet | Android | AI provider calls, Open Food Facts lookups, recipe URL import | Granted at install (no prompt) |
+| Vibrate | Android | Light haptics on some buttons | Granted at install (no prompt) |
+
+On Android, photo picking goes through the system Photo Picker, which needs no permission, so AmpliFood declares **no** storage or media permissions. Shared images and text come in through the share sheet (`expo-share-intent`), which grants access only to the shared item.
+
+Not requested, and actively blocked in the build so a library can't add them back: microphone (`RECORD_AUDIO`), `READ/WRITE_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_MEDIA_AUDIO`, `READ_MEDIA_VISUAL_USER_SELECTED`, `ACCESS_MEDIA_LOCATION`, and `SYSTEM_ALERT_WINDOW`. There is no location, contacts, or Face ID use, and no "save to photo library" feature.
+
+On the web build, the browser's file picker is used and no permission prompts appear.
+
 ## Bring Your Own Key
 
 - AmpliFood does **not** ship a shared `EXPO_PUBLIC_` Gemini (or other) key. Those values are compiled into the JS bundle and would be public.
