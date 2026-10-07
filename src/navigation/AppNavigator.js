@@ -23,18 +23,31 @@ import AddGroceryItemScreen from '../screens/AddGroceryItemScreen';
 import EstimateCostScreen from '../screens/EstimateCostScreen';
 import PartyScreen from '../screens/PartyScreen';
 import AccountScreen from '../screens/AccountScreen';
-import HeaderTitle from '../components/HeaderTitle';
+import HeaderTitle, { HeaderAccountActions, HeaderPartyButton } from '../components/HeaderTitle';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+const hasModifierKey = (e) => !!(e?.metaKey || e?.altKey || e?.ctrlKey || e?.shiftKey);
+
 const TabBarButton = (props) => {
-    const { children, style, onPress, onLongPress, accessibilityState, ...rest } = props;
+    const { children, style, onPress, onLongPress, accessibilityState, href, ...rest } = props;
+    // On web the tab renders as an <a href>; without preventDefault the browser
+    // does a full page load instead of a tab switch. Modified clicks keep the
+    // browser's own open-in-new-tab behaviour.
+    const handlePress = (e) => {
+        if (Platform.OS === 'web' && href) {
+            if (hasModifierKey(e) || (e?.button != null && e.button !== 0)) return;
+            e?.preventDefault?.();
+        }
+        onPress?.(e);
+    };
     return (
         <AnimatedPressable
             {...rest}
+            href={href}
             accessibilityState={accessibilityState}
-            onPress={onPress}
+            onPress={handlePress}
             onLongPress={onLongPress}
             tilt
             style={[style, styles.tabButton]}
@@ -53,14 +66,16 @@ const TabNavigator = () => {
         <Tab.Navigator
             screenOptions={({ route }) => {
                 return {
-                    headerTitle: (props) => (
-                        <HeaderTitle
-                            {...props}
-                            showPartyButton={route.name !== 'AI Chef'}
-                            showAccountButton={route.name === 'Recipes'}
-                        />
-                    ),
+                    headerTitle: () => <HeaderTitle />,
                     headerTitleAlign: 'center',
+                    headerLeft:
+                        route.name !== 'AI Chef'
+                            ? (props) => <HeaderPartyButton {...props} />
+                            : undefined,
+                    headerRight:
+                        route.name === 'Recipes'
+                            ? (props) => <HeaderAccountActions {...props} />
+                            : undefined,
                     tabBarButton: (props) => <TabBarButton {...props} />,
                 tabBarIcon: ({ focused, color, size }) => {
                     let iconName;
@@ -99,14 +114,16 @@ const TabNavigator = () => {
                     backgroundColor: glass.backgroundColor,
                     borderTopColor: theme.colors.borderSoft,
                     borderTopWidth: 1,
-                    paddingBottom: 30,
-                    paddingTop: 10,
-                    height: 90,
+                    // Native keeps room for the home indicator; browsers draw their own chrome.
+                    paddingBottom: Platform.OS === 'web' ? 10 : 30,
+                    paddingTop: 8,
+                    height: Platform.OS === 'web' ? 74 : 94,
                     ...theme.shadows.tabBar,
                 },
                 tabBarLabelStyle: {
                     fontSize: 12,
-                    fontWeight: '700',
+                    lineHeight: 16,
+                    fontFamily: theme.typography.fonts.displayMedium,
                 },
                 headerStyle: {
                     backgroundColor: theme.colors.background,
@@ -115,7 +132,7 @@ const TabNavigator = () => {
                 },
                     headerTintColor: theme.colors.text.primary,
                     headerTitleStyle: {
-                        fontWeight: 'bold',
+                        fontFamily: theme.typography.fonts.display,
                         fontSize: 20,
                     },
                 };
@@ -124,22 +141,22 @@ const TabNavigator = () => {
             <Tab.Screen
                 name="Recipes"
                 component={RecipeBookScreen}
-                options={{ title: 'Recipe Book' }}
+                options={{ title: 'Recipe Book', tabBarLabel: 'Recipes' }}
             />
             <Tab.Screen
                 name="Planner"
                 component={MealPlannerScreen}
-                options={{ title: 'Meal Planner' }}
+                options={{ title: 'Meal Planner', tabBarLabel: 'Planner' }}
             />
             <Tab.Screen
                 name="Pantry"
                 component={PantryScreen}
-                options={{ title: 'My Pantry' }}
+                options={{ title: 'My Pantry', tabBarLabel: 'Pantry' }}
             />
             <Tab.Screen
                 name="Grocery"
                 component={GroceryListScreen}
-                options={{ title: 'Grocery List' }}
+                options={{ title: 'Grocery List', tabBarLabel: 'Grocery' }}
             />
             <Tab.Screen
                 name="AI Chef"
@@ -188,7 +205,7 @@ const AppNavigator = () => {
                 },
                 headerTintColor: theme.colors.text.primary,
                 headerTitleStyle: {
-                    fontWeight: 'bold',
+                    fontFamily: theme.typography.fonts.display,
                     fontSize: 20,
                 },
             }}
@@ -211,7 +228,7 @@ const AppNavigator = () => {
                     },
                     headerTintColor: theme.colors.text.primary,
                     headerTitleStyle: {
-                        fontWeight: 'bold',
+                        fontFamily: theme.typography.fonts.display,
                         fontSize: 20,
                     },
                     headerLeft: () => (
@@ -236,7 +253,7 @@ const AppNavigator = () => {
                     },
                     headerTintColor: theme.colors.text.primary,
                     headerTitleStyle: {
-                        fontWeight: 'bold',
+                        fontFamily: theme.typography.fonts.display,
                         fontSize: 20,
                     },
                     headerLeft: () => (
@@ -261,7 +278,7 @@ const AppNavigator = () => {
                     },
                     headerTintColor: theme.colors.text.primary,
                     headerTitleStyle: {
-                        fontWeight: 'bold',
+                        fontFamily: theme.typography.fonts.display,
                         fontSize: 20,
                     },
                     headerLeft: () => (
@@ -286,7 +303,7 @@ const AppNavigator = () => {
                     },
                     headerTintColor: theme.colors.text.primary,
                     headerTitleStyle: {
-                        fontWeight: 'bold',
+                        fontFamily: theme.typography.fonts.display,
                         fontSize: 20,
                     },
                     headerLeft: () => (
@@ -311,7 +328,7 @@ const AppNavigator = () => {
                     },
                     headerTintColor: theme.colors.text.primary,
                     headerTitleStyle: {
-                        fontWeight: 'bold',
+                        fontFamily: theme.typography.fonts.display,
                         fontSize: 20,
                     },
                     headerLeft: () => (
@@ -336,7 +353,7 @@ const AppNavigator = () => {
                     },
                     headerTintColor: theme.colors.text.primary,
                     headerTitleStyle: {
-                        fontWeight: 'bold',
+                        fontFamily: theme.typography.fonts.display,
                         fontSize: 20,
                     },
                     headerLeft: () => (
@@ -361,7 +378,7 @@ const AppNavigator = () => {
                     },
                     headerTintColor: theme.colors.text.primary,
                     headerTitleStyle: {
-                        fontWeight: 'bold',
+                        fontFamily: theme.typography.fonts.display,
                         fontSize: 20,
                     },
                     headerLeft: () => (
@@ -386,7 +403,7 @@ const AppNavigator = () => {
                     },
                     headerTintColor: theme.colors.text.primary,
                     headerTitleStyle: {
-                        fontWeight: 'bold',
+                        fontFamily: theme.typography.fonts.display,
                         fontSize: 20,
                     },
                     headerLeft: () => (
@@ -411,7 +428,7 @@ const AppNavigator = () => {
                     },
                     headerTintColor: theme.colors.text.primary,
                     headerTitleStyle: {
-                        fontWeight: 'bold',
+                        fontFamily: theme.typography.fonts.display,
                         fontSize: 20,
                     },
                     headerLeft: () => (

@@ -20,6 +20,7 @@ import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { recipeOperations, mealPlanOperations, groceryOperations, recipeCookingHistoryOperations, userOperations } from '../database/operations';
 import aiChefService from '../services/aiChefService';
+import { toPersistentImageUri } from '../services/mediaPrep';
 
 const RecipeDetailScreen = ({ route, navigation }) => {
     const { recipeId } = route.params;
@@ -109,7 +110,8 @@ const RecipeDetailScreen = ({ route, navigation }) => {
             console.log('Image picker result:', result);
 
             if (!result.canceled) {
-                setEditedRecipe({ ...editedRecipe, image_uri: result.assets[0].uri });
+                const imageUri = await toPersistentImageUri(result.assets[0].uri);
+                setEditedRecipe({ ...editedRecipe, image_uri: imageUri });
             }
         } catch (error) {
             console.error('Error picking image:', error);
