@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+    AccessibilityInfo,
     ActivityIndicator,
     FlatList,
     KeyboardAvoidingView,
@@ -15,7 +16,9 @@ import { useNavigation } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { BrandMark } from '../components/Brand';
-import { AiBadge, aiDisclaimerFor } from '../ai/AiLabel';
+import { AiBadge, AiDisclaimer, AllergenWarning, AllergyNotice, ReportButton } from '../ai/AiLabel';
+import { useAllergies } from '../safety/useAllergies';
+import { findAllergenMatches } from '../safety/allergens';
 import { MISSING_KEY_MESSAGE } from '../services/aiSettings';
 import { useOnboardingTour } from '../onboarding/useOnboardingTour';
 import { getSpeechEngine, type SpeechEngine } from '../voice/speech';
@@ -45,6 +48,7 @@ export default function SousScreen() {
     const theme = getTheme(isDark, undefined, undefined);
     const navigation = useNavigation() as unknown as Nav;
     useOnboardingTour();
+    const allergies = useAllergies();
 
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
@@ -88,6 +92,7 @@ export default function SousScreen() {
                 const result = await askSous(history, text);
                 const reply: Message = { id: newId(), role: 'sous', text: result.reply, cards: result.cards };
                 setMessages((prev) => [...prev, reply]);
+                AccessibilityInfo.announceForAccessibility(`Sous says: ${result.reply}`);
                 if (autoSpeak) speak(reply);
             } catch (error) {
                 const message = (error as Error)?.message || 'Something went wrong.';
@@ -152,10 +157,11 @@ export default function SousScreen() {
                             <Text style={[styles.cardRowText, display, { color: c.text.primary, fontSize: 17 }]} numberOfLines={2}>{card.recipe.title}</Text>
                             <Ionicons name="chevron-forward" size={16} color={c.text.tertiary} />
                         </View>
+                        <AllergenWarning matches={findAllergenMatches(card.ingredients || [], allergies.raw)} />
                         {card.aiGenerated && (
                             <View style={styles.cardFooter}>
-                                <AiBadge />
-                                <Text style={[styles.fine, { color: c.text.tertiary }]}>{aiDisclaimerFor('recipe')}</Text>
+                                <AiDisclaimer kind="recipe" report={{ kind: 'recipe', content: `${card.recipe.title}\n${(card.ingredients || []).join('\n')}` }} />
+                                <AllergyNotice allergies={allergies.list} />
                             </View>
                         )}
                     </Pressable>
@@ -192,10 +198,7 @@ export default function SousScreen() {
                         <Text style={[styles.cost, display, { color: c.text.primary }]}>
                             {card.total != null ? `${card.currency === 'USD' ? '$' : ''}${card.total.toFixed(2)}${card.currency !== 'USD' ? ` ${card.currency}` : ''}` : 'See breakdown'}
                         </Text>
-                        <View style={styles.cardFooter}>
-                            <AiBadge />
-                            <Text style={[styles.fine, { color: c.text.tertiary }]}>{aiDisclaimerFor('cost')}</Text>
-                        </View>
+                        <AiDisclaimer kind="estimate" report={{ kind: 'cost', content: `Estimated total ${card.total ?? ''} ${card.currency}` }} />
                     </Pressable>
                 );
             case 'error':
@@ -231,16 +234,18 @@ export default function SousScreen() {
                 {!item.needsKey && (
                     <View style={styles.meta}>
                         <AiBadge />
+                        <ReportButton target={{ kind: 'chat', content: item.text }} />
                         <Pressable
                             onPress={() => (speakingId === item.id ? engineRef.current?.stop() : speak(item))}
-                            accessibilityLabel={speakingId === item.id ? 'Stop reading' : 'Read aloud'}
+                            accessibilityRole="button"
+                            accessibilityLabel={speakingId === item.id ? 'Stop reading aloud' : 'Read this reply aloud'}
                             hitSlop={8}
                         >
                             <Ionicons name={speakingId === item.id ? 'stop-circle-outline' : 'volume-high-outline'} size={18} color={c.text.tertiary} />
                         </Pressable>
                     </View>
                 )}
-                {!item.needsKey && <Text style={[styles.fine, { color: c.text.tertiary }]}>{aiDisclaimerFor('chat')}</Text>}
+                {!item.needsKey && <AiDisclaimer kind="chat" showBadge={false} style={{ paddingLeft: 4, maxWidth: '92%' }} />}
             </View>
         );
     };
@@ -269,7 +274,7 @@ export default function SousScreen() {
                 <Text style={[styles.topTitle, display, { color: c.text.primary }]}>Sous</Text>
                 <Text style={[styles.pronounceInline, { color: c.text.tertiary }]}>(Soo)</Text>
                 <View style={{ flex: 1 }} />
-                <Pressable onPress={toggleAutoSpeak} style={[styles.toggle, { borderColor: c.border }]} accessibilityRole="switch" accessibilityState={{ checked: autoSpeak }}>
+                <Pressable onPress={toggleAutoSpeak} style={[styles.toggle, { borderColor: c.border }]} accessibilityRole="switch" accessibilityLabel="Read Sous replies aloud" accessibilityState={{ checked: autoSpeak }}>
                     <Ionicons name={autoSpeak ? 'volume-high' : 'volume-mute-outline'} size={16} color={autoSpeak ? theme.primary[500] : c.text.tertiary} />
                     <Text style={[styles.toggleText, { color: c.text.secondary }]}>{autoSpeak ? 'Voice on' : 'Voice off'}</Text>
                 </Pressable>
@@ -282,7 +287,7 @@ export default function SousScreen() {
                 ListEmptyComponent={empty}
                 contentContainerStyle={[styles.list, !messages.length && { flexGrow: 1, justifyContent: 'center' }]}
                 ListFooterComponent={thinking ? (
-                    <View style={styles.thinking}>
+                    <View style={styles.thinking} accessibilityLiveRegion="polite">
                         <ActivityIndicator size="small" color={theme.primary[500]} />
                         <Text style={{ color: c.text.tertiary }}>Sous is on it…</Text>
                     </View>
@@ -297,7 +302,9 @@ export default function SousScreen() {
                 <Pressable
                     onPress={() => (listening ? mic.stop() : mic.start())}
                     style={[styles.roundButton, { backgroundColor: listening ? theme.colors.error : c.surfaceMuted, opacity: mic.isSupported ? 1 : 0.4 }]}
+                    accessibilityRole="button"
                     accessibilityLabel={listening ? 'Stop talking' : 'Talk to Sous'}
+                    accessibilityHint="Asks for microphone access the first time"
                 >
                     <Ionicons name={listening ? 'stop' : 'mic'} size={20} color={listening ? '#FFFFFF' : c.text.primary} />
                 </Pressable>
@@ -305,6 +312,7 @@ export default function SousScreen() {
                     value={draft}
                     onChangeText={setInput}
                     placeholder="Message Sous…"
+                    accessibilityLabel="Message to Sous"
                     placeholderTextColor={c.text.tertiary}
                     style={[styles.input, { color: c.text.primary, backgroundColor: c.surface, borderColor: c.border }]}
                     multiline
@@ -316,6 +324,7 @@ export default function SousScreen() {
                     onPress={() => send(input)}
                     disabled={!input.trim() || thinking}
                     style={[styles.roundButton, { backgroundColor: theme.primary[500], opacity: !input.trim() || thinking ? 0.5 : 1 }]}
+                    accessibilityRole="button"
                     accessibilityLabel="Send"
                 >
                     <Ionicons name="arrow-up" size={20} color="#FFFFFF" />

@@ -12,6 +12,7 @@ import {
     ActivityIndicator,
     Image,
     ScrollView,
+    AccessibilityInfo,
 } from 'react-native';
 import Animated, {
     useAnimatedStyle,
@@ -30,12 +31,16 @@ import AnimatedPressable from '../components/AnimatedPressable';
 import { aiConversationOperations, pantryOperations, recipeOperations, userOperations } from '../database/operations';
 import aiChefService from '../services/aiChefService';
 import StyledMessage from '../components/StyledMessage';
-import { AiDisclaimer } from '../ai/AiLabel';
+import { AiDisclaimer, AllergenWarning, AllergyNotice } from '../ai/AiLabel';
+import { useAllergies } from '../safety/useAllergies';
+import { findAllergenMatches } from '../safety/allergens';
+import { isLikelyNonFood } from '../safety/foodSafety';
 import TypingIndicator from '../components/TypingIndicator';
 
 const HELPERS_COLLAPSED_KEY = 'aiChefHelpersCollapsed';
 
 const AiChefScreen = () => {
+    const allergies = useAllergies();
     const navigation = useNavigation();
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
@@ -268,6 +273,7 @@ const AiChefScreen = () => {
                         recipeData: recipeData,
                     };
                     setMessages(prev => [...prev, assistantMessage]);
+                AccessibilityInfo.announceForAccessibility(`AI Chef says: ${String(assistantMessage.message).slice(0, 300)}`);
                     await aiConversationOperations.add(assistantMessage);
                 } else {
                     Alert.alert('Error', response.error || 'Failed to get response from AI Chef');
@@ -329,7 +335,7 @@ const AiChefScreen = () => {
     useLayoutEffect(() => {
         navigation.setOptions({
             headerRight: () => (
-                <TouchableOpacity onPress={handleClearChat} style={{ marginRight: 16 }}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear chat" onPress={handleClearChat} style={{ marginRight: 16 }}>
                     <Ionicons name="trash-outline" size={24} color={theme.colors.text.primary} />
                 </TouchableOpacity>
             ),
@@ -514,7 +520,16 @@ const AiChefScreen = () => {
             setLoading(true);
             setGeneratingRecipeStatus('Loading pantry...');
             console.log('[AI Chef] Loading pantry items...');
-            const pantryItems = await pantryOperations.getAll();
+            const allPantryItems = await pantryOperations.getAll();
+            // Non-food entries (cleaners, medicines, …) never go to the model.
+            const skipped = allPantryItems.filter((item) => isLikelyNonFood(item.name || ''));
+            const pantryItems = allPantryItems.filter((item) => !isLikelyNonFood(item.name || ''));
+            if (skipped.length) {
+                Alert.alert(
+                    'Skipped non-food items',
+                    `These don't look like food, so AmpliFood left them out: ${skipped.map((item) => item.name).join(', ')}.`
+                );
+            }
             
             if (cancelledRef.current) {
                 return;
@@ -524,7 +539,7 @@ const AiChefScreen = () => {
 
             if (pantryItems.length === 0) {
                 console.log('[AI Chef] Pantry is empty');
-                Alert.alert('Empty Pantry', 'Add some items to your pantry first!');
+                Alert.alert('Empty Pantry', skipped.length ? 'Add some food to your pantry first.' : 'Add some items to your pantry first!');
                 setGeneratingRecipeStatus('');
                 return;
             }
@@ -572,6 +587,7 @@ const AiChefScreen = () => {
 
                 console.log('[AI Chef] Adding assistant message to chat');
                 setMessages(prev => [...prev, assistantMessage]);
+                AccessibilityInfo.announceForAccessibility(`AI Chef says: ${String(assistantMessage.message).slice(0, 300)}`);
                 await aiConversationOperations.add(assistantMessage);
                 console.log('[AI Chef] Recipe message added successfully');
             } else {
@@ -666,9 +682,20 @@ const AiChefScreen = () => {
                 ]}
             >
                 <StyledMessage message={item.message} isUser={isUser} />
-                {!isUser && !item.isWelcome && (
-                    <AiDisclaimer kind={hasRecipe ? 'recipe' : 'chat'} style={styles.aiDisclaimer} />
+                {hasRecipe && (
+                    <AllergenWarning
+                        matches={findAllergenMatches((item.recipeData.ingredients || []).map((ing) => ing.ingredient || ''), allergies.raw)}
+                        style={styles.aiDisclaimer}
+                    />
                 )}
+                {!isUser && !item.isWelcome && (
+                    <AiDisclaimer
+                        kind={hasRecipe ? 'recipe' : 'chat'}
+                        style={styles.aiDisclaimer}
+                        report={{ kind: hasRecipe ? 'recipe' : 'chat', content: String(item.message || '') }}
+                    />
+                )}
+                {hasRecipe && <AllergyNotice allergies={allergies.list} style={styles.aiDisclaimer} />}
                 {hasRecipe && (
                     <AnimatedPressable
                         style={[styles.saveRecipeButton, { backgroundColor: theme.accent.green }]}
@@ -830,7 +857,7 @@ const AiChefScreen = () => {
 
             {/* Input */}
             <View style={[styles.inputContainer, { backgroundColor: theme.colors.surfaceGlass, borderTopColor: theme.colors.borderSoft }]}>
-                <TextInput
+                <TextInput accessibilityLabel="Message to AI Chef"
                     style={[styles.input, { color: theme.colors.text.primary, backgroundColor: theme.colors.surfaceElevated }, theme.shadows.sm]}
                     placeholder="Ask me anything about cooking..."
                     placeholderTextColor={theme.colors.text.tertiary}

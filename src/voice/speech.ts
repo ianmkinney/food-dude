@@ -3,6 +3,7 @@ import * as DeviceSpeech from 'expo-speech';
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
 import { getElevenLabsKey, getVoiceSettings } from './voiceSettings';
+import { ensureConsent } from '../consent/consentStore';
 
 // Text-to-speech for Sous behind one interface, so the planned AmpliFood voice
 // proxy can slot in as another engine without touching the UI.
@@ -57,6 +58,7 @@ export function createElevenLabsEngine(apiKey: string, voiceId: string): SpeechE
         id: 'elevenlabs',
         async speak(text) {
             release();
+            await ensureConsent('elevenlabs');
             const response = await fetch(
                 `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
                 {

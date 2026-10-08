@@ -11,6 +11,7 @@ import { getTheme } from './src/theme';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { BrandMark, CheckerStrip } from './src/components/Brand';
 import { AlertHost, installAlertPolyfill } from './src/platform/alert';
+import { ConsentHost, LegalGate } from './src/consent/ConsentHost';
 
 import { ShareIntentProvider } from './src/platform/shareIntent';
 
@@ -131,10 +132,13 @@ function AppContent() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ShareIntentProvider>
-        <NavigationContainer linking={linking} documentTitle={documentTitle}>
-          <AppNavigator />
-          <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-        </NavigationContainer>
+        <LegalGate>
+          <NavigationContainer linking={linking} documentTitle={documentTitle}>
+            <AppNavigator />
+            <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+          </NavigationContainer>
+        </LegalGate>
+        <ConsentHost />
         <AlertHost />
       </ShareIntentProvider>
     </GestureHandlerRootView>

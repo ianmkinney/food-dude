@@ -39,7 +39,7 @@ export type RecipeSummary = { id: number; title: string; image_uri?: string | nu
 
 export type SousCard =
     | { type: 'recipes'; title: string; recipes: RecipeSummary[] }
-    | { type: 'recipe'; title: string; recipe: RecipeSummary; aiGenerated: boolean }
+    | { type: 'recipe'; title: string; recipe: RecipeSummary; aiGenerated: boolean; ingredients?: string[] }
     | { type: 'meal_plan'; recipeTitle: string; date: string; mealType: MealType }
     | { type: 'pantry'; items: string[] }
     | { type: 'grocery'; items: string[] }
@@ -83,7 +83,13 @@ async function run(call: ToolCall): Promise<SousCard> {
             if (!result?.success) throw new Error(result?.error || "Couldn't read a recipe from that.");
             const id = Number(await recipeOperations.create(result.recipe));
             await recipeOperations.setProvenance(id, { isAiGenerated: false, imageSource: result.recipe.imageUri ? 'import' : null });
-            return { type: 'recipe', title: 'Imported to your recipe book', recipe: { id, title: result.recipe.title }, aiGenerated: false };
+            return {
+                type: 'recipe',
+                title: 'Imported to your recipe book',
+                recipe: { id, title: result.recipe.title },
+                aiGenerated: false,
+                ingredients: (result.recipe.ingredients || []).map((ing: { ingredient?: string }) => ing.ingredient || ''),
+            };
         }
         case 'create_recipe': {
             const a = call.args;
@@ -105,7 +111,13 @@ async function run(call: ToolCall): Promise<SousCard> {
                 })
             );
             await recipeOperations.setProvenance(id, { isAiGenerated: true });
-            return { type: 'recipe', title: 'Saved to your recipe book', recipe: { id, title: a.title, is_ai_generated: 1 }, aiGenerated: true };
+            return {
+                type: 'recipe',
+                title: 'Saved to your recipe book',
+                recipe: { id, title: a.title, is_ai_generated: 1 },
+                aiGenerated: true,
+                ingredients: (a.ingredients || []).map((ing) => [ing.quantity, ing.unit, ing.ingredient].filter(Boolean).join(' ')),
+            };
         }
         case 'add_to_meal_plan': {
             const recipe = await findRecipe(call.args);

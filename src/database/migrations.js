@@ -338,6 +338,15 @@ export const MIGRATIONS = [
             await addColumnIfMissing(db, 'recipes', 'image_source', 'TEXT');
         },
     },
+    {
+        version: 9,
+        name: 'users_allergies',
+        up: async (db) => {
+            // Separate from flavor preferences: a hard exclusion for AI prompts
+            // and the on-device ingredient check.
+            await addColumnIfMissing(db, 'users', 'allergies', 'TEXT');
+        },
+    },
 ];
 
 // Cheap PRAGMA check on every boot so Expo Go installs that already sit at

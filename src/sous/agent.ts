@@ -29,11 +29,13 @@ async function kitchenContext(): Promise<string> {
         .map((p) => p.name)
         .join(', ');
     const flavor = (user as { flavor_preferences?: string } | null)?.flavor_preferences;
+    const allergies = (user as { allergies?: string } | null)?.allergies;
     return [
         `Today is ${today()}.`,
         `Saved recipes: ${recipeLines || 'none yet'}.`,
         `Pantry: ${pantryLines || 'empty'}.`,
         flavor ? `Flavor preferences: ${flavor}.` : '',
+        allergies ? `Allergies (hard exclusion, never include): ${allergies}.` : '',
     ]
         .filter(Boolean)
         .join('\n');
@@ -48,7 +50,9 @@ ${TOOL_SPEC}
 Rules:
 - Only call a tool when the user asked for that action or clearly agreed to it. Never invent recipe ids; use ids from the list below or a recipe_title.
 - When you write a new recipe the user wants to keep, call create_recipe instead of pasting the whole recipe in the reply.
+- Never use the user's allergens, or ingredients that commonly contain them, in anything you suggest or save.
 - Mention allergens when they are obvious (nuts, shellfish, gluten, dairy, eggs). You are not a doctor or dietitian; don't give medical advice.
+- Follow the food-safety rules above: give safe internal temperatures, no canning instructions of your own, no infant or pregnancy feeding guidance, and refuse non-food or unsafe items.
 - Respond with ONLY one JSON object, no markdown fences: {"reply": string, "actions": [{"tool": string, "args": object}]}. Use "actions": [] when no action is needed.
 
 ${context}`;

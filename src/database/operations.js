@@ -910,7 +910,7 @@ export const userOperations = {
             if (existing) {
                 // Update
                 await db.runAsync(
-                    `UPDATE users SET name = ?, username = ?, email = ?, avatar_uri = ?, recipes_cooked = ?, flavor_preferences = ?, updated_at = ? WHERE user_id = ?`,
+                    `UPDATE users SET name = ?, username = ?, email = ?, avatar_uri = ?, recipes_cooked = ?, flavor_preferences = ?, allergies = ?, updated_at = ? WHERE user_id = ?`,
                     [
                         user.name || null,
                         user.username || null,
@@ -918,6 +918,7 @@ export const userOperations = {
                         user.avatarUri || null,
                         user.recipesCooked !== undefined ? user.recipesCooked : existing.recipes_cooked || 0,
                         user.flavorPreferences || null,
+                        user.allergies !== undefined ? user.allergies || null : existing.allergies || null,
                         now,
                         user.userId
                     ]
@@ -926,8 +927,8 @@ export const userOperations = {
             } else {
                 // Insert
                 const result = await db.runAsync(
-                    `INSERT INTO users (user_id, name, username, email, avatar_uri, recipes_cooked, flavor_preferences, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    `INSERT INTO users (user_id, name, username, email, avatar_uri, recipes_cooked, flavor_preferences, allergies, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         user.userId,
                         user.name || null,
@@ -936,6 +937,7 @@ export const userOperations = {
                         user.avatarUri || null,
                         user.recipesCooked || 0,
                         user.flavorPreferences || null,
+                        user.allergies || null,
                         now,
                         now
                     ]

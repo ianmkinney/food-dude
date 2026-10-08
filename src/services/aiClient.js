@@ -14,6 +14,9 @@ import {
     setCachedModels,
 } from './aiSettings';
 import { assertVideoSupported, coerceImagesForProvider } from './mediaPrep';
+import { userOperations } from '../database/operations';
+import { safetyPreamble } from '../safety/foodSafety';
+import { ensureConsent } from '../consent/consentStore';
 import { describeMimeType, isImageMimeSupportedBy, normalizeMimeType } from './mediaTypes';
 
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -288,8 +291,25 @@ async function geminiGenerate({ apiKey, model, prompt, images, video }) {
     return text;
 }
 
-export async function generateText(prompt, options = {}) {
+async function currentAllergies() {
+    try {
+        return (await userOperations.getCurrent())?.allergies || null;
+    } catch {
+        return null;
+    }
+}
+
+// Every text/multimodal request carries the food-safety rules and the user's
+// allergies as a hard exclusion, and nothing leaves the device until the user
+// has allowed sharing with this provider.
+async function prepareRequest(prompt) {
     const creds = await requireAiConfigured();
+    await ensureConsent(creds.provider);
+    return { creds, prompt: `${safetyPreamble(await currentAllergies())}\n\n${prompt}` };
+}
+
+export async function generateText(rawPrompt, options = {}) {
+    const { creds, prompt } = await prepareRequest(rawPrompt);
     const model = options.model || creds.model || defaultModelFor(creds.provider);
 
     switch (creds.provider) {
@@ -318,8 +338,8 @@ export async function generateText(prompt, options = {}) {
     }
 }
 
-export async function generateMultimodal({ prompt, images, video }) {
-    const creds = await requireAiConfigured();
+export async function generateMultimodal({ prompt: rawPrompt, images, video }) {
+    const { creds, prompt } = await prepareRequest(rawPrompt);
     const model = creds.model || defaultModelFor(creds.provider);
 
     if (video && creds.provider !== 'gemini') {
@@ -358,6 +378,7 @@ export async function generateMultimodal({ prompt, images, video }) {
 
 export async function generateImage(prompt) {
     const creds = await requireAiConfigured();
+    await ensureConsent(creds.provider);
     if (creds.provider !== 'gemini') {
         throw new Error('Recipe image generation needs Google Gemini. Switch provider in Account and pick an image model.');
     }

@@ -60,7 +60,7 @@ export default function VoiceSettings({ theme }: { theme: Theme }) {
                     ? 'Using your ElevenLabs key. Replies you choose to hear are sent to ElevenLabs as text, billed to your ElevenLabs account.'
                     : "Sous reads replies with your device's built-in voice for free. Add your own ElevenLabs key for a more natural voice."}
             </Text>
-            <TextInput
+            <TextInput accessibilityLabel="ElevenLabs API key"
                 value={keyInput}
                 onChangeText={setKeyInput}
                 placeholder={hasKey ? 'Paste a new ElevenLabs key to replace' : 'Paste ElevenLabs API key'}
@@ -70,7 +70,7 @@ export default function VoiceSettings({ theme }: { theme: Theme }) {
                 autoCorrect={false}
                 style={[styles.input, { color: c.text.primary, borderColor: c.border, backgroundColor: c.surface }]}
             />
-            <TextInput
+            <TextInput accessibilityLabel="Voice ID"
                 value={voice}
                 onChangeText={setVoice}
                 onEndEditing={() => setVoiceId(voice)}

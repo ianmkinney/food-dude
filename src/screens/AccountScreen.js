@@ -14,6 +14,7 @@ import { useTheme } from '../context/ThemeContext';
 import { userOperations, partyStatsOperations, recipeCookingHistoryOperations } from '../database/operations';
 import AiProviderSettings from '../components/AiProviderSettings';
 import VoiceSettings from '../components/VoiceSettings';
+import DataSharingSettings from '../components/DataSharingSettings';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { BrandMark } from '../components/Brand';
@@ -35,6 +36,7 @@ const AccountScreen = ({ navigation }) => {
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [flavorPreferences, setFlavorPreferences] = useState('');
+    const [allergies, setAllergies] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [recipesCooked, setRecipesCooked] = useState(0);
     const [partyMembersJoined, setPartyMembersJoined] = useState(0);
@@ -91,6 +93,7 @@ const AccountScreen = ({ navigation }) => {
             setUsername(currentUser.username || '');
             setEmail(currentUser.email || '');
             setFlavorPreferences(currentUser.flavor_preferences || '');
+            setAllergies(currentUser.allergies || '');
         } catch (error) {
             console.error('Error loading user:', error);
         }
@@ -109,6 +112,7 @@ const AccountScreen = ({ navigation }) => {
                 username: username.trim() || null,
                 email: email.trim() || null,
                 flavorPreferences: flavorPreferences.trim() || null,
+                allergies: allergies.trim() || null,
             });
             setIsEditing(false);
             await loadUser();
@@ -125,6 +129,7 @@ const AccountScreen = ({ navigation }) => {
         setUsername(user?.username || '');
         setEmail(user?.email || '');
         setFlavorPreferences(user?.flavor_preferences || '');
+        setAllergies(user?.allergies || '');
         setIsEditing(false);
     };
 
@@ -167,7 +172,7 @@ const AccountScreen = ({ navigation }) => {
                 <View style={styles.section}>
                     <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Name</Text>
                     {isEditing ? (
-                        <TextInput
+                        <TextInput accessibilityLabel="Name"
                             style={[styles.input, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                             placeholder="Enter your name"
                             placeholderTextColor={theme.colors.text.tertiary}
@@ -184,7 +189,7 @@ const AccountScreen = ({ navigation }) => {
                 <View style={styles.section}>
                     <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Username</Text>
                     {isEditing ? (
-                        <TextInput
+                        <TextInput accessibilityLabel="Username"
                             style={[styles.input, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                             placeholder="Enter your username"
                             placeholderTextColor={theme.colors.text.tertiary}
@@ -202,7 +207,7 @@ const AccountScreen = ({ navigation }) => {
                 <View style={styles.section}>
                     <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Email</Text>
                     {isEditing ? (
-                        <TextInput
+                        <TextInput accessibilityLabel="Email"
                             style={[styles.input, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                             placeholder="Enter your email"
                             placeholderTextColor={theme.colors.text.tertiary}
@@ -221,7 +226,7 @@ const AccountScreen = ({ navigation }) => {
                 <View style={styles.section}>
                     <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Flavor Preferences</Text>
                     {isEditing ? (
-                        <TextInput
+                        <TextInput accessibilityLabel="Flavor Preferences"
                             style={[styles.input, styles.textArea, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                             placeholder="e.g., Spicy, Sweet, Savory, Vegetarian, etc."
                             placeholderTextColor={theme.colors.text.tertiary}
@@ -235,6 +240,29 @@ const AccountScreen = ({ navigation }) => {
                             {user?.flavor_preferences || 'Not set'}
                         </Text>
                     )}
+                </View>
+
+                <View style={styles.section}>
+                    <Text style={[styles.label, { color: theme.colors.text.secondary }]} nativeID="allergiesLabel">Allergies</Text>
+                    {isEditing ? (
+                        <TextInput
+                            style={[styles.input, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
+                            placeholder="e.g., peanuts, shellfish, sesame"
+                            placeholderTextColor={theme.colors.text.tertiary}
+                            value={allergies}
+                            onChangeText={setAllergies}
+                            accessibilityLabel="Allergies"
+                            accessibilityHint="Separate allergens with commas"
+                            accessibilityLabelledBy="allergiesLabel"
+                        />
+                    ) : (
+                        <Text style={[styles.value, { color: theme.colors.text.primary }]}>
+                            {user?.allergies || 'None set'}
+                        </Text>
+                    )}
+                    <Text style={[styles.helper, { color: theme.colors.text.tertiary }]}>
+                        Used only to steer AI suggestions and flag possible matches. It's stored on this device and sent to your AI provider with recipe requests, with your permission. It can't guarantee a recipe is allergen-free.
+                    </Text>
                 </View>
 
                 {isEditing && (
@@ -278,6 +306,10 @@ const AccountScreen = ({ navigation }) => {
 
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                 <VoiceSettings theme={theme} />
+            </ElevatedCard>
+
+            <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
+                <DataSharingSettings theme={theme} />
             </ElevatedCard>
 
             {/* Settings Section */}
@@ -331,6 +363,11 @@ const AccountScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+    helper: {
+        fontSize: 12,
+        lineHeight: 17,
+        marginTop: 6,
+    },
     stamp: {
         alignItems: 'center',
         paddingTop: 8,
