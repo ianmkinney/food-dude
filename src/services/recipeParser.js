@@ -282,8 +282,10 @@ ${html.substring(0, 10000)}`;
             success: true,
             recipe: {
                 ...parsedRecipe,
+                // Keep the link and credit the site; never copy the site's photos.
+                imageUri: null,
                 sourceUrl: url,
-                sourcePlatform: new URL(url).hostname,
+                sourcePlatform: new URL(url).hostname.replace(/^www\./, ''),
             },
         };
     } catch (error) {

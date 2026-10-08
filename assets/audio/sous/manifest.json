@@ -1,0 +1,18 @@
+{
+  "placeholder": true,
+  "note": "Silent placeholders. Run scripts/generate-sous-audio.mjs to render the real AI voice; the app falls back to on-device speech while placeholder is true.",
+  "files": {
+    "intro": "intro.wav",
+    "agree": "agree.wav",
+    "allergies": "allergies.wav",
+    "consent": "consent.wav",
+    "profile": "profile.wav",
+    "recipes": "recipes.wav",
+    "tour_recipes": "tour_recipes.wav",
+    "tour_plan": "tour_plan.wav",
+    "tour_grocery": "tour_grocery.wav",
+    "tour_pantry": "tour_pantry.wav",
+    "tour_sous": "tour_sous.wav",
+    "skipped": "skipped.wav"
+  }
+}

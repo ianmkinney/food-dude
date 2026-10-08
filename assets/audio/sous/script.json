@@ -1,0 +1,17 @@
+{
+  "voice": "Sous (AI voice). Generate with an ElevenLabs Voice Design voice on a Starter-or-higher plan with training opt-out. See scripts/generate-sous-audio.mjs.",
+  "lines": {
+    "intro": "Hi, I'm Sous, AmpliFood's AI sous chef. I'm not a person. My voice and my recipe ideas are made by AI, so I can get things wrong. Let's set up your kitchen. You can skip anytime.",
+    "agree": "First, the fine print. You need to be thirteen or older, and you'll need to agree to the Terms and Privacy Policy. Recipes I suggest are made by AI, so check ingredients, labels, and cooking temperatures yourself.",
+    "allergies": "This step is optional. If you add allergies or diet needs, I'll use them to tailor recipes and flag possible matches. They stay on this device. AI can miss hidden allergens, so this isn't a guarantee or medical advice.",
+    "consent": "To come up with ideas, I need to send your requests to the AI provider you picked. You choose what's included, and you can change it anytime.",
+    "profile": "What do you like to eat? Tap a few, type, or hold the mic and tell me. Or skip this.",
+    "recipes": "Here are a few ideas. Each one says where it came from. Save one to see how the rest of the app works.",
+    "tour_recipes": "This is your recipe book. Everything you save lands here.",
+    "tour_plan": "Want it on the calendar? I can put it on tomorrow's dinner in your meal planner.",
+    "tour_grocery": "Need ingredients? I can add them to your grocery list.",
+    "tour_pantry": "Your pantry keeps track of what's at home. Scan a barcode to add things fast.",
+    "tour_sous": "That's the tour. Ask me anything here, or hold the mic to talk. You can replay this tour in Account.",
+    "skipped": "No problem. You can set things up later in Account."
+  }
+}

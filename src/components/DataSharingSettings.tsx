@@ -1,17 +1,29 @@
 import React, { useCallback, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { PRIVACY_URL, TARGETS, TERMS_URL, getConsents, revokeConsent, type ConsentTarget } from '../consent/consentStore';
+import {
+    PRIVACY_URL,
+    TARGETS,
+    TERMS_URL,
+    getConsents,
+    getIncludeHealthData,
+    revokeConsent,
+    setIncludeHealthData,
+    type ConsentTarget,
+} from '../consent/consentStore';
+import { replayOnboarding } from '../onboarding/onboardingStore';
 
 type Theme = ReturnType<typeof import('../theme').getTheme>;
 
 /** Lists which providers the user allowed to receive data, with a Revoke button each. */
 export default function DataSharingSettings({ theme }: { theme: Theme }) {
     const [granted, setGranted] = useState<ConsentTarget[]>([]);
+    const [includeHealth, setIncludeHealth] = useState(false);
 
     const load = useCallback(() => {
         getConsents().then((map) => setGranted(Object.keys(map) as ConsentTarget[]));
+        getIncludeHealthData().then(setIncludeHealth);
     }, []);
     useFocusEffect(load);
 
@@ -20,7 +32,7 @@ export default function DataSharingSettings({ theme }: { theme: Theme }) {
         <View style={styles.root}>
             <View style={styles.header}>
                 <Ionicons name="shield-checkmark-outline" size={22} color={theme.primary[500]} accessible={false} />
-                <Text style={[styles.title, { color: c.text.primary }]} accessibilityRole="header">Data sharing</Text>
+                <Text style={[styles.title, { color: c.text.primary }]} accessibilityRole="header">AI & privacy</Text>
             </View>
             <Text style={[styles.body, { color: c.text.secondary }]}>
                 AmpliFood asks before sending anything to an AI or voice provider. Revoke a permission to stop sending; you'll be asked again next time.
@@ -45,6 +57,28 @@ export default function DataSharingSettings({ theme }: { theme: Theme }) {
                     </View>
                 ))
             )}
+            <View style={[styles.row, { borderColor: c.border }]}>
+                <Text style={[styles.rowText, { color: c.text.primary }]}>Also include my allergies & diet needs in AI requests</Text>
+                <Switch
+                    value={includeHealth}
+                    onValueChange={async (value) => {
+                        setIncludeHealth(value);
+                        await setIncludeHealthData(value);
+                    }}
+                    accessibilityLabel="Also include my allergies and diet needs in AI requests"
+                />
+            </View>
+            <Text style={[styles.body, { color: c.text.secondary }]}>
+                Off: they stay on this device and the on-device allergen check still flags possible matches.
+            </Text>
+            <Pressable
+                onPress={replayOnboarding}
+                style={[styles.revoke, { borderColor: c.border, alignSelf: 'flex-start' }]}
+                accessibilityRole="button"
+                accessibilityLabel="Replay the Sous tour"
+            >
+                <Text style={[styles.revokeText, { color: c.text.primary }]}>Replay tour</Text>
+            </Pressable>
             <View style={styles.links}>
                 <Text style={[styles.link, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(TERMS_URL)}>
                     Terms of Use

@@ -37,6 +37,7 @@ const AccountScreen = ({ navigation }) => {
     const [email, setEmail] = useState('');
     const [flavorPreferences, setFlavorPreferences] = useState('');
     const [allergies, setAllergies] = useState('');
+    const [diet, setDiet] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [recipesCooked, setRecipesCooked] = useState(0);
     const [partyMembersJoined, setPartyMembersJoined] = useState(0);
@@ -94,6 +95,7 @@ const AccountScreen = ({ navigation }) => {
             setEmail(currentUser.email || '');
             setFlavorPreferences(currentUser.flavor_preferences || '');
             setAllergies(currentUser.allergies || '');
+            setDiet(currentUser.diet || '');
         } catch (error) {
             console.error('Error loading user:', error);
         }
@@ -113,6 +115,7 @@ const AccountScreen = ({ navigation }) => {
                 email: email.trim() || null,
                 flavorPreferences: flavorPreferences.trim() || null,
                 allergies: allergies.trim() || null,
+                diet: diet.trim() || null,
             });
             setIsEditing(false);
             await loadUser();
@@ -130,6 +133,7 @@ const AccountScreen = ({ navigation }) => {
         setEmail(user?.email || '');
         setFlavorPreferences(user?.flavor_preferences || '');
         setAllergies(user?.allergies || '');
+        setDiet(user?.diet || '');
         setIsEditing(false);
     };
 
@@ -243,7 +247,8 @@ const AccountScreen = ({ navigation }) => {
                 </View>
 
                 <View style={styles.section}>
-                    <Text style={[styles.label, { color: theme.colors.text.secondary }]} nativeID="allergiesLabel">Allergies</Text>
+                    <Text style={[styles.label, { color: theme.colors.text.secondary }]} nativeID="allergiesLabel" accessibilityRole="header">Allergies & diet</Text>
+                    <Text style={[styles.subLabel, { color: theme.colors.text.secondary }]}>Allergies</Text>
                     {isEditing ? (
                         <TextInput
                             style={[styles.input, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
@@ -258,6 +263,21 @@ const AccountScreen = ({ navigation }) => {
                     ) : (
                         <Text style={[styles.value, { color: theme.colors.text.primary }]}>
                             {user?.allergies || 'None set'}
+                        </Text>
+                    )}
+                    <Text style={[styles.subLabel, { color: theme.colors.text.secondary }]}>Diet needs</Text>
+                    {isEditing ? (
+                        <TextInput
+                            style={[styles.input, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
+                            placeholder="e.g., vegetarian, low sodium, halal"
+                            placeholderTextColor={theme.colors.text.tertiary}
+                            value={diet}
+                            onChangeText={setDiet}
+                            accessibilityLabel="Diet needs"
+                        />
+                    ) : (
+                        <Text style={[styles.value, { color: theme.colors.text.primary }]}>
+                            {user?.diet || 'None set'}
                         </Text>
                     )}
                     <Text style={[styles.helper, { color: theme.colors.text.tertiary }]}>
@@ -363,6 +383,12 @@ const AccountScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+    subLabel: {
+        fontSize: 13,
+        fontWeight: '700',
+        marginTop: 8,
+        marginBottom: 4,
+    },
     helper: {
         fontSize: 12,
         lineHeight: 17,

@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ASSISTANT_NAME } from '../config/assistant';
 import { SPEECH_ON_DEVICE_ONLY } from '../config/voice';
 
-// Push-to-talk for the assistant. Uses expo-speech-recognition with on-device
+// Push-to-talk for Ampi: listens while the mic button is held. On-device
 // recognition only when SPEECH_ON_DEVICE_ONLY is true.
+
+export const ANDROID_MIC_RATIONALE = `Talk instead of type? ${ASSISTANT_NAME} listens only while you hold the mic button. You can always type instead.`;
+const RATIONALE_SEEN_KEY = 'amplifood.mic.rationaleSeen';
 
 type Recognizer = typeof import('expo-speech-recognition').ExpoSpeechRecognitionModule;
 
@@ -45,6 +50,22 @@ function supportsOnDevice(mod: Recognizer | null): boolean {
     }
 }
 
+async function confirmAndroidRationale(): Promise<boolean> {
+    if (Platform.OS !== 'android' || (await AsyncStorage.getItem(RATIONALE_SEEN_KEY))) return true;
+    return new Promise((resolve) => {
+        Alert.alert('Use the microphone?', ANDROID_MIC_RATIONALE, [
+            { text: 'Type instead', style: 'cancel', onPress: () => resolve(false) },
+            {
+                text: 'Continue',
+                onPress: async () => {
+                    await AsyncStorage.setItem(RATIONALE_SEEN_KEY, '1');
+                    resolve(true);
+                },
+            },
+        ]);
+    });
+}
+
 export function useSpeechInput(onFinal: (text: string) => void): SpeechInput {
     const mod = loadRecognizer();
     const supported = supportsOnDevice(mod);
@@ -69,7 +90,7 @@ export function useSpeechInput(onFinal: (text: string) => void): SpeechInput {
                     event.error === 'not-allowed'
                         ? `Microphone or speech access is off. Turn it on in Settings to talk to ${ASSISTANT_NAME}, or type instead.`
                         : event.error === 'no-speech'
-                          ? "Didn't catch that. Tap Talk and try again."
+                          ? "Didn't catch that. Hold the mic and try again."
                           : event.message || 'Speech recognition stopped.'
                 );
                 setState('idle');
@@ -81,11 +102,16 @@ export function useSpeechInput(onFinal: (text: string) => void): SpeechInput {
 
     const start = useCallback(async () => {
         if (!mod || !supported) {
-            setError('Voice input isn\'t available here. Type your message instead.');
+            setError(
+                Platform.OS === 'web'
+                    ? "Voice input needs on-device speech recognition, which this browser doesn't offer. Type your message instead."
+                    : "Voice input needs on-device speech recognition, which this device doesn't have. Type your message instead."
+            );
             return;
         }
         setError(null);
         setTranscript('');
+        if (!(await confirmAndroidRationale())) return;
         const permission = await mod.requestPermissionsAsync();
         if (!permission.granted) {
             setError(

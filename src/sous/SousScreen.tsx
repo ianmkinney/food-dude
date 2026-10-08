@@ -22,8 +22,9 @@ import { findAllergenMatches } from '../safety/allergens';
 import { MISSING_KEY_MESSAGE } from '../services/aiSettings';
 import { useOnboardingTour } from '../onboarding/useOnboardingTour';
 import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION, ASSISTANT_TAGLINE } from '../config/assistant';
+import { useTourTarget } from '../onboarding/tourTargets';
 import { getSpeechEngine, shouldSpeak, type SpeechEngine } from '../voice/speech';
-import { getVoiceSettings, setAutoSpeak } from '../voice/voiceSettings';
+import { getVoiceSettings, setAutoSpeak, setVoiceMuted } from '../voice/voiceSettings';
 import { useSpeechInput } from '../voice/useSpeechInput';
 import { askSous, type SousTurn } from './agent';
 import type { SousCard } from './tools';
@@ -100,7 +101,7 @@ export default function SousScreen() {
                 const reply: Message = { id: newId(), role: 'sous', text: result.reply, cards: result.cards };
                 setMessages((prev) => [...prev, reply]);
                 AccessibilityInfo.announceForAccessibility(`${ASSISTANT_NAME} says: ${result.reply}`);
-                if (autoSpeak) speak(reply);
+                if (autoSpeak && (await shouldSpeak())) speak(reply);
             } catch (error) {
                 const message = (error as Error)?.message || 'Something went wrong.';
                 setMessages((prev) => [
@@ -120,6 +121,7 @@ export default function SousScreen() {
     );
 
     const mic = useSpeechInput((finalText) => send(finalText));
+    const micTarget = useTourTarget('sous-composer');
     const listening = mic.state === 'listening';
     const draft = listening ? mic.transcript : input;
 
@@ -131,6 +133,7 @@ export default function SousScreen() {
         const next = !autoSpeak;
         setAutoSpeakState(next);
         await setAutoSpeak(next);
+        if (next) await setVoiceMuted(false);
         if (!next) engineRef.current?.stop();
     };
 
@@ -280,6 +283,7 @@ export default function SousScreen() {
             <View style={styles.topBar}>
                 <Text style={[styles.topTitle, display, { color: c.text.primary }]}>AmpliFood · {ASSISTANT_NAME}</Text>
                 <Text style={[styles.pronounceInline, { color: c.text.tertiary }]}>({ASSISTANT_PRONUNCIATION})</Text>
+                <AiBadge style={{ alignSelf: 'center' }} />
                 <View style={{ flex: 1 }} />
                 <Pressable onPress={toggleAutoSpeak} style={[styles.toggle, { borderColor: c.border }]} accessibilityRole="switch" accessibilityLabel={`Read ${ASSISTANT_NAME} replies aloud`} accessibilityState={{ checked: autoSpeak }}>
                     <Ionicons name={autoSpeak ? 'volume-high' : 'volume-mute-outline'} size={16} color={autoSpeak ? theme.primary[500] : c.text.tertiary} />
@@ -305,17 +309,19 @@ export default function SousScreen() {
             )}
             {(mic.error || listening) && (
                 <Text style={[styles.micStatus, { color: mic.error ? c.error : theme.primary[600] }]}>
-                    {mic.error || 'Listening… tap the mic again to stop.'}
+                    {mic.error || 'Listening while you hold the mic. Speech is turned into text on this device.'}
                 </Text>
             )}
             <View style={[styles.composer, { borderTopColor: c.borderSoft, backgroundColor: c.surfaceGlass }]}>
                 {mic.isSupported ? (
                     <Pressable
-                        onPress={() => (listening ? mic.stop() : mic.start())}
+                        ref={micTarget}
+                        onPressIn={() => mic.start()}
+                        onPressOut={() => mic.stop()}
                         style={[styles.roundButton, { backgroundColor: listening ? theme.colors.error : c.surfaceMuted }]}
                         accessibilityRole="button"
-                        accessibilityLabel={listening ? 'Stop talking' : `Talk to ${ASSISTANT_NAME}`}
-                        accessibilityHint="Asks for microphone access the first time"
+                        accessibilityLabel={`Hold to talk to ${ASSISTANT_NAME}`}
+                        accessibilityHint="Listens only while held. Asks for microphone access the first time"
                     >
                         <Ionicons name={listening ? 'stop' : 'mic'} size={20} color={listening ? '#FFFFFF' : c.text.primary} />
                     </Pressable>

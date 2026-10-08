@@ -14,7 +14,7 @@ import {
     type ConsentTarget,
 } from './consentStore';
 
-/** Asks before any data goes to an AI or voice provider. Mount once near the root. */
+/** Asks before any data goes to an AI provider. Mount once near the root. */
 export function ConsentHost() {
     const { isDark } = useTheme();
     const theme = getTheme(isDark, undefined, undefined);
@@ -50,13 +50,12 @@ export function ConsentHost() {
                         Send to {info.name}?
                     </Text>
                     <Text style={[styles.body, { color: c.text.secondary }]}>
-                        To answer, AmpliFood sends {info.sends} to {info.name}
-                        , using your own API key. {info.name} handles it under its own privacy policy. Nothing is sent to AmpliFood.
+                        To answer, AmpliFood sends {info.sends} to {info.name}, using your own API key. {info.name} handles it under its own privacy policy. Nothing is sent to AmpliFood.
                     </Text>
                     <Text style={[styles.link, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(info.policy)}>
                         {info.name} privacy policy
                     </Text>
-                    <Text style={[styles.small, { color: c.text.tertiary }]}>You can turn this off any time in Account → Data sharing.</Text>
+                    <Text style={[styles.small, { color: c.text.tertiary }]}>You can turn this off any time in Account → AI & privacy.</Text>
                     <View style={styles.buttons}>
                         <Pressable onPress={() => answer(false)} style={[styles.button, { backgroundColor: c.surfaceMuted }]} accessibilityRole="button">
                             <Text style={[styles.buttonText, { color: c.text.primary }]}>Not now</Text>

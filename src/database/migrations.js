@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 10;
+export const CURRENT_SCHEMA_VERSION = 11; // v10 drop_health_worlds on #12; v11 users_diet on #13
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
@@ -352,6 +352,13 @@ export const MIGRATIONS = [
             `);
             await db.runAsync(`DELETE FROM domain_tables WHERE planet_id IN ('atlas', 'lumen', 'observatory')`);
             await db.runAsync(`DELETE FROM planets WHERE id IN ('atlas', 'lumen', 'observatory')`);
+        },
+    },
+    {
+        version: 11,
+        name: 'users_diet',
+        up: async (db) => {
+            await addColumnIfMissing(db, 'users', 'diet', 'TEXT');
         },
     },
 ];

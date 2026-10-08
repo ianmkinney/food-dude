@@ -20,8 +20,8 @@
         "NSCameraUsageDescription": "AmpliFood uses the camera to scan barcodes and, when you choose, to take a photo of a dish.",
         "NSPhotoLibraryUsageDescription": "AmpliFood lets you pick recipe screenshots and photos to import or attach to a recipe.",
         "ITSAppUsesNonExemptEncryption": false,
-        "NSMicrophoneUsageDescription": "AmpliFood uses the microphone only while you hold a conversation with Sous, after you tap Talk.",
-        "NSSpeechRecognitionUsageDescription": "AmpliFood turns what you say into a message for Sous, on your device where possible, only after you tap Talk."
+        "NSMicrophoneUsageDescription": "AmpliFood uses the microphone only while you hold the mic button, so you can tell Sous what you like instead of typing. Your voice is turned into text on your device and isn't recorded or saved.",
+        "NSSpeechRecognitionUsageDescription": "AmpliFood turns what you say to Sous into text to fill in your preferences and requests. When your device supports it, this happens on the device."
       }
     },
     "android": {
@@ -67,7 +67,7 @@
         "expo-camera",
         {
           "cameraPermission": "AmpliFood uses the camera to scan barcodes and, when you choose, to take a photo of a dish.",
-          "microphonePermission": "AmpliFood uses the microphone only while you hold a conversation with Sous, after you tap Talk.",
+          "microphonePermission": "AmpliFood uses the microphone only while you hold the mic button, so you can tell Sous what you like instead of typing. Your voice is turned into text on your device and isn't recorded or saved.",
           "recordAudioAndroid": false
         }
       ],
@@ -76,7 +76,7 @@
         {
           "photosPermission": "AmpliFood lets you pick recipe screenshots and photos to import or attach to a recipe.",
           "cameraPermission": "AmpliFood uses the camera to scan barcodes and, when you choose, to take a photo of a dish.",
-          "microphonePermission": "AmpliFood uses the microphone only while you hold a conversation with Sous, after you tap Talk."
+          "microphonePermission": "AmpliFood uses the microphone only while you hold the mic button, so you can tell Sous what you like instead of typing. Your voice is turned into text on your device and isn't recorded or saved."
         }
       ],
       [
@@ -117,15 +117,15 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "AmpliFood uses the microphone only while you hold a conversation with Sous, after you tap Talk.",
+          "microphonePermission": "AmpliFood uses the microphone only while you hold the mic button, so you can tell Sous what you like instead of typing. Your voice is turned into text on your device and isn't recorded or saved.",
           "recordAudioAndroid": false
         }
       ],
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "AmpliFood uses the microphone only while you hold a conversation with Sous, after you tap Talk.",
-          "speechRecognitionPermission": "AmpliFood turns what you say into a message for Sous, on your device where possible, only after you tap Talk."
+          "microphonePermission": "AmpliFood uses the microphone only while you hold the mic button, so you can tell Sous what you like instead of typing. Your voice is turned into text on your device and isn't recorded or saved.",
+          "speechRecognitionPermission": "AmpliFood turns what you say to Sous into text to fill in your preferences and requests. When your device supports it, this happens on the device."
         }
       ]
     ],
