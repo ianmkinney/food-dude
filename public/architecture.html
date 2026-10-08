@@ -81,7 +81,7 @@ a{color:var(--orange)}
   <div class="top">
     <div>
       <h1>AmpliFood architecture</h1>
-      <div class="meta">Last updated October 8, 2026 &middot; <a href="https://github.com/ianmkinney/food-dude">github.com/ianmkinney/food-dude</a></div>
+      <div class="meta">Last updated October 8, 2026 (voice: phone default, Premium Sous voice for Plus)<a href="https://github.com/ianmkinney/food-dude">github.com/ianmkinney/food-dude</a></div>
     </div>
     <button class="toggle" id="themeBtn" type="button" aria-label="Toggle light or dark theme">Theme: auto</button>
   </div>
@@ -127,10 +127,11 @@ a{color:var(--orange)}
       </ul></div>
     <div class="card"><h3>Sous voice (planned)</h3>
       <ul>
-        <li>Text to speak goes to ElevenLabs, either via the AmpliFood proxy or directly with the user's own ElevenLabs key.</li>
+        <li>Default for everyone: the phone's own voice (expo-speech / OS TTS). Free, no key, sends nothing anywhere.</li>
+        <li>Premium Sous voice (Plus perk): text goes to the AmpliFood voice proxy, which streams ElevenLabs TTS under a per-user monthly character cap. Or a user's own ElevenLabs key sends text straight to ElevenLabs (BYOK). No ElevenLabs key ships in the app.</li>
+        <li>Every voice output has captions and a mute, and turns off while a screen reader is on. The only bundled premium audio is a short preview clip labelled "AI voice".</li>
         <li>Speech-to-text runs on-device where available (iOS Speech, Android SpeechRecognizer, Web Speech API, which in some browsers uses a vendor cloud service).</li>
         <li>The microphone is requested only when the user taps talk.</li>
-        <li>Fallback is on-device TTS (expo-speech), which sends nothing anywhere.</li>
       </ul></div>
   </div>
 
@@ -146,7 +147,7 @@ a{color:var(--orange)}
     <tr><td>Recipe websites</td><td>Recipe link import</td><td>An HTTP GET for the URL the user supplied</td><td>Free (the user's own network use)</td><td>Built</td></tr>
     <tr><td>Vercel</td><td>Static hosting of the web build, info pages</td><td>Nothing from the user beyond normal HTTP requests; no user data stored</td><td>AmpliFood; free Hobby or Pro plan</td><td>Built (info pages in draft PR #10)</td></tr>
     <tr><td>Apple App Store (StoreKit) and Google Play Billing</td><td>Plus subscription and credit packs</td><td>Product IDs, signed transaction / purchase token, install ID</td><td>Buyer pays the store price; store keeps 15-30% commission</td><td>In draft PR #11</td></tr>
-    <tr><td>ElevenLabs</td><td>Text-to-speech voice for Sous</td><td>Text to speak (and the user's key if BYOK)</td><td>Per-character pricing; AmpliFood pays via proxy (metered by credits) or the user pays with their own key</td><td>Planned</td></tr>
+    <tr><td>ElevenLabs</td><td>Premium Sous voice (Plus perk; default voice is the free phone voice)</td><td>Reply text to speak (and the user's key if BYOK)</td><td>Per-character pricing. Plus: AmpliFood pays via the voice proxy, capped per user per month and metered. BYOK: the user pays with their own key</td><td>Planned (client in draft PRs #11–#13)</td></tr>
     <tr><td>Speech-to-text (iOS Speech, Android SpeechRecognizer, Web Speech API)</td><td>Talking to Sous</td><td>Audio, handled by the OS or browser; on-device where available</td><td>Free</td><td>Planned</td></tr>
     <tr><td>Platform AI backend hosting (e.g. Vercel Functions or similar, plus a database for the ledger)</td><td>Accounts, receipt validation, webhooks, credit ledger, AI proxy</td><td>Install ID, receipts, prompts in transit, ledger entries</td><td>AmpliFood; usage-based</td><td>Planned</td></tr>
     <tr><td>AmpliFood's own AI provider account</td><td>Model calls for Plus and credit users</td><td>Prompts and images, with AmpliFood's server-side key</td><td>AmpliFood pays per token, recovered through Plus and credit packs</td><td>Planned</td></tr>
@@ -157,7 +158,7 @@ a{color:var(--orange)}
   <h2>Open questions</h2>
   <ul>
     <li>Which host for the platform-AI backend (Vercel Functions, a small container service, or a managed BaaS), and which database for the ledger?</li>
-    <li>Do ElevenLabs voice characters spend platform credits, or are they included in Plus?</li>
+    <li>Is 30,000 characters/month the right Premium Sous voice cap, and can credit packs top it up?</li>
     <li>Speech-to-text on the web: Web Speech API is missing or cloud-backed in some browsers. Is a typed fallback enough?</li>
     <li>How do we restore credits if a user reinstalls (anonymous install ID is lost)?</li>
     <li>Should the Sous chat-first home replace the tab layout by default or be opt-in?</li>
@@ -181,12 +182,12 @@ var N=[
 {id:"iap",x:30,y:535,w:290,h:100,k:"draft",pr:"PR #11",t:"Paywall + expo-iap",s:["AmpliFood Plus: $6.99/mo, $59.99/yr,","200 platform-AI credits/month","Packs: 40/$1.99, 120/$4.99, 350/$12.99"],d:"Draft PR #11: in-app purchases via expo-iap on App Store and Google Play. Plus subscription ($6.99/mo or $59.99/yr, 200 credits/month) and credit packs (40 for $1.99, 120 for $4.99, 350 for $12.99), plus a paywall screen."},
 {id:"ent",x:30,y:655,w:290,h:70,k:"draft",pr:"PR #11",t:"Local entitlement cache",s:["Unverified until server validation exists"],d:"Draft PR #11: purchases are cached locally as an unverified entitlement. Real verification arrives with the planned receipt-validation backend."},
 {id:"pac",x:30,y:760,w:290,h:70,k:"draft",pr:"PR #11",t:"PlatformAiClient (stub)",s:["Interface only; no backend yet"],d:"Draft PR #11: the interface the app will use to call the AmpliFood AI proxy. Currently a stub that returns nothing; BYOK remains the only working AI path."},
-{id:"sous",x:30,y:850,w:290,h:70,k:"planned",t:"Sous voice (TTS)",s:["ElevenLabs via proxy or own key;","fallback expo-speech"],d:"Sous speaks replies with ElevenLabs text-to-speech, proxied through the backend so no key ships in the app. Optional BYOK ElevenLabs key in settings. Falls back to on-device TTS (expo-speech)."},
+{id:"sous",x:30,y:850,w:290,h:70,k:"planned",t:"Sous voice (TTS)",s:["Default: phone voice (expo-speech)","Plus: Premium Sous voice; or BYOK key"],d:"Everyone gets the free on-device phone voice (expo-speech / OS TTS). The Premium Sous voice (ElevenLabs) is a Plus perk served through the AmpliFood voice proxy, so no ElevenLabs key ships in the app; a user's own ElevenLabs key can also unlock it and calls ElevenLabs directly. Captions, mute, and auto-off with screen readers on every voice output. Client side in draft PRs #12/#13; paywall preview in #11."},
 {id:"stt",x:30,y:940,w:290,h:60,k:"planned",t:"Speech-to-text (on-device)",s:["iOS Speech, Android SpeechRecognizer, Web Speech"],d:"Talk to Sous using on-device recognition where available (iOS Speech framework, Android SpeechRecognizer, Web Speech API). The microphone is requested only when the user taps talk. No AmpliFood server involved."},
 
 {id:"val",x:400,y:590,w:260,h:65,k:"planned",t:"Receipt validation + webhooks",s:["App Store Server API / Play Developer API,","ASSN v2, Play RTDN via Pub/Sub"],d:"Validates purchases with the App Store Server API and Google Play Developer API, and receives renewals/refunds via App Store Server Notifications v2 and Google Real-time Developer Notifications (Pub/Sub)."},
 {id:"ledger",x:400,y:675,w:260,h:65,k:"planned",t:"Accounts + credit ledger",s:["Install UUID; grants, debits, refunds"],d:"Anonymous accounts keyed by install UUID (passed as appAccountToken / obfuscatedAccountId). Ledger records the monthly 200-credit grant, pack grants, per-feature debits and refunds."},
-{id:"proxy",x:400,y:760,w:260,h:150,k:"planned",t:"AI + TTS proxy",s:["Holds AmpliFood's provider keys","server-side; rate limits;","debits credits per call"],d:"Receives requests from the app, checks and debits credits, applies rate limits, and forwards to the AI provider (and ElevenLabs for Sous) using AmpliFood's server-side keys. No provider key ships in the app."},
+{id:"proxy",x:400,y:760,w:260,h:150,k:"planned",t:"AI + voice proxy",s:["Provider + ElevenLabs keys","server-side; rate limits;","credits + voice char cap"],d:"AI proxy: checks and debits credits, applies rate limits, and forwards to the AI provider with AmpliFood's server-side key. Voice proxy (Plus only): POST /v1/voice/tts streams ElevenLabs audio back to the app, enforces a per-user monthly character cap (provisional 30,000), and meters characters per request. No provider or ElevenLabs key ships in the app."},
 
 {id:"vercel",x:740,y:60,w:260,h:70,k:"third",t:"Vercel static hosting",s:["amplifood.vercel.app","Files only; auto-deploys from main"],d:"Serves the static web build (https://amplifood.vercel.app) with an SPA fallback from vercel.json. No backend, no user data. Auto-deploys from main."},
 {id:"info",x:740,y:145,w:260,h:55,k:"draft",pr:"PR #10",t:"Info pages",s:["/about /privacy /support /terms"],d:"Draft PR #10: plain static HTML pages in public/ served through Vercel rewrites."},
@@ -195,7 +196,7 @@ var N=[
 {id:"off",x:740,y:450,w:260,h:65,k:"third",t:"Open Food Facts",s:["Free, open product database"],d:"Open product database. Only the barcode number is sent; it returns name, category and image URL."},
 {id:"stores",x:740,y:535,w:260,h:70,k:"third",t:"App Store + Google Play",s:["StoreKit / Play Billing"],d:"Process subscriptions and consumable purchases and take a 15-30% commission. Later they send renewal/refund webhooks to the backend."},
 {id:"pacct",x:740,y:770,w:260,h:65,k:"planned",t:"AmpliFood AI provider account",s:["AmpliFood pays per token"],d:"AmpliFood's own account with a model provider for platform AI. Costs are recovered through Plus and credit packs."},
-{id:"eleven",x:740,y:855,w:260,h:65,k:"third",t:"ElevenLabs",s:["Text-to-speech (planned use)"],d:"Text-to-speech for Sous. Per-character pricing; via the proxy AmpliFood pays (metered in credits), or the user's own key is used directly."},
+{id:"eleven",x:740,y:855,w:260,h:65,k:"third",t:"ElevenLabs",s:["Premium Sous voice (Plus / BYOK)"],d:"Streaming text-to-speech for the Premium Sous voice. Plus: called by the AmpliFood voice proxy (AmpliFood pays per character, capped per user per month). BYOK: the user's own key, billed to them. Final voice: Voice Design voice, Starter-or-higher plan, training opt-out (pending spend approval)."},
 {id:"eas",x:740,y:945,w:260,h:55,k:"third",t:"Expo / EAS",s:["Builds + OTA updates (tooling)"],d:"Builds native binaries and delivers updates. Free tier or paid plan; no user data."}
 ];
 var KL={built:"Built (in main)",draft:"In draft PR",planned:"Planned",third:"Third-party service"};
@@ -210,9 +211,9 @@ var A=[
 {d:"M530 655V673",p:1,both:1,l:[[540,668,"grant credits",0,"start"]]},
 {d:"M530 740V758",p:1,both:1,l:[[540,753,"check / debit",0,"start"]]},
 {d:"M322 795H398",p:1,l:[[360,788,"prompt + ID",1]]},
-{d:"M322 885H398",p:1,l:[[360,878,"text + ID",1]]},
+{d:"M322 885H398",p:1,l:[[360,878,"text (Plus)",1]]},
 {d:"M662 800H738",p:1,both:1,l:[[700,792,"prompt",1]]},
-{d:"M662 885H738",p:1,both:1,l:[[700,877,"text \u2192 audio",1]]}
+{d:"M662 885H738",p:1,both:1,l:[[700,877,"streamed audio",1]]}
 ];
 var svg=document.getElementById("svg");
 function el(n,a,p){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);(p||svg).appendChild(e);return e}
