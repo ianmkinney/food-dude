@@ -13,6 +13,7 @@ import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { userOperations, partyStatsOperations, recipeCookingHistoryOperations } from '../database/operations';
 import AiProviderSettings from '../components/AiProviderSettings';
+import VoiceSettings from '../components/VoiceSettings';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { BrandMark } from '../components/Brand';
@@ -273,6 +274,10 @@ const AccountScreen = ({ navigation }) => {
 
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                 <AiProviderSettings theme={theme} />
+            </ElevatedCard>
+
+            <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
+                <VoiceSettings theme={theme} />
             </ElevatedCard>
 
             {/* Settings Section */}

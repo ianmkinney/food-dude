@@ -328,6 +328,16 @@ export const MIGRATIONS = [
             await addColumnIfMissing(db, 'users', 'flavor_preferences', 'TEXT');
         },
     },
+    {
+        version: 8,
+        name: 'recipe_ai_provenance',
+        up: async (db) => {
+            // Drives the 'AI-generated' badge: whole recipes written by AI, and
+            // where the photo came from ('user' | 'ai' | 'import'; null = unknown).
+            await addColumnIfMissing(db, 'recipes', 'is_ai_generated', 'INTEGER', '0');
+            await addColumnIfMissing(db, 'recipes', 'image_source', 'TEXT');
+        },
+    },
 ];
 
 // Cheap PRAGMA check on every boot so Expo Go installs that already sit at

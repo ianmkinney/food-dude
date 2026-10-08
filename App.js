@@ -27,7 +27,8 @@ const linking =
            Main: {
              path: '',
              screens: {
-               Recipes: '',
+               Sous: '',
+               Recipes: 'recipes',
                Planner: 'planner',
                Pantry: 'pantry',
                Grocery: 'grocery',

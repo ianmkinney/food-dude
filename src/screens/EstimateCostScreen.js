@@ -10,6 +10,7 @@ import {
     Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AiDisclaimer } from '../ai/AiLabel';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { groceryOperations } from '../database/operations';
@@ -202,6 +203,7 @@ const EstimateCostScreen = ({ navigation }) => {
                                 Estimated Costs
                             </Text>
                         </View>
+                        <AiDisclaimer kind="cost" style={{ marginBottom: 12 }} />
 
                         {estimation.items.map((item, index) => (
                             <View key={index} style={[styles.resultItem, { borderBottomColor: theme.colors.border }]}>

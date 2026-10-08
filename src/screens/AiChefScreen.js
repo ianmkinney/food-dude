@@ -30,6 +30,7 @@ import AnimatedPressable from '../components/AnimatedPressable';
 import { aiConversationOperations, pantryOperations, recipeOperations, userOperations } from '../database/operations';
 import aiChefService from '../services/aiChefService';
 import StyledMessage from '../components/StyledMessage';
+import { AiDisclaimer } from '../ai/AiLabel';
 import TypingIndicator from '../components/TypingIndicator';
 
 const HELPERS_COLLAPSED_KEY = 'aiChefHelpersCollapsed';
@@ -151,6 +152,7 @@ const AiChefScreen = () => {
         if (hasMessages.length === 0) {
             const welcomeMsg = {
                 role: 'assistant',
+                isWelcome: true,
                 message: "👋 Hi! I'm your AI Chef assistant. I can help you:\n\n• Create recipes from your pantry items\n• Answer cooking questions\n• Provide detailed cooking instructions\n• Analyze food images\n\nHow can I help you today?",
                 created_at: Date.now(),
             };
@@ -621,6 +623,7 @@ const AiChefScreen = () => {
             };
 
             const recipeId = await recipeOperations.create(recipeToSave);
+            await recipeOperations.setProvenance(recipeId, { isAiGenerated: true });
             // Ensure recipe is fully saved and database is ready
             await new Promise(resolve => setTimeout(resolve, 200));
             Alert.alert(
@@ -663,6 +666,9 @@ const AiChefScreen = () => {
                 ]}
             >
                 <StyledMessage message={item.message} isUser={isUser} />
+                {!isUser && !item.isWelcome && (
+                    <AiDisclaimer kind={hasRecipe ? 'recipe' : 'chat'} style={styles.aiDisclaimer} />
+                )}
                 {hasRecipe && (
                     <AnimatedPressable
                         style={[styles.saveRecipeButton, { backgroundColor: theme.accent.green }]}
@@ -877,6 +883,9 @@ const AiChefScreen = () => {
 };
 
 const styles = StyleSheet.create({
+    aiDisclaimer: {
+        marginTop: 10,
+    },
     container: {
         flex: 1,
     },

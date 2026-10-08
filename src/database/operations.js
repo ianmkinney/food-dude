@@ -213,6 +213,18 @@ export const recipeOperations = {
         }
     },
 
+    // Record whether a recipe and its photo came from AI. Kept separate from
+    // create/update so existing call sites don't change.
+    async setProvenance(id, { isAiGenerated, imageSource } = {}) {
+        const db = getDatabase();
+        if (isAiGenerated !== undefined) {
+            await db.runAsync('UPDATE recipes SET is_ai_generated = ? WHERE id = ?', [isAiGenerated ? 1 : 0, id]);
+        }
+        if (imageSource !== undefined) {
+            await db.runAsync('UPDATE recipes SET image_source = ? WHERE id = ?', [imageSource, id]);
+        }
+    },
+
     // Update recipe
     async update(id, updates) {
         const db = getDatabase();

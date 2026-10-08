@@ -15,12 +15,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { recipeOperations, mealPlanOperations, groceryOperations, recipeCookingHistoryOperations, userOperations } from '../database/operations';
 import aiChefService from '../services/aiChefService';
 import { toPersistentImageUri } from '../services/mediaPrep';
+import { AiBadge, AiDisclaimer } from '../ai/AiLabel';
+import ImageSourceChoice from '../components/ImageSourceChoice';
 
 const RecipeDetailScreen = ({ route, navigation }) => {
     const { recipeId } = route.params;
@@ -79,6 +80,9 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                 imageUri: editedRecipe.image_uri // Map snake_case to camelCase
             };
             await recipeOperations.update(recipeId, updatePayload);
+            if (editedRecipe.image_source !== recipe.image_source) {
+                await recipeOperations.setProvenance(recipeId, { imageSource: editedRecipe.image_source ?? null });
+            }
             setRecipe(editedRecipe);
             setIsEditing(false);
             Alert.alert('Success', 'Recipe updated successfully');
@@ -87,29 +91,6 @@ const RecipeDetailScreen = ({ route, navigation }) => {
             Alert.alert('Error', 'Failed to update recipe');
         } finally {
             setSaving(false);
-        }
-    };
-
-    const handlePickImage = async () => {
-        console.log('handlePickImage called');
-        try {
-            // The system photo picker needs no library permission.
-            console.log('Launching image library...');
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ['images'],
-                allowsEditing: true,
-                aspect: [4, 3],
-                quality: 0.8,
-            });
-            console.log('Image picker result:', result);
-
-            if (!result.canceled) {
-                const imageUri = await toPersistentImageUri(result.assets[0].uri);
-                setEditedRecipe({ ...editedRecipe, image_uri: imageUri });
-            }
-        } catch (error) {
-            console.error('Error picking image:', error);
-            Alert.alert('Error', 'Failed to pick image: ' + error.message);
         }
     };
 
@@ -443,7 +424,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
             if (result.success && result.imageUri) {
                 setGeneratingImageStatus('Finalizing...');
                 // Show success and apply the generated image
-                setEditedRecipe({ ...editedRecipe, image_uri: result.imageUri });
+                setEditedRecipe({ ...editedRecipe, image_uri: result.imageUri, image_source: 'ai' });
                 Alert.alert(
                     'Image Generated!',
                     'AI has created a professional photo for your recipe. You can see it above. Save the recipe to keep this image.',
@@ -481,11 +462,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
             >
                 <ScrollView contentContainerStyle={styles.content}>
                 {/* Header Image */}
-                <TouchableOpacity
-                    style={[styles.imageContainer, { backgroundColor: theme.primary[100] }]}
-                    onPress={isEditing ? handlePickImage : null}
-                    disabled={!isEditing}
-                >
+                <View style={[styles.imageContainer, { backgroundColor: theme.primary[100] }]}>
                     {(isEditing ? editedRecipe.image_uri : recipe.image_uri) ? (
                         <Image
                             source={{ uri: isEditing ? editedRecipe.image_uri : recipe.image_uri }}
@@ -494,32 +471,20 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                     ) : (
                         <Ionicons name="restaurant" size={80} color={theme.primary[300]} />
                     )}
+                    {(isEditing ? editedRecipe.image_source : recipe.image_source) === 'ai' && (
+                        <AiBadge onDark style={styles.imageAiBadge} />
+                    )}
                     {isEditing && (
                         <View style={styles.editImageOverlay}>
-                            <Ionicons name="camera" size={24} color="#FFF" />
-                            <Text style={styles.editImageText}>Tap to change photo</Text>
-                            <TouchableOpacity
-                                style={[styles.generateImageButton, { backgroundColor: theme.accent.purple }]}
-                                onPress={handleGenerateImage}
-                                disabled={generatingImage}
-                            >
-                                {generatingImage ? (
-                                    <>
-                                        <ActivityIndicator size="small" color="#FFF" />
-                                        <Text style={styles.generateImageText}>
-                                            {generatingImageStatus || 'Generating...'}
-                                        </Text>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Ionicons name="sparkles" size={18} color="#FFF" />
-                                        <Text style={styles.generateImageText}>Generate with AI</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
+                            <ImageSourceChoice
+                                onPhoto={(uri) => setEditedRecipe({ ...editedRecipe, image_uri: uri, image_source: 'user' })}
+                                onGenerate={handleGenerateImage}
+                                generating={generatingImage}
+                                generatingLabel={generatingImageStatus}
+                            />
                         </View>
                     )}
-                </TouchableOpacity>
+                </View>
 
                 <View style={styles.detailsContainer}>
                     {/* Header Actions */}
@@ -567,6 +532,9 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                             <Text style={[styles.title, { color: theme.colors.text.primary }]}>
                                 {recipe.title}
                             </Text>
+                            {!!recipe.is_ai_generated && (
+                                <AiDisclaimer kind="recipe" style={{ marginTop: 8, marginBottom: 4 }} />
+                            )}
                             {recipe.description && (
                                 <Text style={[styles.description, { color: theme.colors.text.secondary }]}>
                                     {recipe.description}
@@ -688,6 +656,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                                 <Text style={[styles.sectionSubtitle, { color: theme.colors.text.secondary }]}>
                                     Per serving
                                 </Text>
+                                <AiDisclaimer kind="nutrition" style={{ marginTop: 6 }} />
                             </View>
                             <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
                                 <View style={styles.nutritionGrid}>
@@ -1136,6 +1105,11 @@ const RecipeDetailScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
+    imageAiBadge: {
+        position: 'absolute',
+        top: 12,
+        left: 12,
+    },
     container: {
         flex: 1,
     },

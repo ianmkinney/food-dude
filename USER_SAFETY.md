@@ -29,16 +29,26 @@ AmpliFood asks for as little as possible. Each permission maps to one feature:
 
 | Permission | Platform | Feature | When it's asked |
 | --- | --- | --- | --- |
-| Camera (`CAMERA` / `NSCameraUsageDescription`) | Android, iOS | Scanning a barcode in Pantry → Add / Edit item (`expo-camera`) | The first time you tap Scan |
+| Camera (`CAMERA` / `NSCameraUsageDescription`) | Android, iOS | Scanning a barcode in Pantry → Add / Edit item (`expo-camera`), and taking a photo of a dish when you choose **Use my photo → Take a photo** (`expo-image-picker`) | The first time you tap Scan or Take a photo |
 | Photo library (`NSPhotoLibraryUsageDescription`) | iOS | Picking recipe screenshots or a recipe photo (`expo-image-picker`) | iOS shows the system photo picker; only the photos you pick are shared with the app |
+| Microphone (`RECORD_AUDIO` / `NSMicrophoneUsageDescription`) | Android, iOS | Talking to Sous (`expo-speech-recognition`) | Only when you tap the mic in Sous; never at launch |
+| Speech recognition (`NSSpeechRecognitionUsageDescription`) | iOS | Turning what you say into a message for Sous; on-device recognition is used where the device supports it | With the microphone prompt, when you tap the mic |
+| Modify audio settings (`MODIFY_AUDIO_SETTINGS`) | Android | Playing Sous's voice (`expo-audio`) | Granted at install (no prompt) |
 | Internet | Android | AI provider calls, Open Food Facts lookups, recipe URL import | Granted at install (no prompt) |
 | Vibrate | Android | Light haptics on some buttons | Granted at install (no prompt) |
 
 On Android, photo picking goes through the system Photo Picker, which needs no permission, so AmpliFood declares **no** storage or media permissions. Shared images and text come in through the share sheet (`expo-share-intent`), which grants access only to the shared item.
 
-Not requested, and actively blocked in the build so a library can't add them back: microphone (`RECORD_AUDIO`), `READ/WRITE_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_MEDIA_AUDIO`, `READ_MEDIA_VISUAL_USER_SELECTED`, `ACCESS_MEDIA_LOCATION`, and `SYSTEM_ALERT_WINDOW`. There is no location, contacts, or Face ID use, and no "save to photo library" feature.
+**Microphone came back with Sous.** It was removed in Gate 2 (#9) and is needed again for voice input. It is only requested when you tap the mic, and audio goes to the platform speech recognizer (on-device where available; otherwise Apple's or Google's speech service), not to AmpliFood. Update Play Data Safety and the App Store privacy label ("Audio data" for app functionality, not collected by AmpliFood) before shipping.
 
-On the web build, the browser's file picker is used and no permission prompts appear.
+Not requested, and actively blocked in the build so a library can't add them back: `READ/WRITE_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_MEDIA_AUDIO`, `READ_MEDIA_VISUAL_USER_SELECTED`, `ACCESS_MEDIA_LOCATION`, and `SYSTEM_ALERT_WINDOW`. There is no location, contacts, or Face ID use, and no "save to photo library" feature.
+
+On the web build, the browser's file picker is used for photos; the browser asks for the camera when you scan or take a photo, and for the microphone when you tap Talk (Web Speech API; in Chrome this audio is processed by Google's speech service).
+
+## Sous voice
+
+- Without an ElevenLabs key, Sous reads replies with the device's built-in text-to-speech (`expo-speech`); nothing leaves the device.
+- With your own ElevenLabs key (Account → Sous voice), the reply text you choose to hear is sent to ElevenLabs and billed to your ElevenLabs account. The key is stored like AI keys (Keychain/Keystore; browser storage on web).
 
 ## Bring Your Own Key
 
