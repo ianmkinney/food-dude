@@ -47,8 +47,10 @@ On the web build, the browser's file picker is used for photos; the browser asks
 
 ## Sous voice
 
-- Without an ElevenLabs key, Sous reads replies with the device's built-in text-to-speech (`expo-speech`); nothing leaves the device.
-- With your own ElevenLabs key (Account → Sous voice), the reply text you choose to hear is sent to ElevenLabs and billed to your ElevenLabs account. The key is stored like AI keys (Keychain/Keystore; browser storage on web).
+- **Phone voice (default, free):** the device's built-in text-to-speech (`expo-speech`). Nothing leaves the device.
+- **Premium Sous voice (Plus perk):** an ElevenLabs AI voice served through the AmpliFood voice proxy (planned; stubbed until the backend exists), with a per-user monthly character cap. No ElevenLabs key ships in the app.
+- **Your own ElevenLabs key (optional):** unlocks the Premium Sous voice without Plus. Reply text you choose to hear goes to ElevenLabs, billed to your account. The key is stored like AI keys (Keychain/Keystore; browser storage on web), after you allow sharing with ElevenLabs.
+- Every voice output also shows its text, can be muted (the setting persists), and turns off automatically while VoiceOver/TalkBack is on. The premium preview is a short pre-recorded clip labelled "AI voice".
 
 ## Bring Your Own Key
 

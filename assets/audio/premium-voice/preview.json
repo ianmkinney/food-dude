@@ -1,0 +1,5 @@
+{
+  "placeholder": true,
+  "caption": "Hi, I'm Sous, AmpliFood's AI sous chef. This is my premium AI voice. What are we cooking tonight?",
+  "note": "Silent placeholder. Render with scripts/generate-sous-audio.mjs (ElevenLabs Starter+ plan, Voice Design voice, training opt-out; pending Ian's spend approval)."
+}

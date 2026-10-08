@@ -21,7 +21,7 @@ import { useAllergies } from '../safety/useAllergies';
 import { findAllergenMatches } from '../safety/allergens';
 import { MISSING_KEY_MESSAGE } from '../services/aiSettings';
 import { useOnboardingTour } from '../onboarding/useOnboardingTour';
-import { getSpeechEngine, type SpeechEngine } from '../voice/speech';
+import { getSpeechEngine, shouldSpeak, type SpeechEngine } from '../voice/speech';
 import { getVoiceSettings, setAutoSpeak } from '../voice/voiceSettings';
 import { useSpeechInput } from '../voice/useSpeechInput';
 import { askSous, type SousTurn } from './agent';
@@ -63,11 +63,17 @@ export default function SousScreen() {
         return () => engineRef.current?.stop();
     }, []);
 
+    const [voiceNote, setVoiceNote] = useState<string | null>(null);
+
     const speak = useCallback(async (message: Message) => {
         engineRef.current?.stop();
+        if (!(await shouldSpeak())) {
+            setVoiceNote('Voice is muted or a screen reader is on, so replies are text only. Change this in Account → Sous voice.');
+            return;
+        }
         setSpeakingId(message.id);
         try {
-            engineRef.current = await getSpeechEngine();
+            engineRef.current = await getSpeechEngine(setVoiceNote);
             await engineRef.current.speak(message.text);
         } catch (error) {
             setMessages((prev) => [
@@ -293,6 +299,9 @@ export default function SousScreen() {
                     </View>
                 ) : null}
             />
+            {!!voiceNote && !listening && !mic.error && (
+                <Text style={[styles.micStatus, { color: c.text.secondary }]}>{voiceNote}</Text>
+            )}
             {(mic.error || listening) && (
                 <Text style={[styles.micStatus, { color: mic.error ? c.error : theme.primary[600] }]}>
                     {mic.error || 'Listening… tap the mic again to stop.'}
