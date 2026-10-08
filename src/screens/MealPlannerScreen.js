@@ -266,7 +266,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
         const isSelected = selectedItem && selectedItem.date === dateStr && selectedItem.mealType === mealType;
 
         return (
-            <AnimatedPressable
+            <AnimatedPressable accessibilityRole="button" accessibilityLabel={`${mealType} on ${dateStr}`}
                 style={[
                     styles.mealSlot,
                     theme.shadows.sm,
@@ -349,13 +349,13 @@ const MealPlannerScreen = ({ route, navigation }) => {
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {/* Week Navigation */}
             <View style={[styles.weekNav, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
-                <AnimatedPressable onPress={goToPreviousWeek} style={styles.navButton}>
+                <AnimatedPressable accessibilityRole="button" accessibilityLabel="Previous" onPress={goToPreviousWeek} style={styles.navButton}>
                     <Ionicons name="chevron-back" size={24} color={theme.primary[500]} />
                 </AnimatedPressable>
                 <Text style={[styles.weekTitle, { color: theme.colors.text.primary }]}>
                     {formatDisplayDate(weekDates[0])} - {formatDisplayDate(weekDates[6])}
                 </Text>
-                <AnimatedPressable onPress={goToNextWeek} style={styles.navButton}>
+                <AnimatedPressable accessibilityRole="button" accessibilityLabel="Next" onPress={goToNextWeek} style={styles.navButton}>
                     <Ionicons name="chevron-forward" size={24} color={theme.primary[500]} />
                 </AnimatedPressable>
             </View>
@@ -449,7 +449,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
                             <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>
                                 Select Meal for {selectedDate ? formatDisplayDate(selectedDate) : ''}
                             </Text>
-                            <TouchableOpacity onPress={() => setShowMealModal(false)}>
+                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close" onPress={() => setShowMealModal(false)}>
                                 <Ionicons name="close" size={24} color={theme.colors.text.primary} />
                             </TouchableOpacity>
                         </View>

@@ -26,6 +26,22 @@ export const colors = {
     900: '#57250C',
   },
 
+  // Light mode uses a deeper orange for anything interactive or textual so it
+  // clears WCAG AA 4.5:1 on cream (and white text on orange buttons does too).
+  // The brand burnt orange (#EB6A1C) stays in the logo and in dark mode.
+  primaryLight: {
+    50: '#FFF4EA',
+    100: '#FFE5CC',
+    200: '#FDC897',
+    300: '#F9A862',
+    400: '#CC5512',
+    500: '#A9420D',
+    600: '#93390B',
+    700: '#7E300A',
+    800: '#632709',
+    900: '#461C07',
+  },
+
   // Tomato ramp
   secondary: {
     50: '#FFF1EF',
@@ -74,7 +90,7 @@ export const colors = {
     text: {
       primary: '#2A1424',
       secondary: '#6A5560',
-      tertiary: '#9A8A8C',
+      tertiary: '#756569',
     },
     success: '#4F802F',
     warning: '#C98A0B',
@@ -330,7 +346,7 @@ export const glowFor = (color, opacity = 0.35) => ({
 export const getTheme = (isDark, platform, accentId = 'galley') => ({
   colors: isDark ? colors.dark : colors.light,
   brand,
-  primary: colors.primary,
+  primary: isDark ? colors.primary : colors.primaryLight,
   secondary: colors.secondary,
   accent: colors.accent,
   gray: colors.gray,

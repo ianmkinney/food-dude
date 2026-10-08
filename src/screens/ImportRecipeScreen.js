@@ -175,7 +175,7 @@ const ImportRecipeScreen = () => {
                 </View>
 
                 <View style={[styles.inputContainer, { backgroundColor: theme.colors.surface }]}>
-                    <TextInput
+                    <TextInput accessibilityLabel="Recipe link or text"
                         style={[styles.input, { color: theme.colors.text.primary }]}
                         placeholder="https://instagram.com/p/... or paste recipe text"
                         placeholderTextColor={theme.colors.text.tertiary}

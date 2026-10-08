@@ -98,13 +98,13 @@ const PantryScreen = () => {
                     </View>
                 )}
                 <View style={styles.actionButtons}>
-                    <AnimatedPressable
+                    <AnimatedPressable accessibilityRole="button" accessibilityLabel="Edit item"
                         style={[styles.actionButton, { backgroundColor: theme.primary[100] }]}
                         onPress={() => handleEdit(item)}
                     >
                         <Ionicons name="pencil" size={18} color={theme.primary[500]} />
                     </AnimatedPressable>
-                    <AnimatedPressable
+                    <AnimatedPressable accessibilityRole="button" accessibilityLabel="Delete item"
                         style={[styles.actionButton, { backgroundColor: theme.colors.error + '20' }]}
                         onPress={() => handleDelete(item)}
                     >

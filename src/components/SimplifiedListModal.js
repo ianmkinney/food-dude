@@ -40,7 +40,7 @@ const SimplifiedListModal = ({ visible, result, onApply, onClose }) => {
                                 Simplified Shopping List
                             </Text>
                         </View>
-                        <TouchableOpacity onPress={onClose}>
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close" onPress={onClose}>
                             <Ionicons name="close" size={28} color={theme.colors.text.secondary} />
                         </TouchableOpacity>
                     </View>

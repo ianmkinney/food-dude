@@ -270,7 +270,7 @@ const AddGroceryItemScreen = () => {
         <ScrollView style={styles.content}>
             <View style={styles.form}>
                 <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Name</Text>
-                <TextInput
+                <TextInput accessibilityLabel="Item name"
                     style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                     value={manualName}
                     onChangeText={setManualName}
@@ -281,7 +281,7 @@ const AddGroceryItemScreen = () => {
                 <View style={styles.row}>
                     <View style={[styles.col, { flex: 1 }]}>
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Quantity</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Quantity"
                             style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                             value={manualQuantity}
                             onChangeText={setManualQuantity}
@@ -292,7 +292,7 @@ const AddGroceryItemScreen = () => {
                     </View>
                     <View style={[styles.col, { flex: 1, marginLeft: 10 }]}>
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Unit</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Unit"
                             style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                             value={manualUnit}
                             onChangeText={setManualUnit}
@@ -303,7 +303,7 @@ const AddGroceryItemScreen = () => {
                 </View>
 
                 <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Category</Text>
-                <TextInput
+                <TextInput accessibilityLabel="Category"
                     style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                     value={manualCategory}
                     onChangeText={setManualCategory}
@@ -312,7 +312,7 @@ const AddGroceryItemScreen = () => {
                 />
 
                 <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Notes</Text>
-                <TextInput
+                <TextInput accessibilityLabel="Notes"
                     style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text.primary, borderColor: theme.colors.border, height: 80 }]}
                     value={manualNotes}
                     onChangeText={setManualNotes}
@@ -349,7 +349,7 @@ const AddGroceryItemScreen = () => {
             <Text style={[styles.helperText, { color: theme.colors.text.secondary }]}>
                 Enter items one per line
             </Text>
-            <TextInput
+            <TextInput accessibilityLabel="Items, one per line"
                 style={[styles.textArea, { backgroundColor: theme.colors.surface, color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                 value={listText}
                 onChangeText={setListText}

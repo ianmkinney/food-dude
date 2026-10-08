@@ -207,7 +207,7 @@ const RecipeBookScreen = ({ navigation }) => {
             {/* Search Bar */}
             <View style={[styles.searchContainer, { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border }, theme.shadows.sm]}>
                 <Ionicons name="search" size={20} color={theme.colors.text.tertiary} />
-                <TextInput
+                <TextInput accessibilityLabel="Search recipes"
                     style={[styles.searchInput, { color: theme.colors.text.primary }]}
                     placeholder="Search recipes..."
                     placeholderTextColor={theme.colors.text.tertiary}

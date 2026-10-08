@@ -68,6 +68,6 @@ const styles = StyleSheet.create({
     row: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', justifyContent: 'center' },
     button: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999 },
     photo: { backgroundColor: '#FFF8EC' },
-    generate: { backgroundColor: '#EB6A1C' },
+    generate: { backgroundColor: '#A9420D' },
     text: { fontSize: 15, fontWeight: '800' },
 });

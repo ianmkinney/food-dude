@@ -367,7 +367,7 @@ const GroceryListScreen = () => {
                             <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>
                                 Store Information
                             </Text>
-                            <TouchableOpacity onPress={() => setShowStoreModal(false)}>
+                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close" onPress={() => setShowStoreModal(false)}>
                                 <Ionicons name="close" size={24} color={theme.colors.text.secondary} />
                             </TouchableOpacity>
                         </View>
@@ -376,7 +376,7 @@ const GroceryListScreen = () => {
                             <Text style={[styles.modalLabel, { color: theme.colors.text.secondary }]}>
                                 Grocery Store Name *
                             </Text>
-                            <TextInput
+                            <TextInput accessibilityLabel="Store name"
                                 style={[styles.modalInput, {
                                     backgroundColor: theme.colors.surface,
                                     color: theme.colors.text.primary,
@@ -391,7 +391,7 @@ const GroceryListScreen = () => {
                             <Text style={[styles.modalLabel, { color: theme.colors.text.secondary, marginTop: 16 }]}>
                                 Location (Optional)
                             </Text>
-                            <TextInput
+                            <TextInput accessibilityLabel="Location (Optional)"
                                 style={[styles.modalInput, {
                                     backgroundColor: theme.colors.surface,
                                     color: theme.colors.text.primary,

@@ -149,7 +149,7 @@ const AddPantryItemScreen = () => {
                     {/* Form Fields */}
                     <View style={styles.form}>
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Name</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Name"
                             style={[styles.input, {
                                 backgroundColor: theme.colors.surface,
                                 color: theme.colors.text.primary,
@@ -164,7 +164,7 @@ const AddPantryItemScreen = () => {
                         <View style={styles.row}>
                             <View style={[styles.col, { flex: 1 }]}>
                                 <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Quantity</Text>
-                                <TextInput
+                                <TextInput accessibilityLabel="Quantity"
                                     style={[styles.input, {
                                         backgroundColor: theme.colors.surface,
                                         color: theme.colors.text.primary,
@@ -179,7 +179,7 @@ const AddPantryItemScreen = () => {
                             </View>
                             <View style={[styles.col, { flex: 1, marginLeft: 10 }]}>
                                 <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Unit</Text>
-                                <TextInput
+                                <TextInput accessibilityLabel="Unit"
                                     style={[styles.input, {
                                         backgroundColor: theme.colors.surface,
                                         color: theme.colors.text.primary,
@@ -194,7 +194,7 @@ const AddPantryItemScreen = () => {
                         </View>
 
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Category</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Category"
                             style={[styles.input, {
                                 backgroundColor: theme.colors.surface,
                                 color: theme.colors.text.primary,
@@ -207,7 +207,7 @@ const AddPantryItemScreen = () => {
                         />
 
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Barcode</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Barcode"
                             style={[styles.input, {
                                 backgroundColor: theme.colors.surface,
                                 color: theme.colors.text.primary,

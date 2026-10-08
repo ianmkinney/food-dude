@@ -173,7 +173,7 @@ const EditPantryItemScreen = () => {
                     {/* Form Fields */}
                     <View style={styles.form}>
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Name</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Name"
                             style={[styles.input, {
                                 backgroundColor: theme.colors.surface,
                                 color: theme.colors.text.primary,
@@ -188,7 +188,7 @@ const EditPantryItemScreen = () => {
                         <View style={styles.row}>
                             <View style={[styles.col, { flex: 1 }]}>
                                 <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Quantity</Text>
-                                <TextInput
+                                <TextInput accessibilityLabel="Quantity"
                                     style={[styles.input, {
                                         backgroundColor: theme.colors.surface,
                                         color: theme.colors.text.primary,
@@ -203,7 +203,7 @@ const EditPantryItemScreen = () => {
                             </View>
                             <View style={[styles.col, { flex: 1, marginLeft: 10 }]}>
                                 <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Unit</Text>
-                                <TextInput
+                                <TextInput accessibilityLabel="Unit"
                                     style={[styles.input, {
                                         backgroundColor: theme.colors.surface,
                                         color: theme.colors.text.primary,
@@ -218,7 +218,7 @@ const EditPantryItemScreen = () => {
                         </View>
 
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Category</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Category"
                             style={[styles.input, {
                                 backgroundColor: theme.colors.surface,
                                 color: theme.colors.text.primary,
@@ -231,7 +231,7 @@ const EditPantryItemScreen = () => {
                         />
 
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Barcode</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Barcode"
                             style={[styles.input, {
                                 backgroundColor: theme.colors.surface,
                                 color: theme.colors.text.primary,
@@ -245,7 +245,7 @@ const EditPantryItemScreen = () => {
                         />
 
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Expiration Date</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Expiration Date"
                             style={[styles.input, {
                                 backgroundColor: theme.colors.surface,
                                 color: theme.colors.text.primary,
@@ -258,7 +258,7 @@ const EditPantryItemScreen = () => {
                         />
 
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Location</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Location"
                             style={[styles.input, {
                                 backgroundColor: theme.colors.surface,
                                 color: theme.colors.text.primary,
@@ -271,7 +271,7 @@ const EditPantryItemScreen = () => {
                         />
 
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Notes</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Notes"
                             style={[styles.textArea, {
                                 backgroundColor: theme.colors.surface,
                                 color: theme.colors.text.primary,

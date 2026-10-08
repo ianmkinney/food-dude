@@ -241,7 +241,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -266,7 +266,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -291,7 +291,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -316,7 +316,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -341,7 +341,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -366,7 +366,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -391,7 +391,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -416,7 +416,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -441,7 +441,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
