@@ -22,6 +22,10 @@
       "destination": "/terms.html"
     },
     {
+      "source": "/accessibility",
+      "destination": "/accessibility.html"
+    },
+    {
       "source": "/((?!_expo/|assets/).*)",
       "destination": "/index.html"
     }
