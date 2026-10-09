@@ -14,6 +14,7 @@ import { AlertHost, installAlertPolyfill } from './src/platform/alert';
 import { ConsentHost } from './src/consent/ConsentHost';
 import OnboardingGate from './src/onboarding/OnboardingGate';
 import { MonetizationProvider } from './src/monetization/MonetizationContext';
+import WebShell from './src/components/WebShell';
 
 import { ShareIntentProvider } from './src/platform/shareIntent';
 
@@ -140,6 +141,7 @@ function AppContent() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ShareIntentProvider>
+<<<<<<< HEAD
         <OnboardingGate navigate={navigateToTab}>
           <NavigationContainer ref={navigationRef} linking={linking} documentTitle={documentTitle}>
             <AppNavigator />
@@ -147,6 +149,14 @@ function AppContent() {
           </NavigationContainer>
         </OnboardingGate>
         <ConsentHost />
+=======
+        <WebShell>
+          <NavigationContainer linking={linking} documentTitle={documentTitle}>
+            <AppNavigator />
+            <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+          </NavigationContainer>
+        </WebShell>
+>>>>>>> 76b9b3e (Web perf: lazy routes, deferred planner load, 480px shell, recipe empty states)
         <AlertHost />
       </ShareIntentProvider>
     </GestureHandlerRootView>

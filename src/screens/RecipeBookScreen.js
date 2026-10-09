@@ -73,7 +73,42 @@ const RecipeBookScreen = ({ navigation }) => {
         }
     };
 
-    const renderRecipeCard = ({ item, index }) => (
+    const isEmptyLibrary = !loading && recipes.length === 0 && searchQuery.trim() === '' && filter === 'all';
+
+    const addSampleRecipes = async () => {
+        try {
+            setLoading(true);
+            const samples = [
+                {
+                    title: 'Weeknight Tomato Pasta',
+                    description: 'Garlic, olive oil, and canned tomatoes in twenty minutes.',
+                    totalTime: 25,
+                    difficulty: 'easy',
+                    ingredients: [{ ingredient: 'spaghetti', amount: '12', unit: 'oz' }, { ingredient: 'canned tomatoes', amount: '1', unit: 'can' }],
+                    instructions: ['Boil pasta.', 'Simmer tomatoes with garlic and olive oil.', 'Toss and serve.'],
+                },
+                {
+                    title: 'Sheet-Pan Lemon Chicken',
+                    description: 'Crispy chicken with potatoes and green beans.',
+                    totalTime: 45,
+                    difficulty: 'medium',
+                    ingredients: [{ ingredient: 'chicken thighs', amount: '4', unit: '' }, { ingredient: 'potatoes', amount: '1', unit: 'lb' }],
+                    instructions: ['Roast at 425°F until chicken hits 165°F internal.'],
+                },
+            ];
+            for (const recipe of samples) {
+                await recipeOperations.create(recipe);
+            }
+            await loadRecipes();
+        } catch (error) {
+            console.error(error);
+            Alert.alert('Error', 'Could not add sample recipes');
+        }
+    };
+
+    const recipeKey = useCallback((item) => item.id.toString(), []);
+
+    const renderRecipeCard = useCallback(({ item, index }) => (
         <ElevatedCard
             theme={theme}
             index={index}
@@ -128,7 +163,7 @@ const RecipeBookScreen = ({ navigation }) => {
                 </View>
             </View>
         </ElevatedCard>
-    );
+    ), [navigation, theme]);
 
     const renderEmptyState = () => (
         <View style={styles.emptyState}>
@@ -138,14 +173,28 @@ const RecipeBookScreen = ({ navigation }) => {
                 No Recipes Yet
             </Text>
             <Text style={[styles.emptyDescription, { color: theme.colors.text.secondary }]}>
-                Add your first recipe by tapping the + button
+                Start with a sample recipe or ask AI Chef for ideas.
             </Text>
+            <AnimatedPressable
+                style={[styles.quickStart, { backgroundColor: theme.primary[500] }]}
+                onPress={() => navigation.navigate('AI Chef')}
+                accessibilityRole="button"
+            >
+                <Text style={styles.quickStartText}>Ask AI Chef for a recipe</Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+                style={[styles.quickStart, styles.quickStartOutline, { borderColor: theme.colors.border }]}
+                onPress={addSampleRecipes}
+                accessibilityRole="button"
+            >
+                <Text style={[styles.quickStartText, { color: theme.colors.text.primary }]}>Add sample recipes</Text>
+            </AnimatedPressable>
         </View>
     );
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            {/* Filter Buttons */}
+            {!isEmptyLibrary && (
             <View style={[styles.filterContainer, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
                 <AnimatedPressable
                     style={[
@@ -203,8 +252,9 @@ const RecipeBookScreen = ({ navigation }) => {
                     </Text>
                 </AnimatedPressable>
             </View>
+            )}
 
-            {/* Search Bar */}
+            {!isEmptyLibrary && (
             <View style={[styles.searchContainer, { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border }, theme.shadows.sm]}>
                 <Ionicons name="search" size={20} color={theme.colors.text.tertiary} />
                 <TextInput accessibilityLabel="Search recipes"
@@ -215,12 +265,16 @@ const RecipeBookScreen = ({ navigation }) => {
                     onChangeText={handleSearch}
                 />
             </View>
+            )}
 
             {/* Recipe List */}
             <FlatList
                 data={recipes}
                 renderItem={renderRecipeCard}
-                keyExtractor={(item) => item.id.toString()}
+                keyExtractor={recipeKey}
+                initialNumToRender={8}
+                maxToRenderPerBatch={6}
+                windowSize={7}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={!loading && renderEmptyState()}
                 refreshing={loading}
@@ -339,6 +393,25 @@ const styles = StyleSheet.create({
         fontSize: 16,
         textAlign: 'center',
         paddingHorizontal: 32,
+        marginBottom: 16,
+    },
+    quickStart: {
+        marginTop: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 999,
+        alignSelf: 'stretch',
+        marginHorizontal: 32,
+        alignItems: 'center',
+    },
+    quickStartOutline: {
+        backgroundColor: 'transparent',
+        borderWidth: 1,
+    },
+    quickStartText: {
+        color: '#FFFFFF',
+        fontWeight: '800',
+        fontSize: 15,
     },
     fab: {
         position: 'absolute',

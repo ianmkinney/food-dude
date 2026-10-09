@@ -9,6 +9,7 @@ import {
     Modal,
     FlatList,
     Image,
+    InteractionManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
@@ -37,9 +38,12 @@ const MealPlannerScreen = ({ route, navigation }) => {
     useEffect(() => {
         const dates = getWeekDates(currentWeekStart);
         setWeekDates(dates);
-        loadMealPlans(dates[0], dates[6]);
-        loadParties();
-        loadRecipes();
+        const task = InteractionManager.runAfterInteractions(() => {
+            loadMealPlans(dates[0], dates[6]);
+            loadParties();
+            loadRecipes();
+        });
+        return () => task.cancel();
     }, [currentWeekStart]);
 
     useEffect(() => {
