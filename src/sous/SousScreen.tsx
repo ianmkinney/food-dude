@@ -21,6 +21,7 @@ import { useAllergies } from '../safety/useAllergies';
 import { findAllergenMatches } from '../safety/allergens';
 import { MISSING_KEY_MESSAGE } from '../services/aiSettings';
 import { useOnboardingTour } from '../onboarding/useOnboardingTour';
+import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION, ASSISTANT_TAGLINE } from '../config/assistant';
 import { getSpeechEngine, shouldSpeak, type SpeechEngine } from '../voice/speech';
 import { getVoiceSettings, setAutoSpeak } from '../voice/voiceSettings';
 import { useSpeechInput } from '../voice/useSpeechInput';
@@ -68,12 +69,12 @@ export default function SousScreen() {
     const speak = useCallback(async (message: Message) => {
         engineRef.current?.stop();
         if (!(await shouldSpeak())) {
-            setVoiceNote('Voice is muted or a screen reader is on, so replies are text only. Change this in Account → Sous voice.');
+            setVoiceNote(`Voice is muted or a screen reader is on, so replies are text only. Change this in Account → ${ASSISTANT_NAME} voice.`);
             return;
         }
         setSpeakingId(message.id);
         try {
-            engineRef.current = await getSpeechEngine(setVoiceNote);
+            engineRef.current = await getSpeechEngine();
             await engineRef.current.speak(message.text);
         } catch (error) {
             setMessages((prev) => [
@@ -98,7 +99,7 @@ export default function SousScreen() {
                 const result = await askSous(history, text);
                 const reply: Message = { id: newId(), role: 'sous', text: result.reply, cards: result.cards };
                 setMessages((prev) => [...prev, reply]);
-                AccessibilityInfo.announceForAccessibility(`Sous says: ${result.reply}`);
+                AccessibilityInfo.announceForAccessibility(`${ASSISTANT_NAME} says: ${result.reply}`);
                 if (autoSpeak) speak(reply);
             } catch (error) {
                 const message = (error as Error)?.message || 'Something went wrong.';
@@ -259,8 +260,8 @@ export default function SousScreen() {
     const empty = (
         <View style={styles.empty}>
             <BrandMark size={110} style={null} />
-            <Text style={[styles.hello, display, { color: c.text.primary }]}>Hey, I'm Sous.</Text>
-            <Text style={[styles.pronounce, { color: c.text.tertiary }]}>Sous (Soo) · your AI sous chef</Text>
+            <Text style={[styles.hello, display, { color: c.text.primary }]}>AmpliFood · {ASSISTANT_NAME}</Text>
+            <Text style={[styles.pronounce, { color: c.text.tertiary }]}>{ASSISTANT_NAME} ({ASSISTANT_PRONUNCIATION}) · {ASSISTANT_TAGLINE}</Text>
             <Text style={[styles.helloSub, { color: c.text.secondary }]}>
                 Ask me what to cook, and I can find or import recipes, plan meals, and fill your pantry and grocery list.
             </Text>
@@ -277,10 +278,10 @@ export default function SousScreen() {
     return (
         <KeyboardAvoidingView style={[styles.root, { backgroundColor: c.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
             <View style={styles.topBar}>
-                <Text style={[styles.topTitle, display, { color: c.text.primary }]}>Sous</Text>
-                <Text style={[styles.pronounceInline, { color: c.text.tertiary }]}>(Soo)</Text>
+                <Text style={[styles.topTitle, display, { color: c.text.primary }]}>AmpliFood · {ASSISTANT_NAME}</Text>
+                <Text style={[styles.pronounceInline, { color: c.text.tertiary }]}>({ASSISTANT_PRONUNCIATION})</Text>
                 <View style={{ flex: 1 }} />
-                <Pressable onPress={toggleAutoSpeak} style={[styles.toggle, { borderColor: c.border }]} accessibilityRole="switch" accessibilityLabel="Read Sous replies aloud" accessibilityState={{ checked: autoSpeak }}>
+                <Pressable onPress={toggleAutoSpeak} style={[styles.toggle, { borderColor: c.border }]} accessibilityRole="switch" accessibilityLabel={`Read ${ASSISTANT_NAME} replies aloud`} accessibilityState={{ checked: autoSpeak }}>
                     <Ionicons name={autoSpeak ? 'volume-high' : 'volume-mute-outline'} size={16} color={autoSpeak ? theme.primary[500] : c.text.tertiary} />
                     <Text style={[styles.toggleText, { color: c.text.secondary }]}>{autoSpeak ? 'Voice on' : 'Voice off'}</Text>
                 </Pressable>
@@ -295,7 +296,7 @@ export default function SousScreen() {
                 ListFooterComponent={thinking ? (
                     <View style={styles.thinking} accessibilityLiveRegion="polite">
                         <ActivityIndicator size="small" color={theme.primary[500]} />
-                        <Text style={{ color: c.text.tertiary }}>Sous is on it…</Text>
+                        <Text style={{ color: c.text.tertiary }}>{ASSISTANT_NAME} is on it…</Text>
                     </View>
                 ) : null}
             />
@@ -308,20 +309,22 @@ export default function SousScreen() {
                 </Text>
             )}
             <View style={[styles.composer, { borderTopColor: c.borderSoft, backgroundColor: c.surfaceGlass }]}>
-                <Pressable
-                    onPress={() => (listening ? mic.stop() : mic.start())}
-                    style={[styles.roundButton, { backgroundColor: listening ? theme.colors.error : c.surfaceMuted, opacity: mic.isSupported ? 1 : 0.4 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={listening ? 'Stop talking' : 'Talk to Sous'}
-                    accessibilityHint="Asks for microphone access the first time"
-                >
-                    <Ionicons name={listening ? 'stop' : 'mic'} size={20} color={listening ? '#FFFFFF' : c.text.primary} />
-                </Pressable>
+                {mic.isSupported ? (
+                    <Pressable
+                        onPress={() => (listening ? mic.stop() : mic.start())}
+                        style={[styles.roundButton, { backgroundColor: listening ? theme.colors.error : c.surfaceMuted }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={listening ? 'Stop talking' : `Talk to ${ASSISTANT_NAME}`}
+                        accessibilityHint="Asks for microphone access the first time"
+                    >
+                        <Ionicons name={listening ? 'stop' : 'mic'} size={20} color={listening ? '#FFFFFF' : c.text.primary} />
+                    </Pressable>
+                ) : null}
                 <TextInput
                     value={draft}
                     onChangeText={setInput}
-                    placeholder="Message Sous…"
-                    accessibilityLabel="Message to Sous"
+                    placeholder={`Message ${ASSISTANT_NAME}…`}
+                    accessibilityLabel={`Message to ${ASSISTANT_NAME}`}
                     placeholderTextColor={c.text.tertiary}
                     style={[styles.input, { color: c.text.primary, backgroundColor: c.surface, borderColor: c.border }]}
                     multiline

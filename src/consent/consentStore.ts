@@ -1,18 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TERMS_VERSION } from '../config/legal';
 
-// Terms/Privacy acceptance and per-provider permission to send data to AI or
-// voice services (App Store guideline 5.1.2(i)). Stored on the device only.
+// Terms/Privacy acceptance and per-provider permission to send data to AI
+// services (App Store guideline 5.1.2(i)). Stored on the device only.
 
 export const TERMS_URL = 'https://amplifood.vercel.app/terms';
 export const PRIVACY_URL = 'https://amplifood.vercel.app/privacy';
 
-/** Bump when the Terms or Privacy Policy change materially; users accept again. */
-export const LEGAL_VERSION = '2026-10-08';
+/** @deprecated Use TERMS_VERSION from config/legal */
+export const LEGAL_VERSION = TERMS_VERSION;
 
 const LEGAL_KEY = 'amplifood.legal.accepted';
 const CONSENT_KEY = 'amplifood.dataConsent.v1';
 
-export type ConsentTarget = 'anthropic' | 'openai' | 'xai' | 'gemini' | 'elevenlabs';
+export type ConsentTarget = 'anthropic' | 'openai' | 'xai' | 'gemini';
 
 export const TARGETS: Record<ConsentTarget, { name: string; sends: string; policy: string }> = {
     anthropic: {
@@ -35,11 +36,6 @@ export const TARGETS: Record<ConsentTarget, { name: string; sends: string; polic
         sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items, flavor preferences and allergies',
         policy: 'https://policies.google.com/privacy',
     },
-    elevenlabs: {
-        name: 'ElevenLabs',
-        sends: 'the text of Sous replies you choose to hear read aloud',
-        policy: 'https://elevenlabs.io/privacy-policy',
-    },
 };
 
 export type LegalAcceptance = { version: string; acceptedAt: number };
@@ -54,7 +50,7 @@ export async function getLegalAcceptance(): Promise<LegalAcceptance | null> {
 }
 
 export async function acceptLegal(): Promise<void> {
-    const value: LegalAcceptance = { version: LEGAL_VERSION, acceptedAt: Date.now() };
+    const value: LegalAcceptance = { version: TERMS_VERSION, acceptedAt: Date.now() };
     await AsyncStorage.setItem(LEGAL_KEY, JSON.stringify(value));
 }
 

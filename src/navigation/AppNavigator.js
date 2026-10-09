@@ -11,6 +11,7 @@ import AnimatedPressable from '../components/AnimatedPressable';
 // Import screens
 import RecipeBookScreen from '../screens/RecipeBookScreen';
 import SousScreen from '../sous/SousScreen';
+import { ASSISTANT_NAME } from '../config/assistant';
 import MealPlannerScreen from '../screens/MealPlannerScreen';
 import PantryScreen from '../screens/PantryScreen';
 import GroceryListScreen from '../screens/GroceryListScreen';
@@ -74,7 +75,7 @@ const TabNavigator = () => {
                             ? (props) => <HeaderPartyButton {...props} />
                             : undefined,
                     headerRight:
-                        route.name === 'Sous'
+                        route.name === ASSISTANT_NAME
                             ? (props) => <HeaderAccountActions {...props} />
                             : undefined,
                     tabBarButton: (props) => <TabBarButton {...props} />,
@@ -82,7 +83,7 @@ const TabNavigator = () => {
                     let iconName;
 
                     switch (route.name) {
-                        case 'Sous':
+                        case ASSISTANT_NAME:
                             iconName = focused ? 'sparkles' : 'sparkles-outline';
                             break;
                         case 'Recipes':
@@ -143,9 +144,9 @@ const TabNavigator = () => {
             }}
         >
             <Tab.Screen
-                name="Sous"
+                name={ASSISTANT_NAME}
                 component={SousScreen}
-                options={{ title: 'Sous', tabBarLabel: 'Sous' }}
+                options={{ title: ASSISTANT_NAME, tabBarLabel: ASSISTANT_NAME }}
             />
             <Tab.Screen
                 name="Recipes"

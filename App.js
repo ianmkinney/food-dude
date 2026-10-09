@@ -28,7 +28,7 @@ const linking =
            Main: {
              path: '',
              screens: {
-               Sous: '',
+               Ampi: '',
                Recipes: 'recipes',
                Planner: 'planner',
                Pantry: 'pantry',

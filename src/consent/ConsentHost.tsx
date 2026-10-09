@@ -3,8 +3,8 @@ import { Linking, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View }
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { BrandMark } from '../components/Brand';
+import { MINIMUM_AGE, TERMS_VERSION } from '../config/legal';
 import {
-    LEGAL_VERSION,
     PRIVACY_URL,
     TARGETS,
     TERMS_URL,
@@ -51,7 +51,7 @@ export function ConsentHost() {
                     </Text>
                     <Text style={[styles.body, { color: c.text.secondary }]}>
                         To answer, AmpliFood sends {info.sends} to {info.name}
-                        {target === 'elevenlabs' ? ', using your ElevenLabs key' : ', using your own API key'}. {info.name} handles it under its own privacy policy. Nothing is sent to AmpliFood.
+                        , using your own API key. {info.name} handles it under its own privacy policy. Nothing is sent to AmpliFood.
                     </Text>
                     <Text style={[styles.link, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(info.policy)}>
                         {info.name} privacy policy
@@ -79,7 +79,7 @@ export function LegalGate({ children }: { children: React.ReactNode }) {
     const [agreed, setAgreed] = useState(false);
 
     useEffect(() => {
-        getLegalAcceptance().then((a) => setState(a?.version === LEGAL_VERSION ? 'accepted' : 'needed'));
+        getLegalAcceptance().then((a) => setState(a?.version === TERMS_VERSION ? 'accepted' : 'needed'));
     }, []);
 
     if (state === 'accepted') return <>{children}</>;
@@ -122,7 +122,7 @@ export function LegalGate({ children }: { children: React.ReactNode }) {
                 <Text style={styles.continueText}>Continue</Text>
             </Pressable>
             <Text style={[styles.small, { color: c.text.tertiary, textAlign: 'center' }]}>
-                You must be 13 or older. Under 18? Use AmpliFood with a parent's permission.
+                You must be at least {MINIMUM_AGE} years old to use AmpliFood.
             </Text>
         </ScrollView>
     );

@@ -101,7 +101,7 @@ async function run(call: ToolCall): Promise<SousCard> {
                     prepTime: a.prep_time || null,
                     cookTime: a.cook_time || null,
                     totalTime: a.prep_time && a.cook_time ? a.prep_time + a.cook_time : null,
-                    sourcePlatform: 'Sous',
+                    sourcePlatform: 'Ampi',
                     ingredients: (a.ingredients || []).map((ing) => ({
                         ingredient: ing.ingredient,
                         quantity: asText(ing.quantity),
@@ -152,7 +152,7 @@ async function run(call: ToolCall): Promise<SousCard> {
             };
         }
         default:
-            throw new Error('Sous asked for something it cannot do yet.');
+            throw new Error('Ampi asked for something it cannot do yet.');
     }
 }
 

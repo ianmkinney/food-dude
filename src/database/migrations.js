@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 7;
+export const CURRENT_SCHEMA_VERSION = 10;
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
@@ -224,17 +224,6 @@ const TABLE_OWNERSHIP = [
     ['party_meal_ingredient_claims', PLANET_IDS.GALLEY, 'child'],
     ['recipe_cooking_history', PLANET_IDS.GALLEY, 'child'],
 
-    ['workouts', PLANET_IDS.ATLAS, 'core'],
-    ['workout_sets', PLANET_IDS.ATLAS, 'child'],
-
-    ['mood_logs', PLANET_IDS.LUMEN, 'core'],
-    ['sleep_logs', PLANET_IDS.LUMEN, 'core'],
-    ['focus_sessions', PLANET_IDS.LUMEN, 'core'],
-    ['journal_entries', PLANET_IDS.LUMEN, 'core'],
-
-    ['lab_panels', PLANET_IDS.OBSERVATORY, 'core'],
-    ['lab_markers', PLANET_IDS.OBSERVATORY, 'child'],
-
     ['users', SHELL_OWNER, 'system'],
     ['app_settings', SHELL_OWNER, 'system'],
     ['planets', SHELL_OWNER, 'system'],
@@ -345,6 +334,31 @@ export const MIGRATIONS = [
             // Separate from flavor preferences: a hard exclusion for AI prompts
             // and the on-device ingredient check.
             await addColumnIfMissing(db, 'users', 'allergies', 'TEXT');
+        },
+    },
+    {
+        version: 10,
+        name: 'drop_health_worlds',
+        up: async (db) => {
+            await db.execAsync(`
+              DROP TABLE IF EXISTS workout_sets;
+              DROP TABLE IF EXISTS workouts;
+              DROP TABLE IF EXISTS mood_logs;
+              DROP TABLE IF EXISTS sleep_logs;
+              DROP TABLE IF EXISTS focus_sessions;
+              DROP TABLE IF EXISTS journal_entries;
+              DROP TABLE IF EXISTS lab_markers;
+              DROP TABLE IF EXISTS lab_panels;
+            `);
+            await db.runAsync(
+                `DELETE FROM domain_tables WHERE planet_id IN (?, ?, ?)`,
+                [PLANET_IDS.ATLAS, PLANET_IDS.LUMEN, PLANET_IDS.OBSERVATORY]
+            );
+            await db.runAsync(`DELETE FROM planets WHERE id IN (?, ?, ?)`, [
+                PLANET_IDS.ATLAS,
+                PLANET_IDS.LUMEN,
+                PLANET_IDS.OBSERVATORY,
+            ]);
         },
     },
 ];

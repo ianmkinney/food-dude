@@ -13,7 +13,7 @@ import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { userOperations, partyStatsOperations, recipeCookingHistoryOperations } from '../database/operations';
 import AiProviderSettings from '../components/AiProviderSettings';
-import VoiceSettings from '../components/VoiceSettings';
+import VoicePreferences from '../components/VoicePreferences';
 import DataSharingSettings from '../components/DataSharingSettings';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
@@ -305,7 +305,7 @@ const AccountScreen = ({ navigation }) => {
             </ElevatedCard>
 
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
-                <VoiceSettings theme={theme} />
+                <VoicePreferences theme={theme} />
             </ElevatedCard>
 
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
@@ -342,7 +342,7 @@ const AccountScreen = ({ navigation }) => {
                     onPress={() =>
                         Alert.alert(
                             'About AmpliFood',
-                            'AmpliFood v1.0.0\n\nA kitchen companion with a little attitude. Bring your own AI key; your keys and kitchen data stay on this device.\n\nSee USER_SAFETY.md in the project for the full storage map.'
+                            'AmpliFood v1.0.0\n\nCooking, turned up. Bring your own AI key; your keys and kitchen data stay on this device.\n\nSee USER_SAFETY.md in the project for the full storage map.'
                         )
                     }
                 >

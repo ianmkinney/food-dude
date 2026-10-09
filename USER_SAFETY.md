@@ -17,7 +17,7 @@ That is the accurate line. The app does **not** encrypt every file on disk. SQLi
 | Cached model lists | AsyncStorage (not a secret) | No (on-device) | No |
 | Theme (`themeMode`) and AI Chef helper collapse | AsyncStorage | No (on-device) | No |
 | Account profile: name, username, email, avatar, flavor preferences, recipes cooked | On-device SQLite `users` table | No extra encryption | No |
-| Recipes, pantry, grocery, meal plans, parties, AI chat history, workouts, mood, lab panels | On-device SQLite (`fooddude.db`, a file name kept from before the rebrand so existing data carries over). On web: the same database in this browser's Origin Private File System. | No extra encryption | No, except when you ask AI Chef to use them in a prompt |
+| Recipes, pantry, grocery, meal plans, parties, AI chat history | On-device SQLite (`fooddude.db`, a file name kept from before the rebrand so existing data carries over). On web: the same database in this browser's Origin Private File System. | No extra encryption | No, except when you ask AI Chef to use them in a prompt |
 
 Secrets stay in SecureStore. Do not move API keys into SQLite.
 
@@ -31,26 +31,24 @@ AmpliFood asks for as little as possible. Each permission maps to one feature:
 | --- | --- | --- | --- |
 | Camera (`CAMERA` / `NSCameraUsageDescription`) | Android, iOS | Scanning a barcode in Pantry → Add / Edit item (`expo-camera`), and taking a photo of a dish when you choose **Use my photo → Take a photo** (`expo-image-picker`) | The first time you tap Scan or Take a photo |
 | Photo library (`NSPhotoLibraryUsageDescription`) | iOS | Picking recipe screenshots or a recipe photo (`expo-image-picker`) | iOS shows the system photo picker; only the photos you pick are shared with the app |
-| Microphone (`RECORD_AUDIO` / `NSMicrophoneUsageDescription`) | Android, iOS | Talking to Sous (`expo-speech-recognition`) | Only when you tap the mic in Sous; never at launch |
-| Speech recognition (`NSSpeechRecognitionUsageDescription`) | iOS | Turning what you say into a message for Sous; on-device recognition is used where the device supports it | With the microphone prompt, when you tap the mic |
-| Modify audio settings (`MODIFY_AUDIO_SETTINGS`) | Android | Playing Sous's voice (`expo-audio`) | Granted at install (no prompt) |
+| Microphone (`RECORD_AUDIO` / `NSMicrophoneUsageDescription`) | Android, iOS | Talking to Ampi (`expo-speech-recognition`, on-device only) | Only when you tap the mic in Ampi; never at launch |
+| Speech recognition (`NSSpeechRecognitionUsageDescription`) | iOS | Turning what you say into a message for Ampi; on-device recognition only | With the microphone prompt, when you tap the mic |
+| Modify audio settings (`MODIFY_AUDIO_SETTINGS`) | Android | Playing Ampi's voice (`expo-speech` on-device TTS) | Granted at install (no prompt) |
 | Internet | Android | AI provider calls, Open Food Facts lookups, recipe URL import | Granted at install (no prompt) |
 | Vibrate | Android | Light haptics on some buttons | Granted at install (no prompt) |
 
 On Android, photo picking goes through the system Photo Picker, which needs no permission, so AmpliFood declares **no** storage or media permissions. Shared images and text come in through the share sheet (`expo-share-intent`), which grants access only to the shared item.
 
-**Microphone came back with Sous.** It was removed in Gate 2 (#9) and is needed again for voice input. It is only requested when you tap the mic, and audio goes to the platform speech recognizer (on-device where available; otherwise Apple's or Google's speech service), not to AmpliFood. Update Play Data Safety and the App Store privacy label ("Audio data" for app functionality, not collected by AmpliFood) before shipping.
+**Microphone for Ampi.** It is only requested when you tap the mic. Speech recognition is on-device only where the platform supports it; there is no cloud speech fallback in the app. Audio is not sent to AmpliFood. Update Play Data Safety and the App Store privacy label ("Audio data" for app functionality, not collected by AmpliFood) before shipping.
 
 Not requested, and actively blocked in the build so a library can't add them back: `READ/WRITE_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_MEDIA_AUDIO`, `READ_MEDIA_VISUAL_USER_SELECTED`, `ACCESS_MEDIA_LOCATION`, and `SYSTEM_ALERT_WINDOW`. There is no location, contacts, or Face ID use, and no "save to photo library" feature.
 
-On the web build, the browser's file picker is used for photos; the browser asks for the camera when you scan or take a photo, and for the microphone when you tap Talk (Web Speech API; in Chrome this audio is processed by Google's speech service).
+On the web build, the browser's file picker is used for photos; the browser asks for the camera when you scan or take a photo. The Talk button appears only when on-device speech recognition is available in that browser.
 
-## Sous voice
+## Ampi voice
 
-- **Phone voice (default, free):** the device's built-in text-to-speech (`expo-speech`). Nothing leaves the device.
-- **Premium Sous voice (Plus perk):** an ElevenLabs AI voice served through the AmpliFood voice proxy (planned; stubbed until the backend exists), with a per-user monthly character cap. No ElevenLabs key ships in the app.
-- **Your own ElevenLabs key (optional):** unlocks the Premium Sous voice without Plus. Reply text you choose to hear goes to ElevenLabs, billed to your account. The key is stored like AI keys (Keychain/Keystore; browser storage on web), after you allow sharing with ElevenLabs.
-- Every voice output also shows its text, can be muted (the setting persists), and turns off automatically while VoiceOver/TalkBack is on. The premium preview is a short pre-recorded clip labelled "AI voice".
+- **On-device TTS only at launch:** replies use the device's built-in text-to-speech (`expo-speech`). Nothing leaves the device.
+- Every voice output also shows its text, can be muted (the setting persists), and turns off automatically while VoiceOver/TalkBack is on (native only).
 
 ## Bring Your Own Key
 
@@ -66,8 +64,6 @@ AmpliFood has no account server. The only network calls that carry your content 
 1. **Your chosen LLM provider** (Anthropic, OpenAI, xAI, or Google Gemini). Chat, recipe import, image analysis, cost estimates, and recipe photos go to that provider with the key stored on this device. Flavor preferences and pantry context are included in those prompts when you use AI Chef.
 2. **Open Food Facts** for barcode lookups. The request is a public product lookup, not your account profile.
 3. **A recipe URL you import**, fetched so the app can parse the page.
-
-Labs and other health-style notes stay on device. If you later ask an LLM about them, only the text you send in that prompt leaves the phone.
 
 ## How to remove keys and data
 

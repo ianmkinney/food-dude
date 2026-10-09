@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ASSISTANT_NAME } from '../config/assistant';
+import { SPEECH_ON_DEVICE_ONLY } from '../config/voice';
 
-// Talk-to-Sous. Uses the platform recognizer (iOS Speech, Android
-// SpeechRecognizer, Web Speech API) through expo-speech-recognition, preferring
-// on-device recognition. The mic and speech permissions are requested only
-// when the user taps Talk, never at launch.
+// Push-to-talk for the assistant. Uses expo-speech-recognition with on-device
+// recognition only when SPEECH_ON_DEVICE_ONLY is true.
 
 type Recognizer = typeof import('expo-speech-recognition').ExpoSpeechRecognitionModule;
 
 let recognizer: Recognizer | null | undefined;
 
-// Native module is absent in Expo Go and in builds made before it was added.
 function loadRecognizer(): Recognizer | null {
     if (recognizer !== undefined) return recognizer;
     try {
@@ -33,10 +32,14 @@ export type SpeechInput = {
     stop: () => void;
 };
 
-function isAvailable(mod: Recognizer | null): boolean {
+function supportsOnDevice(mod: Recognizer | null): boolean {
     if (!mod) return false;
     try {
-        return mod.isRecognitionAvailable();
+        if (!mod.isRecognitionAvailable()) return false;
+        if (SPEECH_ON_DEVICE_ONLY) {
+            return mod.supportsOnDeviceRecognition?.() === true;
+        }
+        return true;
     } catch {
         return false;
     }
@@ -44,7 +47,7 @@ function isAvailable(mod: Recognizer | null): boolean {
 
 export function useSpeechInput(onFinal: (text: string) => void): SpeechInput {
     const mod = loadRecognizer();
-    const supported = isAvailable(mod);
+    const supported = supportsOnDevice(mod);
     const [state, setState] = useState<SpeechInputState>(supported ? 'idle' : 'unavailable');
     const [transcript, setTranscript] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -64,7 +67,7 @@ export function useSpeechInput(onFinal: (text: string) => void): SpeechInput {
             mod.addListener('error', (event) => {
                 setError(
                     event.error === 'not-allowed'
-                        ? 'Microphone or speech access is off. Turn it on in Settings to talk to Sous, or type instead.'
+                        ? `Microphone or speech access is off. Turn it on in Settings to talk to ${ASSISTANT_NAME}, or type instead.`
                         : event.error === 'no-speech'
                           ? "Didn't catch that. Tap Talk and try again."
                           : event.message || 'Speech recognition stopped.'
@@ -85,14 +88,16 @@ export function useSpeechInput(onFinal: (text: string) => void): SpeechInput {
         setTranscript('');
         const permission = await mod.requestPermissionsAsync();
         if (!permission.granted) {
-            setError('Sous needs the microphone and speech recognition to hear you. You can allow them in Settings, or type instead.');
+            setError(
+                `${ASSISTANT_NAME} needs the microphone and on-device speech recognition. You can allow them in Settings, or type instead.`
+            );
             return;
         }
         mod.start({
             lang: 'en-US',
             interimResults: true,
             continuous: false,
-            requiresOnDeviceRecognition: mod.supportsOnDeviceRecognition?.() ?? false,
+            requiresOnDeviceRecognition: true,
             addsPunctuation: true,
         });
         setState('listening');

@@ -295,7 +295,7 @@ export async function getAccountAiState() {
     };
 }
 
-// Shared with other on-device secrets (e.g. the ElevenLabs voice key) so they
+// Shared with other on-device secrets so they
 // get the same Keychain/Keystore storage and web fallback as AI keys.
 export const getSecret = (key) => secureGet(key);
 export const setSecret = (key, value) => secureSet(key, value);
