@@ -128,7 +128,6 @@ export default function PaywallScreen() {
                                 <Text style={[styles.planPrice, { color: text.primary }]}>
                                     {priceFor(plan.sku, plan.listPrice)} / {plan.period}
                                 </Text>
-                                {plan.note && <Text style={[styles.small, { color: text.tertiary }]}>{plan.note}</Text>}
                             </View>
                             <BuyButton sku={plan.sku} label={canBuy ? 'Subscribe' : 'Coming soon'} />
                         </View>
