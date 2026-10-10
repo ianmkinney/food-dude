@@ -122,6 +122,7 @@ export const createTablesSQL = `
     owner_email TEXT,
     sync_version INTEGER NOT NULL DEFAULT 1,
     sync_secret TEXT,
+    removed_member_ids TEXT,
     scheduled_date TEXT,
     scheduled_meal_type TEXT,
     created_at INTEGER NOT NULL,
@@ -135,6 +136,8 @@ export const createTablesSQL = `
     user_id TEXT NOT NULL,
     user_name TEXT,
     member_email TEXT,
+    sync_member_id TEXT,
+    member_status TEXT DEFAULT 'confirmed' CHECK(member_status IN ('pending', 'confirmed')),
     role TEXT DEFAULT 'member' CHECK(role IN ('owner', 'member')),
     joined_at INTEGER NOT NULL,
     FOREIGN KEY (party_id) REFERENCES parties(id) ON DELETE CASCADE

@@ -4,7 +4,7 @@ import { base64urlDecode, base64urlEncode } from '../../utils/base64url';
 import { hmacSha256Base64Url, timingSafeEqual } from '../../utils/hmacSha256';
 
 export const PARTY_LINK_BASE = 'https://amplifood.vercel.app/party';
-export const PARTY_PAYLOAD_FORMAT = 1;
+export const PARTY_PAYLOAD_FORMAT = 2;
 export const MAX_EMAIL_LINK_BYTES = 8 * 1024;
 
 const textEncoder = new TextEncoder();
@@ -64,10 +64,22 @@ export async function decodeSignedPartyPayload({ p, sig, secret }) {
     const compressed = base64urlDecode(p);
     const jsonBytes = await inflateAsync(compressed);
     const parsed = JSON.parse(textDecoder.decode(jsonBytes));
-    if (parsed?.format !== PARTY_PAYLOAD_FORMAT) {
+    if (parsed?.format !== 1 && parsed?.format !== PARTY_PAYLOAD_FORMAT) {
         throw new Error('Unsupported party link format.');
     }
     return parsed;
+}
+
+export function generateMemberId() {
+    return generatePartyUuid();
+}
+
+/** @param {string | null | undefined} memberId */
+export function assertMemberNotRemoved(memberId, doc) {
+    const removed = doc?.removedMemberIds || [];
+    if (memberId && removed.includes(memberId)) {
+        throw new Error('You were removed from this party. Ask the owner for a new invite link.');
+    }
 }
 
 /**

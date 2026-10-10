@@ -43,7 +43,7 @@ function buildHtml({ partyName, actorName, shareLink, intro }) {
     return `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;line-height:1.5">
 <p>${intro}</p>
 <p><a href="${shareLink}">Open party in AmpliFood</a></p>
-<p style="color:#555;font-size:14px">Party updates travel by email; nothing is stored on our servers.</p>
+<p style="color:#555;font-size:14px">Membership syncs via links and email only; nothing is stored on our servers.</p>
 <p>— ${actorName}</p>
 </body></html>`;
 }
@@ -81,6 +81,17 @@ function templateForKind(kind, { partyName, actorName, shareLink, version }) {
                     actorName,
                     shareLink,
                     intro: `${actorName} shared <strong>version ${version}</strong> of <strong>${partyName}</strong>.`,
+                }),
+            };
+        case 'join_receipt':
+            return {
+                subject: `${actorName} joined "${partyName}"`,
+                text: `${actorName} joined your party "${partyName}".\n\nConfirm on your device: ${shareLink}`,
+                html: buildHtml({
+                    partyName,
+                    actorName,
+                    shareLink,
+                    intro: `<strong>${actorName}</strong> joined <strong>${partyName}</strong>. Open the receipt link to update your member list.`,
                 }),
             };
         default:
@@ -145,6 +156,7 @@ export default async function handler(req, res) {
     const actorName = String(body.actorName || session.name || session.email || 'A friend').slice(0, 120);
     const partyMembers = validateMembers(body.partyMembers);
     const memberEmails = new Set(partyMembers.map((m) => m.email));
+    const ownerEmail = normalizeEmail(body.ownerEmail);
 
     let recipients = Array.isArray(body.to) ? body.to.map(normalizeEmail) : [];
     recipients = recipients.filter((e) => EMAIL_RE.test(e));
@@ -162,14 +174,21 @@ export default async function handler(req, res) {
         reject(res, 400, 'bad_request');
         return;
     }
-    if (!memberEmails.size) {
-        reject(res, 400, 'bad_request');
-        return;
-    }
-    for (const email of recipients) {
-        if (!memberEmails.has(email)) {
+    if (kind === 'join_receipt') {
+        if (!ownerEmail || recipients.length !== 1 || recipients[0] !== ownerEmail) {
             reject(res, 400, 'bad_request');
             return;
+        }
+    } else {
+        if (!memberEmails.size) {
+            reject(res, 400, 'bad_request');
+            return;
+        }
+        for (const email of recipients) {
+            if (!memberEmails.has(email)) {
+                reject(res, 400, 'bad_request');
+                return;
+            }
         }
     }
 

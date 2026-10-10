@@ -21,7 +21,9 @@ import { partyOperations, partyMealOperations, partyMemberOperations, recipeOper
 import aiChefService from '../services/aiChefService';
 import { generatePartyUuid, generateSyncSecret } from '../services/partySync';
 import PartySyncPanel from '../components/PartySyncPanel';
-import { sendInviteEmailForParty } from '../components/PartySyncPanel';
+import PartyInviteModal from '../components/PartyInviteModal';
+import { completePartyJoin } from '../services/partySync/joinFlow';
+import { generateMemberId } from '../services/partySync';
 import { usePartyDeepLink } from '../hooks/usePartyDeepLink';
 
 const PartyScreen = ({ navigation }) => {
@@ -39,7 +41,7 @@ const PartyScreen = ({ navigation }) => {
     const [newMealDescription, setNewMealDescription] = useState('');
     const [selectedRecipes, setSelectedRecipes] = useState([]);
     const [availableRecipes, setAvailableRecipes] = useState([]);
-    const [inviteEmail, setInviteEmail] = useState('');
+    const [joinDisplayName, setJoinDisplayName] = useState('');
     const [showMealDetailModal, setShowMealDetailModal] = useState(false);
     const [selectedMeal, setSelectedMeal] = useState(null);
     const [editingMealName, setEditingMealName] = useState('');
@@ -58,7 +60,14 @@ const PartyScreen = ({ navigation }) => {
     const [matchingStatus, setMatchingStatus] = useState('');
     const [estimatingStatus, setEstimatingStatus] = useState('');
 
-    const { pendingReview, clearPendingReview, importSummary, clearImportSummary } = usePartyDeepLink({
+    const {
+        pendingReview,
+        clearPendingReview,
+        pendingJoin,
+        clearPendingJoin,
+        importSummary,
+        clearImportSummary,
+    } = usePartyDeepLink({
         viewerEmail: currentUser?.email,
         onImported: async (partyId) => {
             const party = await partyOperations.getById(partyId);
@@ -181,6 +190,8 @@ const PartyScreen = ({ navigation }) => {
                 userId: user.user_id,
                 userName: user.name || user.username || 'You',
                 memberEmail: ownerEmail || null,
+                syncMemberId: generateMemberId(),
+                memberStatus: 'confirmed',
                 role: 'owner',
             });
             
@@ -331,31 +342,29 @@ const PartyScreen = ({ navigation }) => {
         }
     };
 
-    const handleInviteFriend = async () => {
-        if (!inviteEmail.trim()) {
-            Alert.alert('Error', 'Please enter an email address');
+    const handleCompleteJoin = async () => {
+        if (!joinDisplayName.trim()) {
+            Alert.alert('Name required', 'Enter a display name so the owner knows who joined.');
             return;
         }
-
-        if (!selectedParty) {
-            Alert.alert('Error', 'Please select a party first');
-            return;
-        }
-
+        if (!pendingJoin) return;
         try {
             const user = currentUser || await userOperations.getCurrent();
-            await sendInviteEmailForParty({
-                selectedParty,
+            const partyName = pendingJoin.doc.name;
+            const { partyId } = await completePartyJoin({
+                doc: pendingJoin.doc,
+                secret: pendingJoin.secret,
+                displayName: joinDisplayName.trim(),
                 currentUser: user,
-                inviteEmail: inviteEmail.trim(),
-                onPartyUpdated: refreshParty,
             });
-            Alert.alert('Invitation', `Invite prepared for ${inviteEmail.trim()}.`);
-            setInviteEmail('');
-            setShowInviteModal(false);
+            const party = await partyOperations.getById(partyId);
+            if (party) setSelectedParty(party);
+            setJoinDisplayName('');
+            clearPendingJoin();
+            await loadParties();
+            Alert.alert('Joined', `You joined "${partyName}".`);
         } catch (error) {
-            console.error('Error sending invite:', error);
-            Alert.alert('Error', 'Failed to prepare invitation email');
+            Alert.alert('Could not join', error?.message || 'Invalid or expired invite link.');
         }
     };
 
@@ -792,7 +801,11 @@ const PartyScreen = ({ navigation }) => {
                         theme={theme}
                         selectedParty={selectedParty}
                         currentUser={currentUser}
-                        onPartyUpdated={refreshParty}
+                        partyMembers={partyMembers}
+                        onPartyUpdated={async () => {
+                            await refreshParty();
+                            if (selectedParty?.id) await loadPartyMembers(selectedParty.id);
+                        }}
                         pendingImport={
                             pendingReview
                                 ? { doc: pendingReview.doc, secret: pendingReview.secret }
@@ -971,37 +984,45 @@ const PartyScreen = ({ navigation }) => {
                 </View>
             </Modal>
 
-            {/* Invite Friend Modal */}
-            <Modal
+            <PartyInviteModal
                 visible={showInviteModal}
-                transparent
-                animationType="slide"
-                onRequestClose={() => setShowInviteModal(false)}
-            >
+                onClose={() => setShowInviteModal(false)}
+                theme={theme}
+                selectedParty={selectedParty}
+                currentUser={currentUser}
+                onUpdated={refreshParty}
+            />
+
+            <Modal visible={Boolean(pendingJoin)} transparent animationType="slide" onRequestClose={clearPendingJoin}>
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-                        <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>Invite Friend</Text>
-                        <TextInput accessibilityLabel="Friend's email"
+                        <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>
+                            Join {pendingJoin?.doc?.name || 'party'}
+                        </Text>
+                        <Text style={{ color: theme.colors.text.secondary, marginBottom: 12 }}>
+                            Your display name is shared with the owner via a join receipt link. Membership syncs via links
+                            only — nothing is stored on our servers.
+                        </Text>
+                        <TextInput
+                            accessibilityLabel="Display name"
                             style={[styles.modalInput, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
-                            placeholder="Email Address"
+                            placeholder="Your name"
                             placeholderTextColor={theme.colors.text.tertiary}
-                            value={inviteEmail}
-                            onChangeText={setInviteEmail}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
+                            value={joinDisplayName}
+                            onChangeText={setJoinDisplayName}
                         />
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalButton, { backgroundColor: theme.colors.border }]}
-                                onPress={() => setShowInviteModal(false)}
+                                onPress={clearPendingJoin}
                             >
                                 <Text style={[styles.modalButtonText, { color: theme.colors.text.primary }]}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.modalButton, { backgroundColor: theme.accent.green }]}
-                                onPress={handleInviteFriend}
+                                style={[styles.modalButton, { backgroundColor: theme.primary[500] }]}
+                                onPress={handleCompleteJoin}
                             >
-                                <Text style={styles.modalButtonText}>Send Invite</Text>
+                                <Text style={styles.modalButtonText}>Join party</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

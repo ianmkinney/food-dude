@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 13;
+export const CURRENT_SCHEMA_VERSION = 14;
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
@@ -431,6 +431,22 @@ export const MIGRATIONS = [
                         row.created_at,
                     ]
                 );
+            }
+        },
+    },
+    {
+        version: 14,
+        name: 'party_link_members',
+        up: async (db) => {
+            await addColumnIfMissing(db, 'parties', 'removed_member_ids', 'TEXT');
+            await addColumnIfMissing(db, 'party_members', 'sync_member_id', 'TEXT');
+            await addColumnIfMissing(db, 'party_members', 'member_status', 'TEXT', "'confirmed'");
+            const members = await db.getAllAsync(
+                "SELECT id, party_id FROM party_members WHERE sync_member_id IS NULL OR sync_member_id = ''"
+            );
+            for (const row of members) {
+                const syncId = `legacy-${row.id}`;
+                await db.runAsync('UPDATE party_members SET sync_member_id = ? WHERE id = ?', [syncId, row.id]);
             }
         },
     },

@@ -13,3 +13,13 @@ export {
 } from './codec';
 export { buildPartyExportDocument, summarizePartyChanges } from './model';
 export { resolveMergeAction } from './merge';
+export {
+    buildJoinInviteDocument,
+    buildJoinReceiptDocument,
+    buildPartyJoinLink,
+    buildJoinReceiptLink,
+    createJoiningMember,
+} from './join';
+export { assertMemberNotRemoved, generateMemberId } from './codec';
+export { getStoredMemberId, setStoredMemberId } from './memberIdStore';
+export { applyJoinReceipt, applyPartyJoin } from './apply';
