@@ -69,7 +69,7 @@ for (const rel of modules) {
         rel === 'p.js' ||
         rel === 'p-og.js'
     ) {
-        if (typeof mod.default !== 'function') {
+        if (typeof mod.default !== 'function' && typeof mod.GET !== 'function') {
             throw new Error(`${rel}: missing default export handler`);
         }
     }

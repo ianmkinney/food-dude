@@ -2,10 +2,10 @@ import { getPartySql, isPartyDatabaseConfigured } from './_lib/partyDb.js';
 import { isInviteRowValid } from './_lib/partyInvite.js';
 
 export const config = {
-    runtime: 'edge',
+    runtime: 'nodejs',
 };
 
-export default async function handler(req) {
+export async function GET(req) {
     const { ImageResponse } = await import('@vercel/og');
     const React = await import('react');
     const { searchParams } = new URL(req.url);
