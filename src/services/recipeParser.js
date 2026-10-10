@@ -205,7 +205,7 @@ For nutritional info:
 Recipe content to parse:
 ${input}`;
 
-        const text = await retryOperation(() => generateText(prompt));
+        const text = await retryOperation(() => generateText(prompt, { feature: 'textImport' }));
         const cleanedText = stripCodeFences(text);
 
         const parsedRecipe = JSON.parse(cleanedText);
@@ -273,7 +273,7 @@ For nutritional info:
 HTML content (truncated to first 10000 chars):
 ${html.substring(0, 10000)}`;
 
-        const text = await retryOperation(() => generateText(prompt));
+        const text = await retryOperation(() => generateText(prompt, { feature: 'textImport' }));
         const cleanedText = stripCodeFences(text);
 
         const parsedRecipe = JSON.parse(cleanedText);

@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { hasPlatformAiAccess } from '../monetization/entitlements';
 
 let SecureStore = null;
 try {
@@ -264,15 +265,23 @@ export async function getActiveCredentials() {
 
 export async function isAiConfigured() {
     const { apiKey } = await getActiveCredentials();
-    return Boolean(apiKey);
+    return Boolean(apiKey) || (await hasPlatformAiAccess());
 }
 
+/**
+ * Resolves who serves an AI request. Your own key always wins and never touches
+ * credits; without one, Plus or credit-pack holders go to AmpliFood's platform
+ * AI (`route: 'platform'`), and everyone else is asked to add a key.
+ */
 export async function requireAiConfigured() {
     const creds = await getActiveCredentials();
-    if (!creds.apiKey) {
-        throw new Error(MISSING_KEY_MESSAGE);
+    if (creds.apiKey) {
+        return { ...creds, route: 'byok' };
     }
-    return creds;
+    if (await hasPlatformAiAccess()) {
+        return { ...creds, route: 'platform' };
+    }
+    throw new Error(MISSING_KEY_MESSAGE);
 }
 
 export async function getAccountAiState() {

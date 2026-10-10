@@ -117,17 +117,18 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "AmpliFood uses the microphone only while you hold the mic button, so you can tell Sous what you like instead of typing. Your voice is turned into text on your device and isn't recorded or saved.",
+          "microphonePermission": "AmpliFood uses the microphone only while you hold the mic button, so you can tell Ampi what you like instead of typing. Your voice is turned into text on your device and isn't recorded or saved.",
           "recordAudioAndroid": false
         }
       ],
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "AmpliFood uses the microphone only while you hold the mic button, so you can tell Sous what you like instead of typing. Your voice is turned into text on your device and isn't recorded or saved.",
-          "speechRecognitionPermission": "AmpliFood turns what you say to Sous into text to fill in your preferences and requests. When your device supports it, this happens on the device."
+          "microphonePermission": "AmpliFood uses the microphone only while you hold the mic button, so you can tell Ampi what you like instead of typing. Your voice is turned into text on your device and isn't recorded or saved.",
+          "speechRecognitionPermission": "AmpliFood turns what you say to Ampi into text to fill in your preferences and requests. When your device supports it, this happens on the device."
         }
-      ]
+      ],
+      "expo-iap"
     ],
     "extra": {
       "eas": {

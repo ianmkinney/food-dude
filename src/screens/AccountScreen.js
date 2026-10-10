@@ -18,6 +18,7 @@ import DataSharingSettings from '../components/DataSharingSettings';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { BrandMark } from '../components/Brand';
+import { useMonetization } from '../monetization/MonetizationContext';
 import {
     USER_SAFETY_DETAILS,
     USER_SAFETY_SUMMARY,
@@ -31,6 +32,7 @@ const LEGACY_DEFAULT_USER_NAME = 'Food Dude User';
 const AccountScreen = ({ navigation }) => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const monetization = useMonetization();
     const [user, setUser] = useState(null);
     const [name, setName] = useState('');
     const [username, setUsername] = useState('');
@@ -335,6 +337,21 @@ const AccountScreen = ({ navigation }) => {
             {/* Settings Section */}
             <View style={styles.settingsContainer}>
                 <Text style={[styles.settingsTitle, { color: theme.colors.text.primary }]}>Settings</Text>
+
+                <ElevatedCard
+                    theme={theme}
+                    style={styles.settingItem}
+                    onPress={() => navigation.navigate('Paywall')}
+                >
+                    <Ionicons name="flash-outline" size={24} color={theme.primary[500]} />
+                    <Text style={[styles.settingText, { color: theme.colors.text.primary }]}>
+                        AmpliFood Plus · {monetization.isPlus ? 'Active' : 'Free plan'}
+                        {monetization.balance
+                            ? ` · ${monetization.balance.monthlyRemaining + monetization.balance.purchasedRemaining} credits`
+                            : ''}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
+                </ElevatedCard>
                 
                 <ElevatedCard
                     theme={theme}

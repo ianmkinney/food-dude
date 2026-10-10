@@ -17,6 +17,7 @@ import { assertVideoSupported, coerceImagesForProvider } from './mediaPrep';
 import { userOperations } from '../database/operations';
 import { safetyPreamble } from '../safety/foodSafety';
 import { ensureConsent, getIncludeHealthData } from '../consent/consentStore';
+import { platformAi } from '../monetization/platformAi';
 import { describeMimeType, isImageMimeSupportedBy, normalizeMimeType } from './mediaTypes';
 
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -308,6 +309,9 @@ async function currentHealthContext() {
 // has allowed sharing with this provider.
 async function prepareRequest(prompt) {
     const creds = await requireAiConfigured();
+    if (creds.route === 'platform') {
+        return { creds, prompt };
+    }
     await ensureConsent(creds.provider);
     const { allergies, diet } = await currentHealthContext();
     const dietLine = diet ? `\nThe user's diet needs: ${diet}. Follow them.` : '';
@@ -316,6 +320,9 @@ async function prepareRequest(prompt) {
 
 export async function generateText(rawPrompt, options = {}) {
     const { creds, prompt } = await prepareRequest(rawPrompt);
+    if (creds.route === 'platform') {
+        return platformAi.generateText({ prompt, feature: options.feature || 'chat' });
+    }
     const model = options.model || creds.model || defaultModelFor(creds.provider);
 
     switch (creds.provider) {
@@ -344,8 +351,11 @@ export async function generateText(rawPrompt, options = {}) {
     }
 }
 
-export async function generateMultimodal({ prompt: rawPrompt, images, video }) {
+export async function generateMultimodal({ prompt: rawPrompt, images, video, feature = 'imageImport' }) {
     const { creds, prompt } = await prepareRequest(rawPrompt);
+    if (creds.route === 'platform') {
+        return platformAi.generateMultimodal({ prompt, images, video, feature });
+    }
     const model = creds.model || defaultModelFor(creds.provider);
 
     if (video && creds.provider !== 'gemini') {
@@ -383,8 +393,10 @@ export async function generateMultimodal({ prompt: rawPrompt, images, video }) {
 }
 
 export async function generateImage(prompt) {
-    const creds = await requireAiConfigured();
-    await ensureConsent(creds.provider);
+    const { creds, prompt: preparedPrompt } = await prepareRequest(prompt);
+    if (creds.route === 'platform') {
+        return platformAi.generateImage({ prompt: preparedPrompt });
+    }
     if (creds.provider !== 'gemini') {
         throw new Error('Recipe image generation needs Google Gemini. Switch provider in Account and pick an image model.');
     }
@@ -396,7 +408,7 @@ export async function generateImage(prompt) {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                contents: [{ role: 'user', parts: [{ text: preparedPrompt }] }],
                 generationConfig: {
                     responseModalities: ['TEXT', 'IMAGE'],
                 },

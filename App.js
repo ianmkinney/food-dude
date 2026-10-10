@@ -13,6 +13,7 @@ import { BrandMark, CheckerStrip } from './src/components/Brand';
 import { AlertHost, installAlertPolyfill } from './src/platform/alert';
 import { ConsentHost } from './src/consent/ConsentHost';
 import OnboardingGate from './src/onboarding/OnboardingGate';
+import { MonetizationProvider } from './src/monetization/MonetizationContext';
 
 import { ShareIntentProvider } from './src/platform/shareIntent';
 
@@ -52,6 +53,7 @@ const linking =
            EstimateCost: 'grocery/estimate',
            Party: 'party',
            Account: 'account',
+           Paywall: 'plus',
          },
        },
      }
@@ -155,7 +157,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AppContent />
+        <MonetizationProvider>
+          <AppContent />
+        </MonetizationProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );
