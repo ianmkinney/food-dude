@@ -305,11 +305,11 @@ const AiProviderSettings = ({ theme }) => {
 
             {Platform.OS === 'web' ? (
                 <form
-                    style={[
+                    style={StyleSheet.flatten([
                         styles.keyRow,
                         styles.keyForm,
                         { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
-                    ]}
+                    ])}
                     onSubmit={(e) => {
                         e.preventDefault();
                         handleSaveKey();

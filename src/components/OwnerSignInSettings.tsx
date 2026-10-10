@@ -10,6 +10,7 @@ import {
     type OwnerSession,
     type OwnerUsage,
 } from '../platform/ownerSession';
+import { getOwnerGoogleClientIds, isOwnerSignInConfigured } from '../platform/ownerSignInConfig';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -17,17 +18,22 @@ type Props = {
     theme: ReturnType<typeof import('../theme').getTheme>;
 };
 
-const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+/** Renders nothing unless Google client IDs are configured for this platform (avoids hook crash). */
+export default function OwnerSignInSettings(props: Props) {
+    if (!isOwnerSignInConfigured()) {
+        return null;
+    }
+    return <OwnerSignInSettingsInner {...props} />;
+}
 
-export default function OwnerSignInSettings({ theme }: Props) {
+function OwnerSignInSettingsInner({ theme }: Props) {
+    const { webClientId, iosClientId, androidClientId } = getOwnerGoogleClientIds();
     const [session, setSession] = useState<OwnerSession | null>(null);
     const [usage, setUsage] = useState<OwnerUsage | null>(null);
     const [busy, setBusy] = useState(false);
 
     const [request, , promptAsync] = Google.useAuthRequest({
-        webClientId,
+        webClientId: webClientId!,
         iosClientId,
         androidClientId,
         responseType: 'id_token',

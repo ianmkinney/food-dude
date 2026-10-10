@@ -30,7 +30,7 @@ export default function AccountAboutSheet({ visible, onClose, theme }: Props) {
     const c = theme.colors;
 
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} accessibilityViewIsModal>
             <Pressable style={[styles.backdrop, { backgroundColor: c.overlay }]} onPress={onClose}>
                 <Pressable
                     style={[styles.card, { backgroundColor: c.surfaceElevated, borderColor: c.border }]}
