@@ -667,15 +667,84 @@ export const partyOperations = {
 
         try {
             const result = await db.runAsync(
-                `INSERT INTO parties (name, description, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?)`,
-                [party.name, party.description || null, party.createdBy || null, now, now]
+                `INSERT INTO parties (party_uuid, name, description, created_by, owner_email, sync_version, sync_secret, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    party.partyUuid || null,
+                    party.name,
+                    party.description || null,
+                    party.createdBy || null,
+                    party.ownerEmail || null,
+                    party.syncVersion ?? 1,
+                    party.syncSecret || null,
+                    now,
+                    now,
+                ]
             );
             return result.lastInsertRowId;
         } catch (error) {
             console.error('Error creating party:', error);
             throw error;
         }
+    },
+
+    async createWithSync(party) {
+        return partyOperations.create({
+            name: party.name,
+            description: party.description,
+            createdBy: party.createdBy,
+            partyUuid: party.partyUuid,
+            ownerEmail: party.ownerEmail,
+            syncSecret: party.syncSecret,
+            syncVersion: party.syncVersion ?? 1,
+        });
+    },
+
+    async getByUuid(partyUuid) {
+        const db = getDatabase();
+        try {
+            return await db.getFirstAsync('SELECT * FROM parties WHERE party_uuid = ?', [partyUuid]);
+        } catch (error) {
+            console.error('Error getting party by uuid:', error);
+            throw error;
+        }
+    },
+
+    async setSyncSecret(id, syncSecret) {
+        const db = getDatabase();
+        await db.runAsync('UPDATE parties SET sync_secret = ? WHERE id = ?', [syncSecret, id]);
+    },
+
+    async updateSyncFields(id, fields) {
+        const db = getDatabase();
+        const party = await db.getFirstAsync('SELECT * FROM parties WHERE id = ?', [id]);
+        if (!party) throw new Error('Party not found');
+        const now = fields.updated_at ?? Date.now();
+        await db.runAsync(
+            `UPDATE parties SET
+        name = ?,
+        description = ?,
+        owner_email = ?,
+        sync_version = ?,
+        scheduled_date = ?,
+        scheduled_meal_type = ?,
+        party_uuid = ?,
+        updated_at = ?
+       WHERE id = ?`,
+            [
+                fields.name !== undefined ? fields.name : party.name,
+                fields.description !== undefined ? fields.description : party.description,
+                fields.owner_email !== undefined ? fields.owner_email : party.owner_email,
+                fields.sync_version !== undefined ? fields.sync_version : party.sync_version ?? 1,
+                fields.scheduled_date !== undefined ? fields.scheduled_date : party.scheduled_date,
+                fields.scheduled_meal_type !== undefined
+                    ? fields.scheduled_meal_type
+                    : party.scheduled_meal_type,
+                fields.party_uuid !== undefined ? fields.party_uuid : party.party_uuid,
+                now,
+                id,
+            ]
+        );
     },
 
     // Get all parties
@@ -753,14 +822,53 @@ export const partyMemberOperations = {
 
         try {
             const result = await db.runAsync(
-                `INSERT INTO party_members (party_id, user_id, user_name, role, joined_at)
-         VALUES (?, ?, ?, ?, ?)`,
-                [member.partyId, member.userId, member.userName || null, member.role || 'member', now]
+                `INSERT INTO party_members (party_id, user_id, user_name, member_email, role, joined_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+                [
+                    member.partyId,
+                    member.userId,
+                    member.userName || null,
+                    member.memberEmail || member.email || null,
+                    member.role || 'member',
+                    now,
+                ]
             );
             return result.lastInsertRowId;
         } catch (error) {
             console.error('Error adding party member:', error);
             throw error;
+        }
+    },
+
+    async replaceEmailMembers(partyId, members) {
+        const db = getDatabase();
+        const existing = await db.getAllAsync('SELECT * FROM party_members WHERE party_id = ?', [partyId]);
+        const byEmail = new Map(
+            existing
+                .filter((m) => m.member_email)
+                .map((m) => [String(m.member_email).toLowerCase(), m])
+        );
+        const seen = new Set();
+        for (const member of members) {
+            const email = String(member.email || '').toLowerCase();
+            if (!email || seen.has(email)) continue;
+            seen.add(email);
+            const prior = byEmail.get(email);
+            const userId = prior?.user_id || `email:${email}`;
+            if (prior) {
+                await db.runAsync(
+                    'UPDATE party_members SET user_name = ?, role = ?, member_email = ? WHERE id = ?',
+                    [member.name || prior.user_name, member.role || prior.role, email, prior.id]
+                );
+            } else {
+                await partyMemberOperations.add({
+                    partyId,
+                    userId,
+                    userName: member.name,
+                    memberEmail: email,
+                    role: member.role || 'member',
+                });
+            }
         }
     },
 
@@ -804,11 +912,13 @@ export const partyMealOperations = {
 
         try {
             const recipeIdsJson = JSON.stringify(meal.recipeIds || []);
+            const syncMealId = meal.syncMealId || `m-${now}-${Math.random().toString(36).slice(2, 9)}`;
             const result = await db.runAsync(
-                `INSERT INTO party_meals (party_id, name, description, recipe_ids, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO party_meals (party_id, sync_meal_id, name, description, recipe_ids, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     meal.partyId,
+                    syncMealId,
                     meal.name,
                     meal.description || null,
                     recipeIdsJson,
@@ -869,16 +979,24 @@ export const partyMealOperations = {
 
         try {
             const recipeIdsJson = updates.recipeIds ? JSON.stringify(updates.recipeIds) : null;
-            await db.runAsync(
-                `UPDATE party_meals SET name = ?, description = ?, recipe_ids = ?, updated_at = ? WHERE id = ?`,
-                [
-                    updates.name,
-                    updates.description || null,
-                    recipeIdsJson,
-                    now,
-                    id,
-                ]
-            );
+            if (updates.syncMealId) {
+                await db.runAsync(
+                    `UPDATE party_meals SET name = ?, description = ?, recipe_ids = ?, sync_meal_id = ?, updated_at = ? WHERE id = ?`,
+                    [
+                        updates.name,
+                        updates.description || null,
+                        recipeIdsJson,
+                        updates.syncMealId,
+                        now,
+                        id,
+                    ]
+                );
+            } else {
+                await db.runAsync(
+                    `UPDATE party_meals SET name = ?, description = ?, recipe_ids = ?, updated_at = ? WHERE id = ?`,
+                    [updates.name, updates.description || null, recipeIdsJson, now, id]
+                );
+            }
             return true;
         } catch (error) {
             console.error('Error updating party meal:', error);

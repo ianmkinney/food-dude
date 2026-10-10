@@ -83,10 +83,21 @@ Set at **build time** (EAS secrets or `.env` for web export on Vercel):
 3. On a device or web build with the Google client IDs baked in: **Account → Owner sign-in → Sign in with Google** (allowlisted email only).
 4. Leave BYOK in Account for normal testing; owner routing is: **BYOK key wins**, else **owner session** → proxy.
 
-## 6. Clerk / other auth vendors
+## 6. Resend (party invite / sync emails)
+
+Party collaboration uses **email links** with signed payloads in the URL **fragment** (never sent to server logs). The server only relays email when someone is signed in with an allowlisted Google account; otherwise the app falls back to `mailto:`.
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `RESEND_API_KEY` | For server email | API key from [Resend](https://resend.com/). If unset, `/api/party/email` returns `503` and the app uses `mailto:`. |
+| `RESEND_FROM` | Optional | From address (default `onboarding@resend.dev` until a domain is verified). |
+
+Uses the same `ALLOWED_EMAILS` / owner session gate as `/api/ai/chat`. **No party data is stored on the server** — only recipient validation and rate limiting.
+
+## 7. Clerk / other auth vendors
 
 Not used. Google ID-token verification (JWKS) + nonce + a signed session JWT keeps the stack minimal.
 
-## 7. Privacy
+## 8. Privacy
 
 Prompts are not logged on the server. Per-minute rate limiting is **best-effort in-memory** per serverless instance (abuse throttle only, not a billing control). Billing and daily caps are enforced by **OpenRouter per-key limits**.

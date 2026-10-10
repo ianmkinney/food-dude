@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 11;
+export const CURRENT_SCHEMA_VERSION = 12;
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
@@ -359,6 +359,28 @@ export const MIGRATIONS = [
         name: 'users_diet',
         up: async (db) => {
             await addColumnIfMissing(db, 'users', 'diet', 'TEXT');
+        },
+    },
+    {
+        version: 12,
+        name: 'party_email_sync',
+        up: async (db) => {
+            await addColumnIfMissing(db, 'parties', 'party_uuid', 'TEXT');
+            await addColumnIfMissing(db, 'parties', 'owner_email', 'TEXT');
+            await addColumnIfMissing(db, 'parties', 'sync_version', 'INTEGER', '1');
+            await addColumnIfMissing(db, 'parties', 'sync_secret', 'TEXT');
+            await addColumnIfMissing(db, 'party_members', 'member_email', 'TEXT');
+            await addColumnIfMissing(db, 'party_meals', 'sync_meal_id', 'TEXT');
+            await db.execAsync(
+                'CREATE INDEX IF NOT EXISTS idx_parties_party_uuid ON parties(party_uuid);'
+            );
+            const rows = await db.getAllAsync(
+                'SELECT id FROM parties WHERE party_uuid IS NULL OR party_uuid = ""'
+            );
+            for (const row of rows) {
+                const uuid = `00000000-0000-4000-8000-${String(row.id).padStart(12, '0')}`;
+                await db.runAsync('UPDATE parties SET party_uuid = ? WHERE id = ?', [uuid, row.id]);
+            }
         },
     },
 ];

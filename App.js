@@ -218,6 +218,18 @@ function AppContent() {
     if (appReady || error) signalAppReady();
   }, [appReady, error]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !appReady || typeof window === 'undefined') return;
+    const hash = window.location.hash || '';
+    if (!hash.includes('p=') || !hash.includes('sig=')) return;
+    const go = () => {
+      if (navigationRef.isReady()) navigationRef.navigate('Party');
+    };
+    go();
+    const t = setTimeout(go, 300);
+    return () => clearTimeout(t);
+  }, [appReady]);
+
   if (error) {
     return <StartupError error={error} theme={theme} onUseHere={moveHere} />;
   }
