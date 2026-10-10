@@ -16,6 +16,8 @@ import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { useViewTransitionTarget } from '../motion/viewTransition';
 import { groceryOperations, recipeOperations } from '../database/operations';
+import { invalidateQueries } from '../data/queryCache';
+import { groceryQuery } from '../data/queries';
 import { parseGroceryItemsWithAI, checkPantryForMatches } from '../services/intelligentGroceryService';
 import PantryMatchModal from '../components/PantryMatchModal';
 
@@ -116,6 +118,7 @@ const AddGroceryItemScreen = () => {
             setAiProcessingStatus('Checking pantry...');
 
             await groceryOperations.add(enhancedItem);
+            invalidateQueries(groceryQuery.key);
 
             // Check pantry for matches
             const matches = await checkPantryForMatches([enhancedItem.name]);
@@ -169,6 +172,7 @@ const AddGroceryItemScreen = () => {
                 await groceryOperations.add(item);
                 addedCount++;
             }
+            invalidateQueries(groceryQuery.key);
 
             // Check pantry for matches
             const itemNames = enhancedItems.map(item => item.name);
@@ -224,6 +228,7 @@ const AddGroceryItemScreen = () => {
                 await groceryOperations.add(item);
                 addedCount++;
             }
+            invalidateQueries(groceryQuery.key);
 
             // Check pantry for matches
             const itemNames = enhancedItems.map(item => item.name);

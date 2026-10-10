@@ -13,6 +13,7 @@ import RecipeBookScreen from '../screens/RecipeBookScreen';
 import SousScreen from '../sous/SousScreen';
 import { ASSISTANT_NAME } from '../config/assistant';
 import { lazyScreen } from './lazyScreen';
+import { prefetchTabData } from '../data/queries';
 
 const MealPlannerScreen = lazyScreen(() => import('../screens/MealPlannerScreen'));
 const PantryScreen = lazyScreen(() => import('../screens/PantryScreen'));
@@ -58,10 +59,32 @@ const sceneTransition = {
 
 const renderTabBar = (props) => <AppTabBar {...props} icons={TAB_ICONS} />;
 
+// Once startup has settled, load the tab chunks and their data so a first
+// visit renders filled instead of flashing a placeholder.
+const PREFETCH_AFTER_MS = 2500;
+function usePrefetchTabs() {
+    useEffect(() => {
+        let idle;
+        const run = async () => {
+            await Promise.all([MealPlannerScreen, PantryScreen, GroceryListScreen].map((s) => s.preload()));
+            await prefetchTabData();
+        };
+        const timer = setTimeout(() => {
+            if (typeof requestIdleCallback === 'function') idle = requestIdleCallback(run, { timeout: 2000 });
+            else run();
+        }, PREFETCH_AFTER_MS);
+        return () => {
+            clearTimeout(timer);
+            if (idle && typeof cancelIdleCallback === 'function') cancelIdleCallback(idle);
+        };
+    }, []);
+}
+
 const TabNavigator = () => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
     const reduceMotion = useReducedMotion();
+    usePrefetchTabs();
 
     return (
         <Tab.Navigator

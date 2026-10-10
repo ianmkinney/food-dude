@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback } from 'react';
 import {
     View,
     Text,
@@ -6,11 +6,13 @@ import {
     FlatList,
     Alert,
 } from 'react-native';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { pantryOperations } from '../database/operations';
+import { useQuery } from '../data/queryCache';
+import { pantryQuery } from '../data/queries';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
@@ -19,29 +21,19 @@ import ScreenSkeleton from '../components/Skeleton';
 
 const PantryScreen = () => {
     const navigation = useNavigation();
-    const isFocused = useIsFocused();
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
-    const [pantryItems, setPantryItems] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const { data, showSkeleton, refresh } = useQuery(pantryQuery.key, pantryQuery.fetch);
+    const pantryItems = data || [];
 
-    useEffect(() => {
-        if (isFocused) {
-            loadPantryItems();
-        }
-    }, [isFocused]);
-
-    const loadPantryItems = async () => {
+    const loadPantryItems = useCallback(async () => {
         try {
-            const items = await pantryOperations.getAll();
-            setPantryItems(items);
+            await refresh();
         } catch (error) {
             console.error('Error loading pantry items:', error);
             Alert.alert('Error', 'Failed to load pantry items');
-        } finally {
-            setLoading(false);
         }
-    };
+    }, [refresh]);
 
     const handleDelete = (item) => {
         Alert.alert(
@@ -128,8 +120,8 @@ const PantryScreen = () => {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            {loading && pantryItems.length === 0 ? (
-                <ScreenSkeleton />
+            {data === undefined ? (
+                showSkeleton ? <ScreenSkeleton /> : null
             ) : (
                 <FlatList
                     data={pantryItems}

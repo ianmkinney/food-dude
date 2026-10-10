@@ -16,6 +16,8 @@ import * as Clipboard from 'expo-clipboard';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { groceryOperations } from '../database/operations';
+import { useQuery } from '../data/queryCache';
+import { groceryQuery } from '../data/queries';
 import { simplifyGroceryList } from '../services/intelligentGroceryService';
 import SimplifiedListModal from '../components/SimplifiedListModal';
 import GroceryRow from '../components/GroceryRow';
@@ -28,8 +30,13 @@ const GroceryListScreen = () => {
     const navigation = useNavigation();
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
-    const [groceryItems, setGroceryItems] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const {
+        data: cachedItems,
+        showSkeleton,
+        refresh: refreshGroceryItems,
+        setData: setGroceryItems,
+    } = useQuery(groceryQuery.key, groceryQuery.fetch);
+    const groceryItems = cachedItems || [];
     const [filter, setFilter] = useState('all'); // all, checked, unchecked
     const [showStoreModal, setShowStoreModal] = useState(false);
     const [showSimplifiedModal, setShowSimplifiedModal] = useState(false);
@@ -43,26 +50,14 @@ const GroceryListScreen = () => {
 
     useEffect(() => () => clearTimeout(settleTimer.current), []);
 
-    useEffect(() => {
-        loadGroceryItems();
-    }, []);
-
-    const loadGroceryItems = async () => {
+    const loadGroceryItems = useCallback(async () => {
         try {
-            const items = await groceryOperations.getAll();
-            setGroceryItems(items || []);
+            await refreshGroceryItems();
         } catch (error) {
             console.error('Error loading grocery items:', error);
-            // Set empty array instead of showing alert repeatedly
-            setGroceryItems([]);
-            // Only show alert once, not repeatedly
-            if (loading) {
-                Alert.alert('Error', `Failed to load grocery list: ${error.message || 'Unknown error'}`);
-            }
-        } finally {
-            setLoading(false);
+            Alert.alert('Error', `Failed to load grocery list: ${error.message || 'Unknown error'}`);
         }
-    };
+    }, [refreshGroceryItems]);
 
     // Flip the checkbox immediately, let the strike and pop play, then reload so
     // the row moves into (or out of) the Done group.
@@ -79,20 +74,17 @@ const GroceryListScreen = () => {
             await loadGroceryItems();
             setPendingChecked({});
         }, 320);
-        // loadGroceryItems is recreated each render but only reads setters.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pendingChecked]);
+    }, [pendingChecked, loadGroceryItems]);
 
     const deleteItem = useCallback(async (item) => {
-        setGroceryItems((prev) => prev.filter((i) => i.id !== item.id));
+        setGroceryItems((prev) => (prev || []).filter((i) => i.id !== item.id));
         try {
             await groceryOperations.delete(item.id);
         } catch (error) {
             console.error('Error deleting item:', error);
             loadGroceryItems();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [setGroceryItems, loadGroceryItems]);
 
     const clearList = () => {
         Alert.alert(
@@ -337,8 +329,8 @@ const GroceryListScreen = () => {
                 </View>
             )}
 
-            {loading && groceryItems.length === 0 ? (
-                <ScreenSkeleton />
+            {cachedItems === undefined ? (
+                showSkeleton ? <ScreenSkeleton /> : null
             ) : (
                 <FlatList
                     data={rows}

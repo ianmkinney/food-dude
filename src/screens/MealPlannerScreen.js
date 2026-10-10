@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     View,
     Text,
@@ -9,7 +9,6 @@ import {
     Modal,
     FlatList,
     Image,
-    InteractionManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
@@ -18,34 +17,38 @@ import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import SlotSettle from '../components/SlotSettle';
 import { formatDisplayDate, getStartOfWeek, getWeekDates, addDays, subtractDays } from '../utils/dateHelpers';
-import { mealPlanOperations, recipeOperations, partyMealOperations, partyOperations } from '../database/operations';
+import { mealPlanOperations, partyMealOperations } from '../database/operations';
+import { useQuery } from '../data/queryCache';
+import { mealPlansQuery, recipesQuery, partiesQuery } from '../data/queries';
 
 const MealPlannerScreen = ({ route, navigation }) => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
     const [currentWeekStart, setCurrentWeekStart] = useState(getStartOfWeek());
-    const [weekDates, setWeekDates] = useState([]);
-    const [mealPlans, setMealPlans] = useState([]);
+    const weekDates = useMemo(() => getWeekDates(currentWeekStart), [currentWeekStart]);
+    const plansQuery = useMemo(() => mealPlansQuery(currentWeekStart), [currentWeekStart]);
+    const { data: cachedPlans, refresh: refreshMealPlans } = useQuery(plansQuery.key, plansQuery.fetch);
+    const { data: cachedRecipes } = useQuery(recipesQuery.key, recipesQuery.fetch);
+    const { data: cachedParties } = useQuery(partiesQuery.key, partiesQuery.fetch);
+    const mealPlans = cachedPlans || [];
     const [showMealModal, setShowMealModal] = useState(false);
     const [selectedDate, setSelectedDate] = useState(null);
     const [selectedMealType, setSelectedMealType] = useState(null);
     const [partyMeals, setPartyMeals] = useState([]);
-    const [recipes, setRecipes] = useState([]);
+    const recipes = useMemo(() => cachedRecipes || [], [cachedRecipes]);
     const [selectedParty, setSelectedParty] = useState(null);
-    const [parties, setParties] = useState([]);
+    const parties = useMemo(() => cachedParties || [], [cachedParties]);
     const [draggableItems, setDraggableItems] = useState([]);
     const [selectedItem, setSelectedItem] = useState(null);
 
     useEffect(() => {
-        const dates = getWeekDates(currentWeekStart);
-        setWeekDates(dates);
-        const task = InteractionManager.runAfterInteractions(() => {
-            loadMealPlans(dates[0], dates[6]);
-            loadParties();
-            loadRecipes();
-        });
-        return () => task.cancel();
-    }, [currentWeekStart]);
+        if (selectedParty || parties.length === 0) return;
+        setSelectedParty(parties[0]);
+        partyMealOperations
+            .getByPartyId(parties[0].id)
+            .then(setPartyMeals)
+            .catch((error) => console.error('Error loading party meals:', error));
+    }, [parties, selectedParty]);
 
     useEffect(() => {
         // Combine recipes and parties into draggable items
@@ -96,38 +99,11 @@ const MealPlannerScreen = ({ route, navigation }) => {
         }
     }, [route?.params?.selectedMeal]);
 
-    const loadMealPlans = async (startDate, endDate) => {
+    const loadMealPlans = async () => {
         try {
-            const plans = await mealPlanOperations.getByDateRange(
-                startDate.toISOString().split('T')[0],
-                endDate.toISOString().split('T')[0]
-            );
-            setMealPlans(plans);
+            await refreshMealPlans();
         } catch (error) {
             console.error('Error loading meal plans:', error);
-        }
-    };
-
-    const loadParties = async () => {
-        try {
-            const allParties = await partyOperations.getAll();
-            setParties(allParties);
-            if (allParties.length > 0 && !selectedParty) {
-                setSelectedParty(allParties[0]);
-                const meals = await partyMealOperations.getByPartyId(allParties[0].id);
-                setPartyMeals(meals);
-            }
-        } catch (error) {
-            console.error('Error loading parties:', error);
-        }
-    };
-
-    const loadRecipes = async () => {
-        try {
-            const allRecipes = await recipeOperations.getAll();
-            setRecipes(allRecipes);
-        } catch (error) {
-            console.error('Error loading recipes:', error);
         }
     };
 
@@ -156,8 +132,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
                 servings: 1,
             });
             setShowMealModal(false);
-            const dates = getWeekDates(currentWeekStart);
-            await loadMealPlans(dates[0], dates[6]);
+            await loadMealPlans();
             Alert.alert('Success', 'Meal added to planner!');
         } catch (error) {
             console.error('Error adding meal:', error);
@@ -175,8 +150,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
                     mealType: mealType,
                     servings: 1,
                 });
-                const dates = getWeekDates(currentWeekStart);
-                await loadMealPlans(dates[0], dates[6]);
+                await loadMealPlans();
                 Alert.alert('Success', `${item.title} scheduled!`);
             } else if (item.type === 'party') {
                 // Schedule party - add all recipes from party meals and update party scheduled date
@@ -204,8 +178,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
                     scheduled_meal_type: mealType,
                 });
                 
-                const dates = getWeekDates(currentWeekStart);
-                await loadMealPlans(dates[0], dates[6]);
+                await loadMealPlans();
                 Alert.alert('Success', `Party "${item.title}" scheduled with ${scheduledCount} recipe(s)!`);
             }
             setSelectedItem(null);
@@ -251,8 +224,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
                     onPress: async () => {
                         try {
                             await mealPlanOperations.delete(meal.id);
-                            const dates = getWeekDates(currentWeekStart);
-                            await loadMealPlans(dates[0], dates[6]);
+                            await loadMealPlans();
                             Alert.alert('Success', 'Meal removed from planner');
                         } catch (error) {
                             console.error('Error removing meal:', error);
