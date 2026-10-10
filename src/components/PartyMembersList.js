@@ -12,6 +12,7 @@ export default function PartyMembersList({
     onChanged,
     livePartyId,
     syncMode,
+    onInviteRotated,
 }) {
     if (!members?.length) return null;
 
@@ -24,10 +25,16 @@ export default function PartyMembersList({
                 style: 'destructive',
                 onPress: async () => {
                     if (syncMode === 'live' && livePartyId && member.sync_member_id) {
-                        await removeLiveMember({
+                        const result = await removeLiveMember({
                             livePartyId,
                             memberId: member.sync_member_id,
                         });
+                        if (result?.inviteToken) {
+                            await partyOperations.setLiveSyncFields(partyId, {
+                                liveInviteToken: result.inviteToken,
+                            });
+                            onInviteRotated?.(result.inviteToken);
+                        }
                     }
                     await partyOperations.removeMemberFromParty(partyId, member.sync_member_id);
                     onChanged?.();

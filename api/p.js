@@ -1,4 +1,5 @@
 import { getPartySql, isPartyDatabaseConfigured } from './_lib/partyDb.js';
+import { isInviteRowValid } from './_lib/partyInvite.js';
 
 const SITE = 'https://amplifood.vercel.app';
 
@@ -27,14 +28,14 @@ export default async function handler(req, res) {
     try {
         const sql = await getPartySql();
         const invites = await sql`
-            SELECT it.party_id, it.revoked, p.name, p.image_url
+            SELECT it.party_id, it.revoked, it.expires_at, p.name, p.image_url
             FROM invite_tokens it
             JOIN parties p ON p.id = it.party_id
             WHERE it.token = ${token}
             LIMIT 1`;
         const row = invites[0];
-        if (!row || row.revoked) {
-            res.status(404).send('Invite not found');
+        if (!isInviteRowValid(row)) {
+            res.status(404).send('Invite not found or expired');
             return;
         }
         const partyName = row.name || 'AmpliFood party';

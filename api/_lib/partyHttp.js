@@ -9,6 +9,7 @@ export const PARTY_MSG = {
     bad_request: 'Invalid request.',
     not_found: 'Party not found.',
     conflict: 'Request could not be completed.',
+    member_cap: 'This party already has the maximum number of members.',
 };
 
 export function partyReject(res, status, error, extra = {}) {

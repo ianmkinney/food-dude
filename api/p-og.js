@@ -1,4 +1,5 @@
 import { getPartySql, isPartyDatabaseConfigured } from './_lib/partyDb.js';
+import { isInviteRowValid } from './_lib/partyInvite.js';
 
 export const config = {
     runtime: 'edge',
@@ -14,11 +15,11 @@ export default async function handler(req) {
         try {
             const sql = await getPartySql();
             const rows = await sql`
-                SELECT p.name FROM invite_tokens it
+                SELECT p.name, it.revoked, it.expires_at FROM invite_tokens it
                 JOIN parties p ON p.id = it.party_id
-                WHERE it.token = ${token} AND it.revoked = false
+                WHERE it.token = ${token}
                 LIMIT 1`;
-            if (rows[0]?.name) title = rows[0].name;
+            if (isInviteRowValid(rows[0]) && rows[0]?.name) title = rows[0].name;
         } catch (error) {
             console.warn('[p-og] lookup failed', error?.message || error);
         }

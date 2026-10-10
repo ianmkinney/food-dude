@@ -10,19 +10,25 @@ export function normalizeMealsInput(meals) {
         .filter((m) => m.name);
 }
 
-export function rowToPartySnapshot({ party, members, meals, inviteToken }) {
+/**
+ * @param {{ party: object, members?: object[], meals?: object[], inviteToken?: string | null }} bundle
+ * @param {{ isOwner?: boolean }} [options]
+ */
+export function rowToPartySnapshot(bundle, options = {}) {
+    const { party, members, meals, inviteToken } = bundle;
+    const isOwner = Boolean(options.isOwner);
     return {
         id: party.id,
         name: party.name,
         imageUrl: party.image_url || null,
-        ownerEmail: party.owner_email,
+        ownerEmail: isOwner ? party.owner_email : null,
         version: party.version,
         updatedAt: new Date(party.updated_at).getTime(),
-        inviteToken: inviteToken || null,
+        inviteToken: isOwner ? inviteToken || null : null,
         members: (members || []).map((m) => ({
             memberId: m.member_id,
             displayName: m.display_name,
-            email: m.email,
+            email: isOwner ? m.email : null,
             status: m.status,
             joinedAt: new Date(m.joined_at).getTime(),
         })),

@@ -7,6 +7,15 @@ import { generateToken, hashToken } from '../_lib/partyTokens.js';
 import { memberTokenFromReq, partyReject } from '../_lib/partyHttp.js';
 import { normalizeMealsInput, rowToPartySnapshot } from '../_lib/partySerialize.js';
 import { uploadPartyImage, isBlobConfigured } from '../_lib/partyBlob.js';
+import { consumePartyRateLimit } from '../_lib/partyRateLimit.js';
+import { withPartyTransaction } from '../_lib/partyTxn.js';
+import { insertInviteToken, isInviteRowValid, rotateInviteToken } from '../_lib/partyInvite.js';
+import { decodePartyImageBase64, sniffImageBuffer } from '../_lib/partyImageSniff.js';
+import {
+    MAX_ACTIVE_MEMBERS,
+    MAX_EMAIL_LEN,
+    MAX_MIGRATE_MEMBERS,
+} from '../_lib/partyConstants.js';
 
 const MAX_NAME = 200;
 const MAX_DISPLAY = 120;
@@ -19,12 +28,28 @@ function clientKey(req) {
     return req.socket?.remoteAddress || 'unknown';
 }
 
-function rateLimit(req, res, bucket, max = 30) {
+function softRateLimit(req, res, bucket, max = 30) {
     if (!checkMinuteRateLimit(`${bucket}:${clientKey(req)}`, max)) {
         partyReject(res, 429, 'rate_limited');
         return false;
     }
     return true;
+}
+
+async function durableRateLimit(res, sql, rateKey, maxPerMinute) {
+    const ok = await consumePartyRateLimit(sql, rateKey, maxPerMinute);
+    if (!ok) {
+        partyReject(res, 429, 'rate_limited');
+        return false;
+    }
+    return true;
+}
+
+function applyBinaryImageHeaders(res, contentType) {
+    res.setHeader('Content-Type', contentType || 'application/octet-stream');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    res.setHeader('Cache-Control', 'public, max-age=3600');
 }
 
 async function requireOwnerSession(req, res) {
@@ -67,13 +92,16 @@ async function loadPartyBundle(sql, partyId) {
     const meals = await sql`
         SELECT * FROM party_meals WHERE party_id = ${partyId}::uuid ORDER BY created_at ASC`;
     const invites = await sql`
-        SELECT token FROM invite_tokens WHERE party_id = ${partyId}::uuid AND revoked = false
+        SELECT token, revoked, expires_at FROM invite_tokens
+        WHERE party_id = ${partyId}::uuid AND revoked = false
+        AND expires_at > now()
         ORDER BY created_at DESC LIMIT 1`;
+    const inviteRow = invites[0];
     return {
         party,
         members,
         meals,
-        inviteToken: invites[0]?.token || null,
+        inviteToken: inviteRow && isInviteRowValid(inviteRow) ? inviteRow.token : null,
     };
 }
 
@@ -90,6 +118,12 @@ async function assertPartyOwner(sql, partyId, session) {
     return { ok: true };
 }
 
+async function isPartyOwner(sql, partyId, session) {
+    if (!session) return false;
+    const result = await assertPartyOwner(sql, partyId, session);
+    return result.ok;
+}
+
 async function assertMemberAccess(sql, partyId, memberToken) {
     if (!memberToken) return { ok: false, status: 401, error: 'forbidden' };
     const hash = hashToken(memberToken);
@@ -103,12 +137,12 @@ async function assertMemberAccess(sql, partyId, memberToken) {
     return { ok: true, memberId: row.member_id };
 }
 
-async function bumpPartyVersion(sql, partyId) {
-    const rows = await sql`
-        UPDATE parties SET version = version + 1, updated_at = now()
-        WHERE id = ${partyId}::uuid
-        RETURNING version, updated_at`;
-    return rows[0];
+async function countActiveMembers(client, partyId) {
+    const result = await client.query(
+        `SELECT COUNT(*)::int AS c FROM party_members WHERE party_id = $1::uuid AND status = 'active'`,
+        [partyId]
+    );
+    return Number(result.rows[0]?.c ?? 0);
 }
 
 function parseBody(req) {
@@ -123,6 +157,52 @@ function actionFromReq(req) {
     return body.action ? String(body.action) : '';
 }
 
+function parseValidatedImage(imageBase64, res) {
+    const buffer = decodePartyImageBase64(imageBase64);
+    if (!buffer || !buffer.length) {
+        partyReject(res, 400, 'bad_request', { message: 'Invalid image payload.' });
+        return null;
+    }
+    if (buffer.length > MAX_PARTY_IMAGE_BYTES) {
+        partyReject(res, 400, 'bad_request', { message: 'Image must be at most 500KB after compression.' });
+        return null;
+    }
+    const sniffed = sniffImageBuffer(buffer);
+    if (!sniffed) {
+        partyReject(res, 400, 'bad_request', { message: 'Only JPEG, PNG, or WebP images are allowed.' });
+        return null;
+    }
+    return { buffer, contentType: sniffed.contentType };
+}
+
+async function persistPartyImage(sql, partyId, buffer, contentType) {
+    let imageUrl = null;
+    let imageBytea = null;
+    if (isBlobConfigured()) {
+        const uploaded = await uploadPartyImage({ partyId, buffer, contentType });
+        imageUrl = uploaded.url;
+    } else {
+        imageBytea = buffer;
+    }
+    await sql`
+        UPDATE parties SET image_url = ${imageUrl}, image_bytea = ${imageBytea},
+            image_content_type = ${contentType}, updated_at = now()
+        WHERE id = ${partyId}::uuid`;
+}
+
+async function replaceMealsOnClient(client, partyId, mealsInput) {
+    const meals = normalizeMealsInput(mealsInput).slice(0, MAX_MEALS);
+    await client.query(`DELETE FROM party_meals WHERE party_id = $1::uuid`, [partyId]);
+    for (const meal of meals) {
+        const recipeJson = JSON.stringify(meal.recipeIds || []);
+        await client.query(
+            `INSERT INTO party_meals (party_id, name, description, recipe_ids)
+             VALUES ($1::uuid, $2, $3, $4::jsonb)`,
+            [partyId, meal.name, meal.description, recipeJson]
+        );
+    }
+}
+
 async function handleCreate(req, res, session) {
     const body = parseBody(req);
     const name = String(body.name || '').trim().slice(0, MAX_NAME);
@@ -131,32 +211,36 @@ async function handleCreate(req, res, session) {
         return;
     }
     const sql = await getPartySql();
-    const inviteToken = generateToken(24);
-    const rows = await sql`
-        INSERT INTO parties (name, owner_sub, owner_email)
-        VALUES (${name}, ${session.sub}, ${session.email.toLowerCase()})
-        RETURNING id, name, version, updated_at, owner_email, image_url`;
-    const party = rows[0];
-    await sql`
-        INSERT INTO invite_tokens (token, party_id) VALUES (${inviteToken}, ${party.id})`;
-    const ownerMemberToken = generateToken(32);
-    await sql`
-        INSERT INTO party_members (party_id, display_name, email, status, member_token_hash)
-        VALUES (
-            ${party.id},
-            ${session.name || session.email.split('@')[0] || 'Owner'},
-            ${session.email.toLowerCase()},
-            'active',
-            ${hashToken(ownerMemberToken)}
-        )`;
-    const bundle = await loadPartyBundle(sql, party.id);
-    const snapshot = rowToPartySnapshot({
-        ...bundle,
-        inviteToken,
+    if (!(await durableRateLimit(res, sql, `party:create:${session.sub}`, 10))) return;
+
+    const { party, inviteToken, ownerMemberToken } = await withPartyTransaction(async (client) => {
+        const inviteToken = generateToken(24);
+        const partyRes = await client.query(
+            `INSERT INTO parties (name, owner_sub, owner_email)
+             VALUES ($1, $2, $3)
+             RETURNING id, name, version, updated_at, owner_email, image_url`,
+            [name, session.sub, session.email.toLowerCase()]
+        );
+        const party = partyRes.rows[0];
+        await insertInviteToken(client, party.id, inviteToken);
+        const ownerMemberToken = generateToken(32);
+        await client.query(
+            `INSERT INTO party_members (party_id, display_name, email, status, member_token_hash)
+             VALUES ($1::uuid, $2, $3, 'active', $4)`,
+            [
+                party.id,
+                session.name || session.email.split('@')[0] || 'Owner',
+                session.email.toLowerCase(),
+                hashToken(ownerMemberToken),
+            ]
+        );
+        return { party, inviteToken, ownerMemberToken };
     });
+
+    const bundle = await loadPartyBundle(sql, party.id);
     res.status(200).json({
         ok: true,
-        party: snapshot,
+        party: rowToPartySnapshot(bundle, { isOwner: true }),
         ownerMemberToken,
         inviteUrl: `/p/${inviteToken}`,
     });
@@ -171,12 +255,8 @@ async function handleGet(req, res, session) {
     }
     const sql = await getPartySql();
     const memberToken = memberTokenFromReq(req);
-    let allowed = false;
-    if (session) {
-        const owner = await assertPartyOwner(sql, partyId, session);
-        if (owner.ok) allowed = true;
-    }
-    if (!allowed) {
+    const ownerView = await isPartyOwner(sql, partyId, session);
+    if (!ownerView) {
         const member = await assertMemberAccess(sql, partyId, memberToken);
         if (!member.ok) {
             partyReject(res, member.status, member.error);
@@ -188,7 +268,7 @@ async function handleGet(req, res, session) {
         partyReject(res, 404, 'not_found');
         return;
     }
-    res.status(200).json({ ok: true, party: rowToPartySnapshot(bundle) });
+    res.status(200).json({ ok: true, party: rowToPartySnapshot(bundle, { isOwner: ownerView }) });
 }
 
 async function handleJoin(req, res) {
@@ -200,26 +280,48 @@ async function handleJoin(req, res) {
         return;
     }
     const sql = await getPartySql();
+    if (!(await durableRateLimit(res, sql, `party:join:${clientKey(req)}`, 15))) return;
+
     const invites = await sql`
-        SELECT party_id, revoked FROM invite_tokens WHERE token = ${inviteToken} LIMIT 1`;
+        SELECT party_id, revoked, expires_at FROM invite_tokens WHERE token = ${inviteToken} LIMIT 1`;
     const invite = invites[0];
-    if (!invite || invite.revoked) {
+    if (!isInviteRowValid(invite)) {
         partyReject(res, 404, 'not_found');
         return;
     }
-    const memberToken = generateToken(32);
-    const email = body.email ? String(body.email).trim().toLowerCase().slice(0, 200) : null;
-    const inserted = await sql`
-        INSERT INTO party_members (party_id, display_name, email, status, member_token_hash)
-        VALUES (${invite.party_id}, ${displayName}, ${email}, 'active', ${hashToken(memberToken)})
-        RETURNING member_id`;
-    await bumpPartyVersion(sql, invite.party_id);
-    const bundle = await loadPartyBundle(sql, invite.party_id);
+
+    const email = body.email ? String(body.email).trim().toLowerCase().slice(0, MAX_EMAIL_LEN) : null;
+
+    const result = await withPartyTransaction(async (client) => {
+        const active = await countActiveMembers(client, invite.party_id);
+        if (active >= MAX_ACTIVE_MEMBERS) {
+            return { cap: true };
+        }
+        const memberToken = generateToken(32);
+        const inserted = await client.query(
+            `INSERT INTO party_members (party_id, display_name, email, status, member_token_hash)
+             VALUES ($1::uuid, $2, $3, 'active', $4)
+             RETURNING member_id`,
+            [invite.party_id, displayName, email, hashToken(memberToken)]
+        );
+        await client.query(
+            `UPDATE parties SET version = version + 1, updated_at = now() WHERE id = $1::uuid`,
+            [invite.party_id]
+        );
+        return { memberId: inserted.rows[0].member_id, memberToken, partyId: invite.party_id };
+    });
+
+    if (result.cap) {
+        partyReject(res, 409, 'member_cap');
+        return;
+    }
+
+    const bundle = await loadPartyBundle(sql, result.partyId);
     res.status(200).json({
         ok: true,
-        memberId: inserted[0].member_id,
-        memberToken,
-        party: rowToPartySnapshot(bundle),
+        memberId: result.memberId,
+        memberToken: result.memberToken,
+        party: rowToPartySnapshot(bundle, { isOwner: false }),
     });
 }
 
@@ -240,7 +342,8 @@ async function handleLeave(req, res) {
     await sql`
         UPDATE party_members SET status = 'removed', removed_at = now(), member_token_hash = NULL
         WHERE member_id = ${access.memberId}::uuid`;
-    await bumpPartyVersion(sql, partyId);
+    await sql`
+        UPDATE parties SET version = version + 1, updated_at = now() WHERE id = ${partyId}::uuid`;
     res.status(200).json({ ok: true });
 }
 
@@ -258,22 +361,75 @@ async function handleRemoveMember(req, res, session) {
         partyReject(res, owner.status, owner.error);
         return;
     }
-    await sql`
-        UPDATE party_members SET status = 'removed', removed_at = now(), member_token_hash = NULL
-        WHERE party_id = ${partyId}::uuid AND member_id = ${memberId}::uuid`;
-    await bumpPartyVersion(sql, partyId);
-    res.status(200).json({ ok: true });
+
+    const newInviteToken = await withPartyTransaction(async (client) => {
+        await client.query(
+            `UPDATE party_members SET status = 'removed', removed_at = now(), member_token_hash = NULL
+             WHERE party_id = $1::uuid AND member_id = $2::uuid`,
+            [partyId, memberId]
+        );
+        const token = await rotateInviteToken(client, partyId);
+        await client.query(
+            `UPDATE parties SET version = version + 1, updated_at = now() WHERE id = $1::uuid`,
+            [partyId]
+        );
+        return token;
+    });
+
+    res.status(200).json({
+        ok: true,
+        inviteToken: newInviteToken,
+        inviteUrl: `/p/${newInviteToken}`,
+    });
 }
 
-async function replaceMeals(sql, partyId, mealsInput) {
-    const meals = normalizeMealsInput(mealsInput).slice(0, MAX_MEALS);
-    await sql`DELETE FROM party_meals WHERE party_id = ${partyId}::uuid`;
-    for (const meal of meals) {
-        const recipeJson = JSON.stringify(meal.recipeIds || []);
-        await sql`
-            INSERT INTO party_meals (party_id, name, description, recipe_ids)
-            VALUES (${partyId}::uuid, ${meal.name}, ${meal.description}, ${recipeJson}::jsonb)`;
+async function handleRotateInvite(req, res, session) {
+    const body = parseBody(req);
+    const partyId = String(body.partyId || '').trim();
+    if (!partyId) {
+        partyReject(res, 400, 'bad_request');
+        return;
     }
+    const sql = await getPartySql();
+    const owner = await assertPartyOwner(sql, partyId, session);
+    if (!owner.ok) {
+        partyReject(res, owner.status, owner.error);
+        return;
+    }
+    const newInviteToken = await withPartyTransaction(async (client) => {
+        const token = await rotateInviteToken(client, partyId);
+        await client.query(
+            `UPDATE parties SET version = version + 1, updated_at = now() WHERE id = $1::uuid`,
+            [partyId]
+        );
+        return token;
+    });
+    res.status(200).json({
+        ok: true,
+        inviteToken: newInviteToken,
+        inviteUrl: `/p/${newInviteToken}`,
+    });
+}
+
+async function handleRename(req, res, session) {
+    const body = parseBody(req);
+    const partyId = String(body.partyId || '').trim();
+    const name = String(body.name || '').trim().slice(0, MAX_NAME);
+    if (!partyId || !name) {
+        partyReject(res, 400, 'bad_request');
+        return;
+    }
+    const sql = await getPartySql();
+    const owner = await assertPartyOwner(sql, partyId, session);
+    if (!owner.ok) {
+        partyReject(res, owner.status, owner.error);
+        return;
+    }
+    await sql`
+        UPDATE parties SET name = ${name}, version = version + 1, updated_at = now()
+        WHERE id = ${partyId}::uuid`;
+    const bundle = await loadPartyBundle(sql, partyId);
+    res.status(200).json({ ok: true, party: rowToPartySnapshot(bundle, { isOwner: true }) });
 }
 
 async function handleUpdateMeals(req, res, session) {
@@ -285,32 +441,29 @@ async function handleUpdateMeals(req, res, session) {
     }
     const sql = await getPartySql();
     const memberToken = memberTokenFromReq(req);
-    let allowed = false;
-    if (session) {
-        const owner = await assertPartyOwner(sql, partyId, session);
-        if (owner.ok) allowed = true;
-    }
-    if (!allowed) {
+    const ownerView = await isPartyOwner(sql, partyId, session);
+    if (!ownerView) {
         const member = await assertMemberAccess(sql, partyId, memberToken);
         if (!member.ok) {
             partyReject(res, member.status, member.error);
             return;
         }
     }
-    await replaceMeals(sql, partyId, body.meals);
-    if (body.name) {
-        const name = String(body.name).trim().slice(0, MAX_NAME);
-        if (name) {
-            await sql`UPDATE parties SET name = ${name}, updated_at = now() WHERE id = ${partyId}::uuid`;
-        }
-    }
-    const bumped = await bumpPartyVersion(sql, partyId);
+
+    await withPartyTransaction(async (client) => {
+        await replaceMealsOnClient(client, partyId, body.meals);
+        await client.query(
+            `UPDATE parties SET version = version + 1, updated_at = now() WHERE id = $1::uuid`,
+            [partyId]
+        );
+    });
+
     const bundle = await loadPartyBundle(sql, partyId);
     res.status(200).json({
         ok: true,
-        version: bumped.version,
-        updatedAt: new Date(bumped.updated_at).getTime(),
-        party: rowToPartySnapshot(bundle),
+        version: bundle.party.version,
+        updatedAt: new Date(bundle.party.updated_at).getTime(),
+        party: rowToPartySnapshot(bundle, { isOwner: ownerView }),
     });
 }
 
@@ -323,36 +476,19 @@ async function handleUploadImage(req, res, session) {
         return;
     }
     const sql = await getPartySql();
+    if (!(await durableRateLimit(res, sql, `party:upload:${session.sub}`, 10))) return;
     const owner = await assertPartyOwner(sql, partyId, session);
     if (!owner.ok) {
         partyReject(res, owner.status, owner.error);
         return;
     }
-    const raw = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-    let buffer;
-    try {
-        buffer = Buffer.from(raw, 'base64');
-    } catch {
-        partyReject(res, 400, 'bad_request');
-        return;
-    }
-    if (buffer.length > MAX_PARTY_IMAGE_BYTES) {
-        partyReject(res, 400, 'bad_request', { message: 'Image must be at most 500KB after compression.' });
-        return;
-    }
-    let imageUrl = null;
-    let imageBytea = null;
-    if (isBlobConfigured()) {
-        const uploaded = await uploadPartyImage({ partyId, buffer, contentType: 'image/jpeg' });
-        imageUrl = uploaded.url;
-    } else {
-        imageBytea = buffer;
-    }
-    await sql`
-        UPDATE parties SET image_url = ${imageUrl}, image_bytea = ${imageBytea}, updated_at = now()
-        WHERE id = ${partyId}::uuid`;
-    await bumpPartyVersion(sql, partyId);
-    res.status(200).json({ ok: true, imageUrl });
+    const parsed = parseValidatedImage(imageBase64, res);
+    if (!parsed) return;
+
+    await persistPartyImage(sql, partyId, parsed.buffer, parsed.contentType);
+    await sql`UPDATE parties SET version = version + 1, updated_at = now() WHERE id = ${partyId}::uuid`;
+    const rows = await sql`SELECT image_url FROM parties WHERE id = ${partyId}::uuid LIMIT 1`;
+    res.status(200).json({ ok: true, imageUrl: rows[0]?.image_url || null });
 }
 
 async function handleChangesSince(req, res, session) {
@@ -365,12 +501,8 @@ async function handleChangesSince(req, res, session) {
     }
     const sql = await getPartySql();
     const memberToken = memberTokenFromReq(req);
-    let allowed = false;
-    if (session) {
-        const owner = await assertPartyOwner(sql, partyId, session);
-        if (owner.ok) allowed = true;
-    }
-    if (!allowed) {
+    const ownerView = await isPartyOwner(sql, partyId, session);
+    if (!ownerView) {
         const member = await assertMemberAccess(sql, partyId, memberToken);
         if (!member.ok) {
             partyReject(res, member.status, member.error);
@@ -388,7 +520,7 @@ async function handleChangesSince(req, res, session) {
         changed,
         version: bundle.party.version,
         updatedAt: new Date(bundle.party.updated_at).getTime(),
-        party: changed ? rowToPartySnapshot(bundle) : null,
+        party: changed ? rowToPartySnapshot(bundle, { isOwner: ownerView }) : null,
     });
 }
 
@@ -399,51 +531,74 @@ async function handleMigrate(req, res, session) {
         partyReject(res, 400, 'bad_request');
         return;
     }
-    const sql = await getPartySql();
-    const inviteToken = generateToken(24);
-    const rows = await sql`
-        INSERT INTO parties (name, owner_sub, owner_email)
-        VALUES (${name}, ${session.sub}, ${session.email.toLowerCase()})
-        RETURNING id`;
-    const partyId = rows[0].id;
-    await sql`INSERT INTO invite_tokens (token, party_id) VALUES (${inviteToken}, ${partyId})`;
-    const ownerMemberToken = generateToken(32);
-    await sql`
-        INSERT INTO party_members (party_id, display_name, email, status, member_token_hash)
-        VALUES (
-            ${partyId},
-            ${session.name || 'Owner'},
-            ${session.email.toLowerCase()},
-            'active',
-            ${hashToken(ownerMemberToken)}
-        )`;
-    const members = Array.isArray(body.members) ? body.members : [];
-    for (const m of members) {
-        const displayName = String(m.displayName || m.name || '').trim().slice(0, MAX_DISPLAY);
-        if (!displayName || displayName.toLowerCase() === 'owner') continue;
-        await sql`
-            INSERT INTO party_members (party_id, display_name, email, status)
-            VALUES (${partyId}, ${displayName}, ${m.email || null}, 'active')`;
+    const membersInput = Array.isArray(body.members) ? body.members : [];
+    if (membersInput.length > MAX_MIGRATE_MEMBERS) {
+        partyReject(res, 400, 'bad_request', { message: `At most ${MAX_MIGRATE_MEMBERS} members can be migrated.` });
+        return;
     }
-    await replaceMeals(sql, partyId, body.meals);
+
+    const sql = await getPartySql();
+    if (!(await durableRateLimit(res, sql, `party:create:${session.sub}`, 10))) return;
+
+    let imagePayload = null;
     if (body.imageBase64) {
-        const raw = String(body.imageBase64).replace(/^data:image\/\w+;base64,/, '');
-        const buffer = Buffer.from(raw, 'base64');
-        if (buffer.length && buffer.length <= MAX_PARTY_IMAGE_BYTES) {
+        imagePayload = parseValidatedImage(body.imageBase64, res);
+        if (!imagePayload) return;
+    }
+
+    const { partyId, inviteToken, ownerMemberToken } = await withPartyTransaction(async (client) => {
+        const inviteToken = generateToken(24);
+        const partyRes = await client.query(
+            `INSERT INTO parties (name, owner_sub, owner_email) VALUES ($1, $2, $3) RETURNING id`,
+            [name, session.sub, session.email.toLowerCase()]
+        );
+        const partyId = partyRes.rows[0].id;
+        await insertInviteToken(client, partyId, inviteToken);
+        const ownerMemberToken = generateToken(32);
+        await client.query(
+            `INSERT INTO party_members (party_id, display_name, email, status, member_token_hash)
+             VALUES ($1::uuid, $2, $3, 'active', $4)`,
+            [partyId, session.name || 'Owner', session.email.toLowerCase(), hashToken(ownerMemberToken)]
+        );
+        let added = 1;
+        for (const m of membersInput) {
+            const displayName = String(m.displayName || m.name || '').trim().slice(0, MAX_DISPLAY);
+            if (!displayName || displayName.toLowerCase() === 'owner') continue;
+            if (added >= MAX_ACTIVE_MEMBERS) break;
+            const email = m.email ? String(m.email).trim().toLowerCase().slice(0, MAX_EMAIL_LEN) : null;
+            await client.query(
+                `INSERT INTO party_members (party_id, display_name, email, status)
+                 VALUES ($1::uuid, $2, $3, 'active')`,
+                [partyId, displayName, email]
+            );
+            added += 1;
+        }
+        await replaceMealsOnClient(client, partyId, body.meals);
+        if (imagePayload) {
             let imageUrl = null;
             let imageBytea = null;
             if (isBlobConfigured()) {
-                const uploaded = await uploadPartyImage({ partyId, buffer, contentType: 'image/jpeg' });
+                const uploaded = await uploadPartyImage({
+                    partyId,
+                    buffer: imagePayload.buffer,
+                    contentType: imagePayload.contentType,
+                });
                 imageUrl = uploaded.url;
             } else {
-                imageBytea = buffer;
+                imageBytea = imagePayload.buffer;
             }
-            await sql`
-                UPDATE parties SET image_url = ${imageUrl}, image_bytea = ${imageBytea}
-                WHERE id = ${partyId}::uuid`;
+            await client.query(
+                `UPDATE parties SET image_url = $1, image_bytea = $2, image_content_type = $3 WHERE id = $4::uuid`,
+                [imageUrl, imageBytea, imagePayload.contentType, partyId]
+            );
         }
-    }
-    await bumpPartyVersion(sql, partyId);
+        await client.query(
+            `UPDATE parties SET version = version + 1, updated_at = now() WHERE id = $1::uuid`,
+            [partyId]
+        );
+        return { partyId, inviteToken, ownerMemberToken };
+    });
+
     const bundle = await loadPartyBundle(sql, partyId);
     res.status(200).json({
         ok: true,
@@ -451,7 +606,7 @@ async function handleMigrate(req, res, session) {
         ownerMemberToken,
         inviteToken,
         inviteUrl: `/p/${inviteToken}`,
-        party: rowToPartySnapshot({ ...bundle, inviteToken }),
+        party: rowToPartySnapshot(bundle, { isOwner: true }),
     });
 }
 
@@ -463,7 +618,7 @@ async function handlePartyImage(req, res) {
     }
     const sql = await getPartySql();
     const rows = await sql`
-        SELECT image_url, image_bytea FROM parties WHERE id = ${partyId}::uuid LIMIT 1`;
+        SELECT image_url, image_bytea, image_content_type FROM parties WHERE id = ${partyId}::uuid LIMIT 1`;
     const row = rows[0];
     if (!row) {
         partyReject(res, 404, 'not_found');
@@ -474,8 +629,7 @@ async function handlePartyImage(req, res) {
         return;
     }
     if (row.image_bytea) {
-        res.setHeader('Content-Type', 'image/jpeg');
-        res.setHeader('Cache-Control', 'public, max-age=3600');
+        applyBinaryImageHeaders(res, row.image_content_type || 'application/octet-stream');
         res.status(200).send(Buffer.from(row.image_bytea));
         return;
     }
@@ -491,7 +645,7 @@ export default async function handler(req, res) {
             partyReject(res, 503, 'misconfigured');
             return;
         }
-        if (!rateLimit(req, res, 'party-image', 60)) return;
+        if (!softRateLimit(req, res, 'party-image', 60)) return;
         try {
             await handlePartyImage(req, res);
         } catch (error) {
@@ -510,14 +664,16 @@ export default async function handler(req, res) {
         partyReject(res, 503, 'misconfigured');
         return;
     }
-    if (!rateLimit(req, res, 'party-api', 40)) return;
+    if (!softRateLimit(req, res, 'party-api', 40)) return;
 
     let session = null;
     const needsOwner =
         action === 'create' ||
         action === 'remove_member' ||
         action === 'upload_image' ||
-        action === 'migrate';
+        action === 'migrate' ||
+        action === 'rotate_invite' ||
+        action === 'rename';
     const optionalSession =
         action === 'get' || action === 'update_meals' || action === 'changes_since';
 
@@ -552,6 +708,12 @@ export default async function handler(req, res) {
                 break;
             case 'remove_member':
                 await handleRemoveMember(req, res, session);
+                break;
+            case 'rotate_invite':
+                await handleRotateInvite(req, res, session);
+                break;
+            case 'rename':
+                await handleRename(req, res, session);
                 break;
             case 'update_meals':
                 await handleUpdateMeals(req, res, session);

@@ -43,8 +43,17 @@ async function applyPartySchemaOnce() {
 /**
  * Idempotent schema ensure — once per serverless instance (memoized), guarded by pg_advisory_xact_lock.
  */
+export function isPartyAutoMigrateEnabled() {
+    const flag = process.env.PARTY_AUTO_MIGRATE;
+    if (flag === '0' || flag === 'false' || flag === 'off') return false;
+    return true;
+}
+
 export function ensurePartySchema() {
     if (!isPartyDatabaseConfigured()) {
+        return Promise.resolve();
+    }
+    if (!isPartyAutoMigrateEnabled()) {
         return Promise.resolve();
     }
     if (!schemaReadyPromise) {

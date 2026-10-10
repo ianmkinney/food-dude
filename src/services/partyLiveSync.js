@@ -117,10 +117,10 @@ export async function fetchLiveChanges({ livePartyId, sinceVersion, memberToken,
     return data;
 }
 
-export async function pushLiveMeals({ livePartyId, meals, name, memberToken }) {
+export async function pushLiveMeals({ livePartyId, meals, memberToken }) {
     const token = memberToken || (await getStoredMemberToken(livePartyId));
     const ownerToken = await getOwnerSessionToken();
-    const body = { action: 'update_meals', partyId: livePartyId, meals, name };
+    const body = { action: 'update_meals', partyId: livePartyId, meals };
     return partyFetch('/party?action=update_meals', {
         body,
         memberToken: token,
@@ -140,8 +140,18 @@ export async function uploadLivePartyImage({ livePartyId, imageBase64 }) {
 export async function removeLiveMember({ livePartyId, memberId }) {
     const sessionToken = await getOwnerSessionToken();
     if (!sessionToken) throw new Error('Sign in as owner to remove members.');
-    return partyFetch('/party?action=remove_member', {
+    const data = await partyFetch('/party?action=remove_member', {
         body: { action: 'remove_member', partyId: livePartyId, memberId },
+        sessionToken,
+    });
+    return data;
+}
+
+export async function renameLiveParty({ livePartyId, name }) {
+    const sessionToken = await getOwnerSessionToken();
+    if (!sessionToken) throw new Error('Sign in as owner to rename the party.');
+    return partyFetch('/party?action=rename', {
+        body: { action: 'rename', partyId: livePartyId, name },
         sessionToken,
     });
 }
@@ -214,7 +224,6 @@ export async function pushLocalPartyMealsToLive(localParty) {
     const result = await pushLiveMeals({
         livePartyId: localParty.live_party_id,
         meals: payload,
-        name: localParty.name,
     });
     await partyOperations.setLiveSyncFields(localParty.id, {
         liveVersion: result.version,

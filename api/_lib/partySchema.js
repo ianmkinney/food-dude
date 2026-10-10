@@ -2,12 +2,12 @@
 export const PARTY_SCHEMA_ADVISORY_LOCK_KEY = '9037428910123';
 
 export const PARTY_SCHEMA_STATEMENTS = [
-    'CREATE EXTENSION IF NOT EXISTS pgcrypto',
     `CREATE TABLE IF NOT EXISTS parties (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     image_url TEXT,
     image_bytea BYTEA,
+    image_content_type TEXT,
     owner_sub TEXT NOT NULL,
     owner_email TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
@@ -39,8 +39,19 @@ export const PARTY_SCHEMA_STATEMENTS = [
     token TEXT PRIMARY KEY,
     party_id UUID NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
     revoked BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '30 days')
 )`,
     'CREATE INDEX IF NOT EXISTS idx_invite_tokens_party_id ON invite_tokens(party_id)',
+    `CREATE TABLE IF NOT EXISTS rate_limits (
+    rate_key TEXT NOT NULL,
+    window_start TIMESTAMPTZ NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (rate_key, window_start)
+)`,
     'ALTER TABLE parties ADD COLUMN IF NOT EXISTS image_bytea BYTEA',
+    'ALTER TABLE parties ADD COLUMN IF NOT EXISTS image_content_type TEXT',
+    'ALTER TABLE invite_tokens ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ',
+    `UPDATE invite_tokens SET expires_at = created_at + interval '30 days'
+     WHERE expires_at IS NULL`,
 ];
