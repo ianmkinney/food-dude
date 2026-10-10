@@ -10,6 +10,10 @@ function sourcePlatformLabel({ sourceUrl, sourcePlatform, author }) {
         const handle = author ? String(author).replace(/^@/, '') : null;
         return handle ? `Instagram · @${handle}` : 'Instagram';
     }
+    if (sourcePlatform === 'tiktok') {
+        const handle = author ? String(author).replace(/^@/, '') : null;
+        return handle ? `TikTok · @${handle}` : 'TikTok';
+    }
     if (sourcePlatform) return sourcePlatform;
     try {
         return new URL(sourceUrl).hostname.replace(/^www\./, '');
@@ -123,4 +127,13 @@ export async function importRecipeFromVideoAsset(asset, options = {}) {
 export function extractInstagramUrlFromText(text) {
     const match = String(text || '').match(/https?:\/\/(?:www\.)?instagram\.com\/[^\s]+/i);
     return match ? match[0].replace(/[),.]+$/, '') : null;
+}
+
+export function extractTikTokUrlFromText(text) {
+    const match = String(text || '').match(/https?:\/\/(?:vm|vt|www\.)?tiktok\.com\/[^\s]+/i);
+    return match ? match[0].replace(/[),.]+$/, '') : null;
+}
+
+export function extractSocialUrlFromText(text) {
+    return extractInstagramUrlFromText(text) || extractTikTokUrlFromText(text);
 }

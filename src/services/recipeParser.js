@@ -3,12 +3,16 @@ import { generateMultimodal, generateText, stripCodeFences } from './aiClient';
 import { isAiConfigured, requireAiConfigured } from './aiSettings';
 import { prepareImagesForAi, toPersistentImageUri } from './mediaPrep';
 import { friendlyMediaErrorMessage } from './mediaTypes';
-import { fetchRecipeImportViaApi, isInstagramPostUrl } from './recipeUrlImport';
+import { fetchRecipeImportViaApi, isSocialPostUrl } from './recipeUrlImport';
 
 function sourcePlatformLabel({ sourceUrl, sourcePlatform, author }) {
     if (sourcePlatform === 'instagram') {
         const handle = author ? String(author).replace(/^@/, '') : null;
         return handle ? `Instagram · @${handle}` : 'Instagram';
+    }
+    if (sourcePlatform === 'tiktok') {
+        const handle = author ? String(author).replace(/^@/, '') : null;
+        return handle ? `TikTok · @${handle}` : 'TikTok';
     }
     try {
         return new URL(sourceUrl).hostname.replace(/^www\./, '');
@@ -243,7 +247,7 @@ ${input}`;
 export const parseRecipeFromUrl = async (url) => {
     try {
         const viaApi =
-            Platform.OS === 'web' || isInstagramPostUrl(url) ? await fetchRecipeImportViaApi(url) : null;
+            Platform.OS === 'web' || isSocialPostUrl(url) ? await fetchRecipeImportViaApi(url) : null;
         if (viaApi) {
             if (viaApi.kind === 'structured') {
                 const aiExtracted = Boolean(viaApi.aiExtracted || viaApi.recipe?.aiExtracted);

@@ -34,8 +34,8 @@ import { useSpeechInput } from '../voice/useSpeechInput';
 import { WEB_SPEECH_NOTICE } from '../voice/webSpeechRecognition';
 import * as ImagePicker from 'expo-image-picker';
 import { recipeOperations } from '../database/operations';
-import { importRecipeFromVideoAsset, extractInstagramUrlFromText } from '../services/recipeVideoImport';
-import { isInstagramPostUrl } from '../services/recipeUrlImport';
+import { importRecipeFromVideoAsset, extractSocialUrlFromText } from '../services/recipeVideoImport';
+import { isSocialPostUrl, isTikTokPostUrl, isInstagramPostUrl } from '../services/recipeUrlImport';
 import { askSous, type SousTurn } from './agent';
 import type { SousCard } from './tools';
 
@@ -141,10 +141,17 @@ export default function SousScreen() {
             setAttachedVideo(null);
             try {
                 if (videoAsset) {
-                    const igUrl = extractInstagramUrlFromText(text) || (isInstagramPostUrl(text) ? text : null);
+                    const socialUrl =
+                        extractSocialUrlFromText(text) || (isSocialPostUrl(text) ? text : null);
                     const imported = await importRecipeFromVideoAsset(videoAsset, {
-                        sourceUrl: igUrl || undefined,
-                        sourcePlatform: igUrl ? 'instagram' : undefined,
+                        sourceUrl: socialUrl || undefined,
+                        sourcePlatform: socialUrl
+                            ? isTikTokPostUrl(socialUrl)
+                                ? 'tiktok'
+                                : isInstagramPostUrl(socialUrl)
+                                  ? 'instagram'
+                                  : undefined
+                            : undefined,
                         note: text,
                     });
                     if (!imported.success || !imported.recipe) {

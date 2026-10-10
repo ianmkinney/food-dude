@@ -5,6 +5,8 @@ import { checkMinuteRateLimit } from '../lib/store.js';
 import { assertHttpOrHttpsUrl, safeFetchHtml } from '../lib/ssrf.js';
 import { extractRecipeFromHtml, hasRecipeShape } from '../lib/recipeExtract.js';
 import { importInstagramPost, isInstagramPostUrl } from '../lib/instagramImport.js';
+import { importTikTokPost, isTikTokPostUrl } from '../lib/tiktokImport.js';
+import { isStructuredImportPayload, jsonFromSocialImport, mapSocialImportError } from '../lib/socialImportRespond.js';
 import { runVideoRecipeExtraction, validateUploadedVideo } from '../lib/importVideoShared.js';
 
 const HEAVY_RL_PER_MINUTE = 3;
@@ -24,6 +26,8 @@ const MSG = {
         "Instagram didn't share the caption (login required). Paste the caption text below or upload a screenshot or screen recording of the post.",
     instagram_no_caption:
         "Couldn't read an Instagram caption from that link. Paste the caption or upload a screenshot or screen recording of the post.",
+    tiktok_no_caption:
+        "Couldn't read a TikTok description from that link. Paste the caption or upload a screen recording of the video.",
     video_too_large: 'That video is too large (max 25 MB). Trim the clip or upload a shorter screen recording.',
 };
 
@@ -42,8 +46,21 @@ function mapFetchError(code) {
     return 'site_blocked';
 }
 
-function isStructuredImportPayload(body) {
-    return Boolean(body?.title && Array.isArray(body.ingredients) && body.ingredients.length && Array.isArray(body.steps));
+async function handleSocialImport(res, platform, inputUrl, session) {
+    const apiKey = resolveOpenRouterApiKey(session.email);
+    const importer = platform === 'tiktok' ? importTikTokPost : importInstagramPost;
+    try {
+        const result = await importer(inputUrl, {
+            apiKey,
+            onHeavyRateLimit: () => checkMinuteRateLimit(`import-heavy:${session.sub}`, HEAVY_RL_PER_MINUTE),
+        });
+        const { status, body } = jsonFromSocialImport(result, platform);
+        res.status(status).json(body);
+    } catch (error) {
+        const code = error?.message || `${platform}_no_caption`;
+        const mapped = mapSocialImportError(code, platform);
+        reject(res, mapped.status, mapped.error);
+    }
 }
 
 async function handleVideoUpload(req, res, session) {
@@ -69,7 +86,7 @@ async function handleVideoUpload(req, res, session) {
     }
     const sourceUrl = typeof req.body?.sourceUrl === 'string' ? req.body.sourceUrl : null;
     const author = typeof req.body?.author === 'string' ? req.body.author : null;
-    const sourcePlatform = typeof req.body?.sourcePlatform === 'string' ? req.body.sourcePlatform : 'instagram';
+    const sourcePlatform = typeof req.body?.sourcePlatform === 'string' ? req.body.sourcePlatform : 'video';
     const note = typeof req.body?.note === 'string' ? req.body.note : '';
 
     try {
@@ -149,42 +166,14 @@ export default async function handler(req, res) {
         return;
     }
 
+    if (isTikTokPostUrl(url)) {
+        await handleSocialImport(res, 'tiktok', url, session);
+        return;
+    }
+
     if (isInstagramPostUrl(url)) {
-        try {
-            const apiKey = resolveOpenRouterApiKey(session.email);
-            const ig = await importInstagramPost(url, {
-                apiKey,
-                onHeavyRateLimit: () => checkMinuteRateLimit(`import-heavy:${session.sub}`, HEAVY_RL_PER_MINUTE),
-            });
-            if (isStructuredImportPayload(ig)) {
-                res.status(200).json(ig);
-                return;
-            }
-            res.status(200).json({
-                text: ig.text,
-                image: ig.image,
-                sourceUrl: ig.sourceUrl,
-                sourcePlatform: 'instagram',
-                author: ig.author,
-            });
-            return;
-        } catch (error) {
-            const code = error?.message || 'instagram_no_caption';
-            if (code === 'instagram_login_wall') {
-                reject(res, 422, 'instagram_login_wall');
-                return;
-            }
-            if (code === 'rate_limited') {
-                reject(res, 429, 'rate_limited');
-                return;
-            }
-            if (code === 'invalid_instagram_url') {
-                reject(res, 400, 'bad_request');
-                return;
-            }
-            reject(res, 404, 'instagram_no_caption');
-            return;
-        }
+        await handleSocialImport(res, 'instagram', url, session);
+        return;
     }
 
     let fetched;

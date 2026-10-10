@@ -20,6 +20,8 @@ const modules = [
     'lib/ssrf.js',
     'lib/recipeExtract.js',
     'lib/instagramImport.js',
+    'lib/tiktokImport.js',
+    'lib/socialImportRespond.js',
     'lib/importVideoShared.js',
     'lib/recipeVideoAi.js',
     'recipes/import.js',

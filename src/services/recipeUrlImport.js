@@ -2,6 +2,22 @@ import { Platform } from 'react-native';
 import { getApiBaseUrl } from '../config/api';
 import { getOwnerSessionToken } from '../platform/ownerSession';
 
+export function isTikTokPostUrl(url) {
+    try {
+        const parsed = new URL(String(url).trim());
+        const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+        if (host === 'vm.tiktok.com' || host === 'vt.tiktok.com') return true;
+        if (!host.endsWith('tiktok.com')) return false;
+        return /\/@[^/]+\/video\/\d+/i.test(parsed.pathname) || /\/video\/\d+/i.test(parsed.pathname) || /\/t\/\w+/i.test(parsed.pathname);
+    } catch {
+        return false;
+    }
+}
+
+export function isSocialPostUrl(url) {
+    return isInstagramPostUrl(url) || isTikTokPostUrl(url);
+}
+
 export function isInstagramPostUrl(url) {
     try {
         const parsed = new URL(String(url).trim());
@@ -25,11 +41,25 @@ const IMPORT_ERRORS = {
         "Instagram didn't share the caption (login required). Paste the caption below or upload a screenshot of the post.",
     instagram_no_caption:
         "Couldn't read an Instagram caption from that link. Paste the caption or upload a screenshot of the post.",
+    tiktok_no_caption:
+        "Couldn't read a TikTok description from that link. Paste the caption or upload a screen recording of the video.",
     rate_limited: 'Too many import attempts. Wait a moment and try again.',
 };
 
 export function instagramImportFallbackHint() {
     return ' Paste the caption text below, or upload a screenshot of the post.';
+}
+
+export function socialImportFallbackHint(url) {
+    if (isTikTokPostUrl(url)) {
+        return ' Paste the caption below, or attach a screen recording in Ampi chat.';
+    }
+    return instagramImportFallbackHint();
+}
+
+function tiktokPlatformLabel(author) {
+    const handle = author ? String(author).replace(/^@/, '') : null;
+    return handle ? `TikTok · @${handle}` : 'TikTok';
 }
 
 function hostnameFromUrl(url) {
@@ -53,10 +83,12 @@ function mapStructuredPayload(payload, fallbackUrl) {
         unit: null,
         section: null,
     }));
-    const platform =
-        payload.sourcePlatform === 'instagram'
-            ? instagramPlatformLabel(sourceUrl, payload.author)
-            : hostnameFromUrl(sourceUrl);
+    let platform = hostnameFromUrl(sourceUrl);
+    if (payload.sourcePlatform === 'instagram') {
+        platform = instagramPlatformLabel(sourceUrl, payload.author);
+    } else if (payload.sourcePlatform === 'tiktok') {
+        platform = tiktokPlatformLabel(payload.author);
+    }
     return {
         title: payload.title || 'Imported recipe',
         description: payload.description || null,
@@ -121,7 +153,7 @@ async function postRecipeImport(url) {
  * @returns {Promise<{ kind: 'structured', recipe: object } | { kind: 'text', text: string, sourceUrl: string } | { kind: 'error', message: string, code?: string }>}
  */
 export async function fetchRecipeImportViaApi(url) {
-    const useServer = Platform.OS === 'web' || isInstagramPostUrl(url);
+    const useServer = Platform.OS === 'web' || isSocialPostUrl(url);
     if (!useServer) {
         return { kind: 'error', message: 'Server import is only used on web.', code: 'not_web' };
     }
