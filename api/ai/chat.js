@@ -7,6 +7,13 @@ import {
     resolveOpenRouterApiKey,
 } from '../_lib/env.js';
 import { bearerToken, verifySession } from '../_lib/session.js';
+import {
+    IMAGE_REQUESTS_PER_MINUTE,
+    OpenRouterImageError,
+    getOpenRouterImageModel,
+    openRouterGenerateImage,
+    validateImagePrompt,
+} from '../_lib/openRouterImage.js';
 import { checkMinuteRateLimit } from '../_lib/store.js';
 
 const DAILY_CREDIT_MSG = 'Daily AI limit reached. Try again tomorrow or ask Ian to raise your OpenRouter credit limit.';
@@ -209,6 +216,49 @@ export default async function handler(req, res) {
     const apiKey = resolveOpenRouterApiKey(session.email);
     if (!apiKey) {
         reject(res, 403, 'no_platform_key');
+        return;
+    }
+
+    if (req.body?.mode === 'image') {
+        let prompt;
+        try {
+            prompt = validateImagePrompt(req.body?.prompt);
+        } catch (error) {
+            console.warn('[ai/chat] image bad request:', error?.message || error);
+            reject(res, 400, 'bad_request');
+            return;
+        }
+
+        if (!checkMinuteRateLimit(`image:${session.sub}`, IMAGE_REQUESTS_PER_MINUTE)) {
+            reject(res, 429, 'rate_limited');
+            return;
+        }
+
+        const model = getOpenRouterImageModel();
+        const startedAt = Date.now();
+
+        try {
+            const { imageUri } = await openRouterGenerateImage({ apiKey, model, prompt });
+            res.status(200).json({
+                imageUri,
+                model,
+                latencyMs: Date.now() - startedAt,
+            });
+        } catch (error) {
+            const upstreamStatus = error instanceof OpenRouterImageError ? error.status : null;
+            const reason = error?.message || 'Unknown error';
+            console.error(
+                `[ai/chat] image upstream failed: status=${upstreamStatus} model=${error?.model || model} ${reason}`,
+            );
+            if (upstreamStatus === 402) {
+                reject(res, 429, 'credit_limit');
+                return;
+            }
+            res.status(502).json({
+                error: 'upstream_failed',
+                message: MSG.upstream_failed,
+            });
+        }
         return;
     }
 

@@ -14,6 +14,7 @@ const modules = [
     '_lib/session.js',
     '_lib/google.js',
     '_lib/store.js',
+    '_lib/openRouterImage.js',
     'auth/google.js',
     'auth/session.js',
     'ai/chat.js',
@@ -49,6 +50,16 @@ if (checkMinuteRateLimit('verify-user')) {
     throw new Error('rate limit should block 11th request');
 }
 console.log('ok in-memory rate limit');
+
+for (let i = 0; i < 5; i++) {
+    if (!checkMinuteRateLimit('verify-image-user', 5)) {
+        throw new Error('image rate limit should allow 5 per minute');
+    }
+}
+if (checkMinuteRateLimit('verify-image-user', 5)) {
+    throw new Error('image rate limit should block 6th request');
+}
+console.log('ok image rate limit');
 
 process.env.ALLOWED_EMAILS = 'owner@example.com,tester@example.com';
 process.env.OWNER_EMAIL = 'owner@example.com';
