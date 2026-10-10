@@ -28,7 +28,7 @@ import { useOnboardingTour } from '../onboarding/useOnboardingTour';
 import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION, ASSISTANT_TAGLINE } from '../config/assistant';
 import { useTourTarget } from '../onboarding/tourTargets';
 import { getSpeechEngine, primeSpeechOnWeb, shouldSpeak, type SpeechEngine } from '../voice/speech';
-import { getVoiceSettings, setAutoSpeak, setVoiceMuted } from '../voice/voiceSettings';
+import { getVoiceSettings, hasSeenWebSpeechNotice, markWebSpeechNoticeSeen, setAutoSpeak, setVoiceMuted } from '../voice/voiceSettings';
 import { useSpeechInput } from '../voice/useSpeechInput';
 import { WEB_SPEECH_NOTICE } from '../voice/webSpeechRecognition';
 import { askSous, type SousTurn } from './agent';
@@ -135,6 +135,23 @@ export default function SousScreen() {
     const micTarget = useTourTarget('sous-composer');
     const listening = mic.state === 'listening';
     const draft = listening ? mic.transcript : input;
+
+    const [micTip, setMicTip] = useState(false);
+    const micTipSeen = useRef(true);
+    useEffect(() => {
+        if (mic.isWeb) hasSeenWebSpeechNotice().then((seen) => (micTipSeen.current = seen));
+    }, [mic.isWeb]);
+    useEffect(() => {
+        if (!micTip) return undefined;
+        const t = setTimeout(() => setMicTip(false), 8000);
+        return () => clearTimeout(t);
+    }, [micTip]);
+    const showMicTipOnce = () => {
+        if (!mic.isWeb || micTipSeen.current) return;
+        micTipSeen.current = true;
+        setMicTip(true);
+        markWebSpeechNoticeSeen();
+    };
 
     useEffect(() => {
         if (messages.length) requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
@@ -304,12 +321,12 @@ export default function SousScreen() {
             <Text style={[styles.helloSub, { color: c.text.secondary }]}>
                 Ask what to cook. I can find or import recipes, plan meals, and fill your pantry and grocery list.
             </Text>
-            {mic.isWeb && mic.isSupported && (
-                <Text style={[styles.webVoiceNote, { color: c.text.tertiary }]}>Tap the mic to talk. {WEB_SPEECH_NOTICE}</Text>
-            )}
         </View>
     );
 
+    // Two rows that scroll together, so every suggestion is a tap away without
+    // pushing the hero up.
+    const chipRows = [SUGGESTIONS.filter((_, i) => i % 2 === 0), SUGGESTIONS.filter((_, i) => i % 2 === 1)];
     const chips = (
         <ScrollView
             horizontal
@@ -319,17 +336,21 @@ export default function SousScreen() {
             contentContainerStyle={styles.chips}
             accessibilityLabel="Suggestions"
         >
-            {SUGGESTIONS.map((s, i) => (
-                <Enter key={s} index={i}>
-                    <AnimatedPressable
-                        onPress={() => send(s)}
-                        scaleTo={motion.scale.press}
-                        style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }]}
-                        accessibilityRole="button"
-                    >
-                        <Text style={[styles.chipText, { color: c.text.primary }]} numberOfLines={1}>{s}</Text>
-                    </AnimatedPressable>
-                </Enter>
+            {chipRows.map((row, r) => (
+                <View key={r} style={styles.chipRow}>
+                    {row.map((s, i) => (
+                        <Enter key={s} index={i * 2 + r}>
+                            <AnimatedPressable
+                                onPress={() => send(s)}
+                                scaleTo={motion.scale.press}
+                                style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }]}
+                                accessibilityRole="button"
+                            >
+                                <Text style={[styles.chipText, { color: c.text.primary }]} numberOfLines={1}>{s}</Text>
+                            </AnimatedPressable>
+                        </Enter>
+                    ))}
+                </View>
             ))}
         </ScrollView>
     );
@@ -393,6 +414,20 @@ export default function SousScreen() {
             )}
             {!started && chips}
             <View style={[styles.composer, { borderTopColor: c.borderSoft, backgroundColor: c.background }]}>
+                {micTip && (
+                    <Enter springy distance={8} style={styles.micTipWrap}>
+                        <Pressable
+                            onPress={() => setMicTip(false)}
+                            style={[styles.micTip, { backgroundColor: c.surfaceElevated, borderColor: c.border }]}
+                            accessibilityRole="alert"
+                            accessibilityLiveRegion="polite"
+                            accessibilityHint="Tap to dismiss"
+                        >
+                            <Text style={[styles.micTipText, { color: c.text.primary }]}>{WEB_SPEECH_NOTICE}</Text>
+                            <View style={[styles.micTipArrow, { backgroundColor: c.surfaceElevated, borderColor: c.border }]} />
+                        </Pressable>
+                    </Enter>
+                )}
                 {mic.isSupported ? (
                     <Pressable
                         ref={micTarget}
@@ -401,6 +436,8 @@ export default function SousScreen() {
                             mic.pressProps.onPress
                                 ? () => {
                                       if (autoSpeak) primeSpeechOnWeb();
+                                      if (!listening) showMicTipOnce();
+                                      else setMicTip(false);
                                       mic.pressProps.onPress?.();
                                   }
                                 : undefined
@@ -452,13 +489,14 @@ const styles = StyleSheet.create({
     identityName: { fontSize: 18 },
     iconButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
     list: { paddingHorizontal: 16, paddingVertical: 8, gap: 16 },
-    listEmpty: { flexGrow: 1, justifyContent: 'center' },
-    hero: { alignItems: 'center', paddingHorizontal: 8, paddingBottom: 16 },
+    listEmpty: { flexGrow: 1, justifyContent: 'flex-end' },
+    hero: { alignItems: 'center', paddingHorizontal: 8, paddingBottom: 8 },
     hello: { fontSize: 30, marginTop: 16, textAlign: 'center' },
     pronounce: { fontSize: 13, marginTop: 4, textAlign: 'center' },
     helloSub: { fontSize: 16, lineHeight: 24, textAlign: 'center', marginTop: 12, maxWidth: 360 },
     chipScroll: { flexGrow: 0, flexShrink: 0 },
-    chips: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
+    chips: { flexDirection: 'column', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
+    chipRow: { flexDirection: 'row', gap: 8 },
     chip: { minHeight: 44, borderWidth: 1, borderRadius: 22, paddingHorizontal: 16, justifyContent: 'center' },
     chipText: { fontSize: 15, fontWeight: '600' },
     bubble: { borderRadius: 24, paddingHorizontal: 16, paddingVertical: 12, maxWidth: '88%' },
@@ -481,7 +519,10 @@ const styles = StyleSheet.create({
     thinking: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     thinkingBubble: { borderWidth: 1, borderRadius: 24, borderBottomLeftRadius: 8, paddingHorizontal: 16, paddingVertical: 14 },
     thinkingText: { fontSize: 14 },
-    webVoiceNote: { fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 16, maxWidth: 360 },
+    micTipWrap: { position: 'absolute', left: 12, bottom: '100%', marginBottom: 6, zIndex: 2 },
+    micTip: { maxWidth: 300, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, ...Platform.select({ web: { boxShadow: '0 6px 20px rgba(0,0,0,0.18)' }, default: {} }) },
+    micTipText: { fontSize: 13, lineHeight: 19 },
+    micTipArrow: { position: 'absolute', left: 16, bottom: -6, width: 12, height: 12, borderRightWidth: 1, borderBottomWidth: 1, transform: [{ rotate: '45deg' }] },
     micStatus: { textAlign: 'center', fontSize: 13, paddingHorizontal: 16, paddingBottom: 8 },
     composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
     input: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderRadius: 22, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11, fontSize: 16, lineHeight: 20 },
