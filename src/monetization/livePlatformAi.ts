@@ -23,7 +23,15 @@ export class OwnerAiError extends Error {
     }
 }
 
-type ChatPayload = { text?: string; model?: string; fallbackFrom?: string; latencyMs?: number; error?: string; message?: string };
+type ChatPayload = {
+    text?: string;
+    imageUri?: string;
+    model?: string;
+    fallbackFrom?: string;
+    latencyMs?: number;
+    error?: string;
+    message?: string;
+};
 
 async function postOwnerChat(body: Record<string, unknown>): Promise<ChatPayload> {
     const token = await getOwnerSessionToken();
@@ -101,9 +109,12 @@ export const livePlatformAi: PlatformAiClient = {
             feature: request.feature,
             images: request.images?.map((img) => ({ data: img.data, mimeType: img.mimeType })),
         }),
-    generateImage: async (_request: PlatformImageRequest) => {
-        throw new Error(
-            'Recipe image generation on owner platform AI is not supported yet. Add a Gemini API key in Account.'
-        );
+    generateImage: async (request: PlatformImageRequest) => {
+        const payload = await postOwnerChat({ mode: 'image', prompt: request.prompt });
+        const imageUri = payload?.imageUri;
+        if (!imageUri) {
+            throw new Error('The image model returned no photo. Try again later.');
+        }
+        return { imageUri };
     },
 };
