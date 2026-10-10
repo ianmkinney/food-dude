@@ -7,7 +7,8 @@ import { useTheme } from '../context/ThemeContext';
 import AnimatedPressable from './AnimatedPressable';
 import { Wordmark } from './Brand';
 
-const HeaderTitle = () => <Wordmark height={24} />;
+// public/index.html flies the startup wordmark onto this element by id.
+const HeaderTitle = () => <Wordmark height={24} nativeID="af-header-logo" />;
 
 const HeaderIconButton = ({ icon, onPress, label, color }) => (
     <AnimatedPressable

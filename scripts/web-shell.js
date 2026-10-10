@@ -19,27 +19,40 @@ const SPARKLE =
 const SPEAKER =
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
 
+// Same letters and colour classes as the splash wordmark in public/index.html,
+// so the splash can fly its wordmark onto this one.
+const WORDMARK = [
+    ['A', 'ink'], ['m', 'ink'], ['p', 'ink'], ['l', 'ink'], ['i', 'ink'],
+    ['F', 'or'], ['o', 'to'], ['o', 'to'], ['d', 'gr'],
+]
+    .map(([ch, tone]) => `<span class="af-${tone}">${ch}</span>`)
+    .join('');
+
 function buildShell({ fontFaces = '' } = {}) {
     const assistant = readJson('src/config/assistant.json');
     const script = readJson('assets/audio/sous/script.json');
+    const [line1, line2] = script.introScreen.lines;
+    const spoken = `Hi, I'm ${assistant.name}. ${line1} ${line2}`;
+    if (script.lines.intro !== spoken) {
+        throw new Error(`script.json lines.intro must read the on-screen intro:\n  ${spoken}`);
+    }
     const name = escapeHtml(assistant.name);
-    const caption = escapeHtml(script.lines.intro);
-    const lead = `<b>Hi, I'm ${name}, ${escapeHtml(assistant.tagline)}.</b> I'm an AI assistant, not a person. My voice is generated on your device, and AI can make mistakes, so always check ingredients and labels yourself.`;
     return [
         fontFaces && `<style>${fontFaces}</style>`,
         '<div id="af-shell" aria-busy="true">',
         '<div class="afs-screen">',
         '<div class="afs-top">',
         '<div class="afs-mark"></div>',
-        '<div class="afs-name-col">',
-        `<div class="afs-name">AmpliFood · ${name}</div>`,
-        `<div class="afs-name-row"><span class="afs-small">${escapeHtml(assistant.pronunciation)}</span><span class="afs-badge">${SPARKLE}AI-generated</span></div>`,
-        '</div>',
+        `<div class="afs-name-col"><div class="afs-logo" aria-label="AmpliFood"><div class="afs-word">${WORDMARK}</div></div></div>`,
         `<div class="afs-mute">${SPEAKER}</div>`,
         '</div>',
         '<div class="afs-content">',
-        `<div class="afs-caption"><div class="afs-caption-tag">CAPTION</div><div class="afs-caption-text">${caption}</div></div>`,
-        `<p class="afs-lead">${lead}</p>`,
+        '<div class="afs-headline">',
+        `<h1 class="afs-h1">Hi, I'm ${name}</h1>`,
+        `<div class="afs-name-row"><span class="afs-small">${escapeHtml(assistant.pronunciation)}</span><span class="afs-badge">${SPARKLE}AI-generated</span></div>`,
+        '</div>',
+        `<p class="afs-lead">${escapeHtml(line1)}</p>`,
+        `<p class="afs-body">${escapeHtml(line2)}</p>`,
         '<div class="afs-row"><button class="afs-button afs-primary" disabled>Let\'s go</button><button class="afs-button" disabled>Skip setup</button></div>',
         '</div>',
         '</div>',

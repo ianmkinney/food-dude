@@ -7,6 +7,7 @@ import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import GuitarMark from '../brand/GuitarMark';
+import { Wordmark } from '../components/Brand';
 import SourceLabel from '../components/SourceLabel';
 import { AiBadge, AiDisclaimer, AllergyNotice } from '../ai/AiLabel';
 import {
@@ -22,11 +23,11 @@ import { getApiKey, getSelectedProvider } from '../services/aiSettings';
 import { generateText, stripCodeFences } from '../services/aiClient';
 import { recipeOperations, userOperations } from '../database/operations';
 import { findAllergenMatches, parseAllergies } from '../safety/allergens';
-import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION, ASSISTANT_TAGLINE } from '../config/assistant';
+import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION } from '../config/assistant';
 import { MINIMUM_AGE } from '../config/legal';
 import { useSpeechInput } from '../voice/useSpeechInput';
 import { WEB_SPEECH_NOTICE } from '../voice/webSpeechRecognition';
-import { LINES, type LineId } from './script';
+import { INTRO_LINES, LINES, type LineId } from './script';
 import { playLine, stopLine } from './onboardingVoice';
 import { isVoiceMuted, setVoiceMuted } from './onboardingStore';
 import { SAMPLE_RECIPES, type DemoRecipe } from './sampleRecipes';
@@ -239,9 +240,17 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
             case 'intro':
                 return (
                     <>
-                        <Text style={[styles.lead, { color: c.text.primary }]}>
-                            <Text style={styles.bold}>Hi, I'm {ASSISTANT_NAME}, {ASSISTANT_TAGLINE}.</Text> I'm an AI assistant, not a person. My voice is generated on your device, and AI can make mistakes, so always check ingredients and labels yourself.
-                        </Text>
+                        <View style={styles.headline}>
+                            <Text style={[styles.h1, display, { color: c.text.primary }]} accessibilityRole="header">
+                                Hi, I'm {ASSISTANT_NAME}
+                            </Text>
+                            <View style={styles.nameRow}>
+                                <Text style={[styles.small, { color: c.text.tertiary }]}>{ASSISTANT_PRONUNCIATION}</Text>
+                                <AiBadge />
+                            </View>
+                        </View>
+                        <Text style={[styles.lead, { color: c.text.primary }]}>{INTRO_LINES[0]}</Text>
+                        <Text style={[styles.body, { color: c.text.secondary }]}>{INTRO_LINES[1]}</Text>
                         <View style={styles.row}>
                             <Button label="Let's go" primary onPress={() => go('agree')} />
                             <Button
@@ -448,13 +457,16 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
     return (
         <ScrollView style={{ backgroundColor: c.background }} contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
             <View style={styles.topBar}>
-                <GuitarMark size={44} waves="idle" />
+                <GuitarMark size={40} waves="idle" />
                 <View style={styles.nameCol}>
-                    <Text style={[styles.sous, display, { color: c.text.primary }]} numberOfLines={1}>AmpliFood · {ASSISTANT_NAME}</Text>
-                    <View style={styles.nameRow}>
-                        <Text style={[styles.small, { color: c.text.tertiary }]}>{ASSISTANT_PRONUNCIATION}</Text>
-                        <AiBadge />
-                    </View>
+                    <Wordmark height={26} nativeID="af-onboarding-logo" />
+                    {step !== 'intro' && (
+                        <View style={styles.nameRow}>
+                            <Text style={[styles.small, styles.bold, { color: c.text.secondary }]}>{ASSISTANT_NAME}</Text>
+                            <Text style={[styles.small, { color: c.text.tertiary }]}>{ASSISTANT_PRONUNCIATION}</Text>
+                            <AiBadge />
+                        </View>
+                    )}
                 </View>
                 <Pressable onPress={toggleMute} style={[styles.mute, { borderColor: c.border }]} accessibilityRole="switch" accessibilityState={{ checked: !muted }} accessibilityLabel="AI voice">
                     <Ionicons name={muted ? 'volume-mute-outline' : 'volume-high-outline'} size={20} color={c.text.secondary} />
@@ -462,10 +474,12 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
             </View>
 
             <Animated.View key={step} entering={entering} exiting={exiting} style={styles.content}>
-                <View style={[styles.caption, { backgroundColor: c.surfaceMuted, borderColor: c.border }]} accessibilityLabel={`Caption: ${LINES[STEP_LINE[step]]}`}>
-                    <Text style={[styles.captionTag, { color: c.text.tertiary }]}>CAPTION</Text>
-                    <Text style={[styles.captionText, { color: c.text.primary }]}>{LINES[STEP_LINE[step]]}</Text>
-                </View>
+                {step !== 'intro' && (
+                    <View style={[styles.caption, { backgroundColor: c.surfaceMuted, borderColor: c.border }]} accessibilityLabel={`Caption: ${LINES[STEP_LINE[step]]}`}>
+                        <Text style={[styles.captionTag, { color: c.text.tertiary }]}>CAPTION</Text>
+                        <Text style={[styles.captionText, { color: c.text.primary }]}>{LINES[STEP_LINE[step]]}</Text>
+                    </View>
+                )}
                 {body()}
             </Animated.View>
 
@@ -481,14 +495,15 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
 const styles = StyleSheet.create({
     screen: { flexGrow: 1, padding: 22, gap: 18, maxWidth: 560, width: '100%', alignSelf: 'center' },
     topBar: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    nameCol: { flex: 1, gap: 4 },
+    nameCol: { flex: 1, gap: 6, alignItems: 'flex-start' },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-    sous: { fontSize: 20 },
     mute: { width: 44, height: 44, borderWidth: 1, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
     content: { gap: 14 },
     caption: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 4 },
     captionTag: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
     captionText: { fontSize: 15, lineHeight: 22 },
+    headline: { gap: 6 },
+    h1: { fontSize: 32, lineHeight: 38 },
     lead: { fontSize: 18, lineHeight: 27 },
     bold: { fontWeight: '800' },
     h2: { fontSize: 26 },

@@ -9,6 +9,9 @@ export type LineId = keyof typeof script.lines;
 
 export const LINES = script.lines as Record<LineId, string>;
 
+/** The intro screen shows "Hi, I'm <name>" plus these lines; LINES.intro reads the same text aloud. */
+export const INTRO_LINES = script.introScreen.lines as [string, string];
+
 export const AUDIO_IS_PLACEHOLDER = manifest.placeholder;
 
 // Static requires so Metro bundles every file.

@@ -243,7 +243,7 @@
         transform-origin: 50% 100%;
       }
       #af-splash .af-word {
-        font: 700 44px/1 'Fredoka', ui-rounded, 'Arial Rounded MT Bold', system-ui, sans-serif;
+        font: 700 44px/1 Fredoka_700Bold, ui-rounded, 'Arial Rounded MT Bold', system-ui, sans-serif;
         letter-spacing: -0.5px;
         white-space: nowrap;
       }
@@ -353,9 +353,34 @@
         }
       }
 
-      /* Exit: the lockup shrinks into the header while the app fades in. */
-      #af-splash.af-exit {
+      /* Exit: the wordmark flies onto the app's logo (header, onboarding or the
+         first-run shell) while the mark and backdrop fade; the real logo stays
+         hidden until it lands. Without a visible logo the lockup just fades. */
+      #af-splash.af-exit,
+      #af-splash.af-fly {
         pointer-events: none;
+      }
+      #af-splash.af-fly .af-word {
+        transition: transform 0.45s var(--af-ease);
+      }
+      #af-splash.af-fly .af-mark {
+        transition: transform 0.3s var(--af-ease), opacity 0.2s var(--af-ease);
+        transform: scale(0.4);
+        opacity: 0;
+      }
+      #af-splash.af-fly .af-bg {
+        transition: opacity 0.3s var(--af-ease) 0.1s;
+        opacity: 0;
+      }
+      #af-header-logo,
+      #af-onboarding-logo,
+      .afs-logo {
+        transition: opacity 0.12s linear;
+      }
+      html.af-handoff #af-header-logo,
+      html.af-handoff #af-onboarding-logo,
+      html.af-handoff .afs-logo {
+        opacity: 0;
       }
       .af-first.af-exit .af-lockup {
         transition: transform 0.4s var(--af-ease), opacity 0.4s var(--af-ease);
@@ -405,29 +430,31 @@
         transition: opacity 250ms cubic-bezier(.2, .8, .2, 1);
         --afs-muted: #F4EDE2;
         --afs-border: rgba(42, 20, 36, 0.12);
+        --afs-secondary: #5F4D57;
         --afs-tertiary: #73646A;
         --afs-primary: #A9420D;
       }
       #af-shell.afs-out { opacity: 0; }
       .afs-screen { max-width: 560px; margin: 0 auto; padding: 22px; padding-top: calc(22px + env(safe-area-inset-top)); display: flex; flex-direction: column; gap: 18px; box-sizing: border-box; }
       .afs-top { display: flex; align-items: center; gap: 12px; }
-      .afs-mark { width: 44px; height: 44px; flex: none; }
-      .afs-mark svg { width: 44px; height: 44px; display: block; }
-      .afs-name-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-      .afs-name { font-family: Fredoka_700Bold, Fredoka, system-ui, sans-serif; font-size: 20px; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .afs-mark { width: 40px; height: 40px; flex: none; }
+      .afs-mark svg { width: 40px; height: 40px; display: block; }
+      .afs-name-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+      /* Box matches the 26px-tall wordmark image; the text is nudged so its ink fills it. */
+      .afs-logo { width: 125px; height: 26px; }
+      .afs-word { position: relative; top: -3px; font: 700 26.6px/26px Fredoka_700Bold, ui-rounded, system-ui, sans-serif; letter-spacing: -0.3px; white-space: nowrap; }
       .afs-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
       .afs-small { font-size: 13px; line-height: 18px; color: var(--afs-tertiary); }
-      .afs-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; line-height: 14px; font-weight: 700; letter-spacing: 0.2px; border: 1px solid var(--afs-border); border-radius: 999px; padding: 3px 8px; color: var(--afs-tertiary); background: var(--afs-muted); }
+      .afs-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; line-height: 14px; font-weight: 700; letter-spacing: 0.2px; border: 1px solid var(--afs-border); border-radius: 999px; padding: 3px 8px; color: var(--afs-secondary); background: var(--afs-muted); }
       .afs-badge svg, .afs-mute svg { display: block; }
-      .afs-mute { width: 44px; height: 44px; box-sizing: border-box; border: 1px solid var(--afs-border); border-radius: 22px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--afs-tertiary); }
+      .afs-mute { width: 44px; height: 44px; box-sizing: border-box; border: 1px solid var(--afs-border); border-radius: 22px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--afs-secondary); }
       .afs-content { display: flex; flex-direction: column; gap: 14px; }
-      .afs-caption { background: var(--afs-muted); border: 1px solid var(--afs-border); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
-      .afs-caption-tag { font-size: 10px; font-weight: 800; letter-spacing: 1px; color: var(--afs-tertiary); }
-      .afs-caption-text { font-size: 15px; line-height: 22px; white-space: pre-wrap; overflow-wrap: break-word; }
+      .afs-headline { display: flex; flex-direction: column; gap: 6px; }
+      .afs-h1 { margin: 0; font: 700 32px/38px Fredoka_700Bold, ui-rounded, system-ui, sans-serif; }
       .afs-lead { font-size: 18px; line-height: 27px; margin: 0; white-space: pre-wrap; overflow-wrap: break-word; }
-      .afs-lead b { font-weight: 800; }
+      .afs-body { font-size: 15px; line-height: 22px; margin: 0; color: var(--afs-secondary); white-space: pre-wrap; overflow-wrap: break-word; }
       .afs-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
-      .afs-button { border: 0; border-radius: 999px; padding: 13px 22px; font: 800 16px/19px Inter, system-ui, sans-serif; background: var(--afs-muted); color: inherit; }
+      .afs-button { border: 1.5px solid transparent; border-radius: 999px; padding: 12px 22px; font: 800 16px/19px Inter, system-ui, sans-serif; background: var(--afs-muted); color: inherit; }
       .afs-button.afs-primary { background: var(--afs-primary); color: #FFFFFF; }
       @media (prefers-color-scheme: dark) {
         #af-shell {
@@ -435,6 +462,7 @@
           color: #FFF4E3;
           --afs-muted: #191517;
           --afs-border: rgba(255, 244, 227, 0.12);
+          --afs-secondary: #DDCFC4;
           --afs-tertiary: #A8988F;
           --afs-primary: #EB6A1C;
         }
@@ -500,10 +528,41 @@
         var ready = false;
         var gone = false;
         var holdTimer = animated ? setTimeout(function () { splash.classList.add('af-hold'); }, 1200) : 0;
+        // Fredoka's ink is 0.977em tall and sits 0.114em below the centre of a
+        // line-height:1 box; the targets are boxes cropped to the ink.
+        var INK_H = 0.977;
+        var INK_DY = 0.114;
+        function findLogo() {
+          if (shell) return shell.querySelector('.afs-logo');
+          var nodes = document.querySelectorAll('#af-header-logo, #af-onboarding-logo');
+          for (var i = 0; i < nodes.length; i++) {
+            var r = nodes[i].getBoundingClientRect();
+            if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight) return nodes[i];
+          }
+          return null;
+        }
+        function fly(logo) {
+          var word = splash.querySelector('.af-word');
+          var a = word.getBoundingClientRect();
+          var b = logo.getBoundingClientRect();
+          var size = parseFloat(getComputedStyle(word).fontSize) || a.height;
+          var scale = b.height / (size * INK_H);
+          var tx = b.left + b.width / 2 - (a.left + a.width / 2);
+          var ty = b.top + b.height / 2 - (a.top + a.height / 2) - scale * size * INK_DY;
+          document.documentElement.classList.add('af-handoff');
+          splash.classList.add('af-fly');
+          word.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+          setTimeout(function () {
+            document.documentElement.classList.remove('af-handoff');
+            setTimeout(function () { splash.remove(); }, 140);
+          }, 450);
+        }
         function exit() {
           if (gone) return;
           gone = true;
           clearTimeout(holdTimer);
+          var logo = !reduce && findLogo();
+          if (logo) return fly(logo);
           splash.classList.add('af-exit');
           setTimeout(function () { splash.remove(); }, animated ? 520 : 320);
         }
