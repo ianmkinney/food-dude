@@ -822,6 +822,39 @@ export const partyOperations = {
         await db.runAsync('UPDATE parties SET sync_secret = ? WHERE id = ?', [syncSecret, id]);
     },
 
+    async getRemovedMemberIds(id) {
+        const party = await partyOperations.getById(id);
+        if (!party?.removed_member_ids) return [];
+        try {
+            const parsed = JSON.parse(party.removed_member_ids);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    },
+
+    async setRemovedMemberIds(id, ids) {
+        const db = getDatabase();
+        const json = JSON.stringify([...new Set((ids || []).filter(Boolean))]);
+        await db.runAsync('UPDATE parties SET removed_member_ids = ? WHERE id = ?', [json, id]);
+    },
+
+    async removeMemberFromParty(partyId, syncMemberId) {
+        const removed = await partyOperations.getRemovedMemberIds(partyId);
+        if (syncMemberId && !removed.includes(syncMemberId)) {
+            removed.push(syncMemberId);
+        }
+        await partyOperations.setRemovedMemberIds(partyId, removed);
+        await partyMemberOperations.removeBySyncMemberId(partyId, syncMemberId);
+        const party = await partyOperations.getById(partyId);
+        const nextVersion = Number(party?.sync_version || 1) + 1;
+        await partyOperations.updateSyncFields(partyId, {
+            sync_version: nextVersion,
+            updated_at: Date.now(),
+        });
+        return nextVersion;
+    },
+
     async updateSyncFields(id, fields) {
         const db = getDatabase();
         const party = await db.getFirstAsync('SELECT * FROM parties WHERE id = ?', [id]);
@@ -929,15 +962,17 @@ export const partyMemberOperations = {
 
         try {
             const result = await db.runAsync(
-                `INSERT INTO party_members (party_id, user_id, user_name, member_email, role, joined_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO party_members (party_id, user_id, user_name, member_email, sync_member_id, member_status, role, joined_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     member.partyId,
                     member.userId,
                     member.userName || null,
                     member.memberEmail || member.email || null,
+                    member.syncMemberId || member.sync_member_id || null,
+                    member.memberStatus || member.member_status || 'confirmed',
                     member.role || 'member',
-                    now,
+                    member.joinedAt || now,
                 ]
             );
             return result.lastInsertRowId;
@@ -945,6 +980,86 @@ export const partyMemberOperations = {
             console.error('Error adding party member:', error);
             throw error;
         }
+    },
+
+    async upsertSyncMember(partyId, member) {
+        const db = getDatabase();
+        const existing = await db.getFirstAsync(
+            'SELECT * FROM party_members WHERE party_id = ? AND sync_member_id = ?',
+            [partyId, member.syncMemberId]
+        );
+        if (existing) {
+            await db.runAsync(
+                'UPDATE party_members SET user_name = ?, member_email = ?, member_status = ?, role = ?, joined_at = ? WHERE id = ?',
+                [
+                    member.userName,
+                    member.memberEmail || null,
+                    member.memberStatus || 'confirmed',
+                    member.role || 'member',
+                    member.joinedAt || existing.joined_at,
+                    existing.id,
+                ]
+            );
+            return existing.id;
+        }
+        return partyMemberOperations.add({ partyId, ...member });
+    },
+
+    async syncFromDocument(partyId, members, ownerEmail) {
+        const db = getDatabase();
+        const existing = await db.getAllAsync('SELECT * FROM party_members WHERE party_id = ?', [partyId]);
+        const bySyncId = new Map(
+            existing.filter((m) => m.sync_member_id).map((m) => [m.sync_member_id, m])
+        );
+        const incomingIds = new Set();
+        for (const m of members) {
+            if (!m?.id) continue;
+            incomingIds.add(m.id);
+            const prior = bySyncId.get(m.id);
+            const role =
+                m.role ||
+                (m.email && ownerEmail && m.email.toLowerCase() === ownerEmail.toLowerCase()
+                    ? 'owner'
+                    : 'member');
+            if (prior) {
+                await db.runAsync(
+                    'UPDATE party_members SET user_name = ?, member_email = ?, member_status = ?, role = ?, joined_at = ? WHERE id = ?',
+                    [
+                        m.name || prior.user_name,
+                        m.email || prior.member_email,
+                        m.status || prior.member_status || 'confirmed',
+                        role,
+                        m.joinedAt || prior.joined_at,
+                        prior.id,
+                    ]
+                );
+            } else {
+                await partyMemberOperations.add({
+                    partyId,
+                    userId: `member:${m.id}`,
+                    userName: m.name,
+                    memberEmail: m.email,
+                    syncMemberId: m.id,
+                    memberStatus: m.status || 'confirmed',
+                    role,
+                    joinedAt: m.joinedAt,
+                });
+            }
+        }
+        for (const row of existing) {
+            if (row.role === 'owner') continue;
+            if (row.sync_member_id && !incomingIds.has(row.sync_member_id)) {
+                await db.runAsync('DELETE FROM party_members WHERE id = ?', [row.id]);
+            }
+        }
+    },
+
+    async removeBySyncMemberId(partyId, syncMemberId) {
+        const db = getDatabase();
+        await db.runAsync(
+            'DELETE FROM party_members WHERE party_id = ? AND sync_member_id = ? AND role != ?',
+            [partyId, syncMemberId, 'owner']
+        );
     },
 
     async replaceEmailMembers(partyId, members) {

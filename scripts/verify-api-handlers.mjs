@@ -3,10 +3,24 @@
  * Smoke-load Vercel /api handlers and shared libs under Node ESM (matches Node 24 on Vercel).
  */
 import { pathToFileURL } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readdirSync, statSync } from 'node:fs';
 
 const apiRoot = join(dirname(fileURLToPath(import.meta.url)), '..', 'api');
+
+function listApiJsFiles(dir) {
+    const out = [];
+    for (const name of readdirSync(dir)) {
+        const full = join(dir, name);
+        if (statSync(full).isDirectory()) {
+            out.push(...listApiJsFiles(full));
+        } else if (name.endsWith('.js')) {
+            out.push(relative(apiRoot, full).split('\\').join('/'));
+        }
+    }
+    return out.sort();
+}
 
 const modules = [
     '_lib/cors.js',
@@ -76,5 +90,12 @@ if (resolveOpenRouterApiKey('other@example.com') !== null) {
     throw new Error('unexpected key for unknown email');
 }
 console.log('ok openrouter key resolution');
+
+const onDisk = listApiJsFiles(apiRoot);
+const missing = onDisk.filter((rel) => !modules.includes(rel));
+if (missing.length) {
+    throw new Error(`Add API smoke imports for: ${missing.join(', ')}`);
+}
+console.log(`ok all ${onDisk.length} api/*.js modules listed`);
 
 console.log('All API modules loaded.');

@@ -1,4 +1,4 @@
-import { Linking, Platform } from 'react-native';
+import { Linking, Platform, Share } from 'react-native';
 import { getApiBaseUrl } from '../config/api';
 import { getOwnerSessionToken } from '../platform/ownerSession';
 
@@ -13,13 +13,7 @@ const MSG = {
 
 /**
  * @param {object} params
- * @param {'invite' | 'member_update' | 'broadcast'} params.kind
- * @param {string[]} params.to
- * @param {{ email: string, name?: string }[]} params.partyMembers
- * @param {string} params.partyName
- * @param {string} params.shareLink
- * @param {string} [params.actorName]
- * @param {string} [params.note]
+ * @param {'invite' | 'member_update' | 'broadcast' | 'join_receipt'} params.kind
  */
 export async function sendPartyEmailViaApi(params) {
     const token = await getOwnerSessionToken();
@@ -62,20 +56,42 @@ export async function openMailtoFallback({ to, subject, body }) {
     return false;
 }
 
+export async function shareLink({ title, message, url }) {
+    try {
+        if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.share) {
+            await navigator.share({ title, text: message, url });
+            return true;
+        }
+        await Share.share({
+            title,
+            message: Platform.OS === 'ios' ? message : `${message}\n${url}`,
+            url: Platform.OS === 'ios' ? url : undefined,
+        });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 export function buildInviteMail({ partyName, actorName, shareLink, appName = 'AmpliFood' }) {
     const subject = `Join my party "${partyName}" on ${appName}`;
-    const body = `Hi!
+    const body = `You're invited to "${partyName}" on ${appName}.
 
-${actorName} invited you to join the party "${partyName}" on ${appName}.
+Open this link to join (the party data stays in the link — nothing is stored on our servers):
 
-Open this link to import the party on your device (your browser will not send the link to our servers):
+${shareLink}`;
+    return { subject, body };
+}
+
+export function buildJoinReceiptMail({ partyName, memberName, shareLink }) {
+    const subject = `${memberName} joined "${partyName}"`;
+    const body = `${memberName} joined your party "${partyName}".
+
+Open this receipt link on your device to confirm them on your member list:
 
 ${shareLink}
 
-Party updates travel by email; nothing is stored on our servers.
-
-Happy cooking!
-${actorName}`;
+Membership syncs via links and email only; nothing is stored on our servers.`;
     return { subject, body };
 }
 
@@ -83,11 +99,7 @@ export function buildMemberUpdateMail({ partyName, actorName, shareLink }) {
     const subject = `Party update for "${partyName}"`;
     const body = `${actorName} suggested changes for "${partyName}".
 
-Review the update here:
-
-${shareLink}
-
-Party updates travel by email; nothing is stored on our servers.`;
+Review: ${shareLink}`;
     return { subject, body };
 }
 
@@ -97,8 +109,34 @@ export function buildBroadcastMail({ partyName, actorName, shareLink, version })
 
 Open to sync on your device:
 
-${shareLink}
-
-Party updates travel by email; nothing is stored on our servers.`;
+${shareLink}`;
     return { subject, body };
+}
+
+export async function sendJoinReceiptToOwner({
+    ownerEmail,
+    partyName,
+    memberName,
+    receiptLink,
+    partyUuid,
+    version,
+}) {
+    if (!ownerEmail) {
+        return { ok: false, reason: 'no_owner_email', receiptLink };
+    }
+    const apiResult = await sendPartyEmailViaApi({
+        kind: 'join_receipt',
+        to: [ownerEmail],
+        ownerEmail,
+        partyMembers: [{ email: ownerEmail, name: 'Owner' }],
+        partyName,
+        shareLink: receiptLink,
+        actorName: memberName,
+        version,
+        partyUuid,
+    });
+    if (apiResult.ok) return { ok: true };
+    const mail = buildJoinReceiptMail({ partyName, memberName, shareLink: receiptLink });
+    const mailed = await openMailtoFallback({ to: [ownerEmail], subject: mail.subject, body: mail.body });
+    return { ok: mailed, reason: apiResult.reason, receiptLink };
 }
