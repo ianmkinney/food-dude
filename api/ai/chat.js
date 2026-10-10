@@ -15,6 +15,7 @@ import {
     validateImagePrompt,
 } from '../_lib/openRouterImage.js';
 import { checkMinuteRateLimit } from '../_lib/store.js';
+import { handleElevenLabsMode } from '../_lib/elevenLabs.js';
 
 const DAILY_CREDIT_MSG = 'Daily AI limit reached. Try again tomorrow or ask Ian to raise your OpenRouter credit limit.';
 
@@ -210,6 +211,12 @@ export default async function handler(req, res) {
 
     if (!isEmailAllowed(session.email)) {
         reject(res, 403, 'not_allowed');
+        return;
+    }
+
+    const mode = req.body?.mode;
+    if (mode === 'voices' || mode === 'tts') {
+        await handleElevenLabsMode(req, res, session, mode);
         return;
     }
 

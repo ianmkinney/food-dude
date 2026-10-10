@@ -29,6 +29,7 @@ const modules = [
     '_lib/google.js',
     '_lib/store.js',
     '_lib/openRouterImage.js',
+    '_lib/elevenLabs.js',
     'auth/google.js',
     'auth/session.js',
     'ai/chat.js',
