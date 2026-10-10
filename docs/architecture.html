@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>AmpliFood architecture</title>
+<style>
+:root{
+  --bg:#FBF4E8;--panel:#fff;--ink:#2A1424;--muted:#6b5663;--line:#e3d6c3;
+  --orange:#EB6A1C;--tomato:#E2261F;--butter:#F6C445;--green:#4F802F;
+  --built-fill:#fff1e4;--planned-fill:#fff6d6;--third-fill:#eef5e8;--arrow:#5a4452;
+}
+:root[data-theme=dark]{
+  --bg:#1A1216;--panel:#241a20;--ink:#f6ece0;--muted:#b7a5ae;--line:#3b2c34;
+  --orange:#f2853f;--tomato:#f0524b;--butter:#F6C445;--green:#86b862;
+  --built-fill:#3a2418;--planned-fill:#3a3114;--third-fill:#1f2b19;--arrow:#cdb9c3;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]){
+    --bg:#1A1216;--panel:#241a20;--ink:#f6ece0;--muted:#b7a5ae;--line:#3b2c34;
+    --orange:#f2853f;--tomato:#f0524b;--butter:#F6C445;--green:#86b862;
+    --built-fill:#3a2418;--planned-fill:#3a3114;--third-fill:#1f2b19;--arrow:#cdb9c3;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header,main{max-width:1120px;margin:0 auto;padding:0 18px}
+header{padding-top:28px}
+h1{margin:0 0 4px;font-size:2rem;color:var(--orange)}
+h2{margin:40px 0 10px;font-size:1.35rem;border-bottom:2px solid var(--butter);padding-bottom:4px}
+p{margin:.5em 0}
+.meta{color:var(--muted);font-size:.9rem}
+.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+button.toggle{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font:inherit;font-size:.85rem;cursor:pointer}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 0;font-size:.9rem}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.sw{width:30px;height:18px;border-radius:5px;display:inline-block}
+.sw.built{border:2px solid var(--orange);background:var(--built-fill)}
+.sw.draft{border:2px dashed var(--orange);background:var(--built-fill)}
+.sw.planned{border:2.5px dotted var(--tomato);background:var(--planned-fill)}
+.sw.third{border:2px solid var(--green);background:var(--third-fill)}
+.diagram{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+.diagram svg{display:block;min-width:1020px;width:100%;height:auto}
+#details{margin-top:12px;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--orange);border-radius:8px;padding:10px 14px;min-height:4.2em}
+#details b{font-size:1.05rem}
+.tag{display:inline-block;font-size:.72rem;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--orange);color:#fff;margin-left:6px;vertical-align:middle}
+.tag.planned{background:var(--tomato)}.tag.third{background:var(--green)}
+.node{cursor:pointer;outline:none}
+.node rect{stroke-width:2;transition:filter .1s}
+.node:hover rect,.node:focus rect{filter:drop-shadow(0 0 5px var(--orange));stroke-width:3.5}
+.node.built rect{fill:var(--built-fill);stroke:var(--orange)}
+.node.draft rect{fill:var(--built-fill);stroke:var(--orange);stroke-dasharray:7 4}
+.node.planned rect{fill:var(--planned-fill);stroke:var(--tomato);stroke-dasharray:2 4;stroke-linecap:round;stroke-width:2.6}
+.node.third rect{fill:var(--third-fill);stroke:var(--green)}
+.node.sel rect{stroke-width:4}
+.node rect.tagr{fill:var(--orange);stroke:none;filter:none}
+.node text{fill:var(--ink);pointer-events:none}
+.t{font-size:13px;font-weight:700}.s{font-size:11.5px;fill:var(--muted)!important}
+.pr{font-size:10px;font-weight:700;fill:#fff!important}
+.zone{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:10 5}
+.zonelbl{font-size:12px;font-weight:700;fill:var(--muted)}
+.arrow{fill:none;stroke:var(--arrow);stroke-width:1.8}
+.arrow.planned{stroke-dasharray:3 5;stroke:var(--tomato)}
+.lbl{font-size:11.5px;fill:var(--ink);paint-order:stroke;stroke:var(--panel);stroke-width:4px;stroke-linejoin:round}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px 16px 10px}
+.card h3{margin:10px 0 4px;font-size:1.02rem;color:var(--orange)}
+.card ul{margin:4px 0;padding-left:1.1em}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:820px;font-size:.88rem}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{background:var(--built-fill);position:sticky;top:0}
+tr:last-child td{border-bottom:0}
+footer{max-width:1120px;margin:30px auto;padding:0 18px;color:var(--muted);font-size:.85rem}
+a{color:var(--orange)}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div>
+      <h1>AmpliFood architecture</h1>
+      <div class="meta">Last updated October 8, 2026 (voice: phone default, Premium Sous voice for Plus) · <a href="https://github.com/ianmkinney/food-dude">github.com/ianmkinney/food-dude</a></div>
+    </div>
+    <button class="toggle" id="themeBtn" type="button" aria-label="Toggle light or dark theme">Theme: auto</button>
+  </div>
+  <p>AmpliFood is a recipe and kitchen app (recipes, meal planner, pantry, grocery list, AI Chef) built once with React Native and Expo for iOS, Android and the web. Today everything the user creates lives on their own device, and AI features call the AI provider directly with the user's own API key. Planned work adds optional in-app purchases (in draft), an AmpliFood-run AI proxy with a credit ledger, and a chat-first voice assistant called Sous. Click or focus any box to read what it does.</p>
+</header>
+<main>
+  <h2>System map</h2>
+  <div class="legend" aria-label="Legend">
+    <span><i class="sw built"></i>Built (in main)</span>
+    <span><i class="sw draft"></i>In draft PR (PR #10 / PR #11)</span>
+    <span><i class="sw planned"></i>Planned</span>
+    <span><i class="sw third"></i>Third-party service</span>
+    <span><svg width="38" height="10" aria-hidden="true"><path d="M0 5H36" stroke="var(--arrow)" stroke-width="2"/></svg>data flow today</span>
+    <span><svg width="38" height="10" aria-hidden="true"><path d="M0 5H36" stroke="var(--tomato)" stroke-width="2" stroke-dasharray="3 5"/></svg>planned data flow</span>
+  </div>
+  <div class="diagram"><svg id="svg" viewBox="0 0 1040 1050" role="group" aria-label="AmpliFood architecture diagram"></svg></div>
+  <div id="details" aria-live="polite"><b>Select a box</b><br>Hover, click, or focus a box and press Enter to see its description here.</div>
+  <p class="meta">On a narrow screen the diagram scrolls sideways.</p>
+
+  <h2>Trust boundaries &amp; privacy</h2>
+  <div class="grid">
+    <div class="card"><h3>Inside the device boundary</h3>
+      <ul>
+        <li>All user data is local: recipes, plans, pantry, grocery, parties, chat history and profile in SQLite.</li>
+        <li>AI keys live in the iOS Keychain or Android Keystore (SecureStore). On web, keys are in localStorage and the database is in the browser's Origin Private File System (OPFS).</li>
+        <li>Theme and UI preferences are in AsyncStorage.</li>
+        <li>Camera is used only for barcode scanning; only photos the user picks are read.</li>
+      </ul></div>
+    <div class="card"><h3>What crosses the boundary today</h3>
+      <ul>
+        <li>AI requests go directly from the device to Anthropic, OpenAI, xAI or Google with the user's own key. AmpliFood never sees them.</li>
+        <li>Barcode numbers (only the number) go to Open Food Facts.</li>
+        <li>Recipe import fetches the page the user supplied; the text is then sent to the chosen AI provider.</li>
+        <li>Vercel serves static files only. There is no AmpliFood backend and no user data on the server.</li>
+      </ul></div>
+    <div class="card"><h3>What changes with platform AI (planned)</h3>
+      <ul>
+        <li>Prompts for Plus and credit users go through the AmpliFood AI proxy, which can read them in transit.</li>
+        <li>AmpliFood's provider key stays server-side only and never ships in the app.</li>
+        <li>Identity is an anonymous install ID (passed as appAccountToken / obfuscatedAccountId), not an email or name.</li>
+        <li>The server keeps a credit ledger (grants, debits, refunds) and validates store receipts.</li>
+        <li>Bring-your-own-key stays available and unchanged.</li>
+      </ul></div>
+    <div class="card"><h3>Sous voice (planned)</h3>
+      <ul>
+        <li>Default for everyone: the phone's own voice (expo-speech / OS TTS). Free, no key, sends nothing anywhere.</li>
+        <li>Premium Sous voice (Plus perk): text goes to the AmpliFood voice proxy, which streams ElevenLabs TTS under a per-user monthly character cap. Or a user's own ElevenLabs key sends text straight to ElevenLabs (BYOK). No ElevenLabs key ships in the app.</li>
+        <li>Every voice output has captions and a mute, and turns off while a screen reader is on. The only bundled premium audio is a short preview clip labelled "AI voice".</li>
+        <li>Speech-to-text runs on-device where available (iOS Speech, Android SpeechRecognizer, Web Speech API, which in some browsers uses a vendor cloud service).</li>
+        <li>The microphone is requested only when the user taps talk.</li>
+      </ul></div>
+  </div>
+
+  <h2>External services</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Service</th><th>Purpose</th><th>Data sent</th><th>Who pays / cost model</th><th>Status</th></tr></thead>
+    <tbody>
+    <tr><td>Anthropic API</td><td>AI Chef, recipe import, cost estimate</td><td>Prompt, images, user's API key</td><td>User, per token, on their own account</td><td>Built</td></tr>
+    <tr><td>OpenAI API</td><td>Same AI features</td><td>Prompt, images, user's API key</td><td>User, per token</td><td>Built</td></tr>
+    <tr><td>xAI API (Grok)</td><td>Same AI features</td><td>Prompt, images, user's API key</td><td>User, per token</td><td>Built</td></tr>
+    <tr><td>Google Gemini API</td><td>Same AI features plus recipe image generation</td><td>Prompt, images, user's API key</td><td>User, per token</td><td>Built</td></tr>
+    <tr><td>Open Food Facts</td><td>Barcode product lookup</td><td>Barcode number only</td><td>Free, open data; no cost to anyone</td><td>Built</td></tr>
+    <tr><td>Recipe websites</td><td>Recipe link import</td><td>An HTTP GET for the URL the user supplied</td><td>Free (the user's own network use)</td><td>Built</td></tr>
+    <tr><td>Vercel</td><td>Static hosting of the web build, info pages</td><td>Nothing from the user beyond normal HTTP requests; no user data stored</td><td>AmpliFood; free Hobby or Pro plan</td><td>Built (info pages in draft PR #10)</td></tr>
+    <tr><td>Apple App Store (StoreKit) and Google Play Billing</td><td>Plus subscription and credit packs</td><td>Product IDs, signed transaction / purchase token, install ID</td><td>Buyer pays the store price; store keeps 15-30% commission</td><td>In draft PR #11</td></tr>
+    <tr><td>ElevenLabs</td><td>Premium Sous voice (Plus perk; default voice is the free phone voice)</td><td>Reply text to speak (and the user's key if BYOK)</td><td>Per-character pricing. Plus: AmpliFood pays via the voice proxy, capped per user per month and metered. BYOK: the user pays with their own key</td><td>Planned (client in draft PRs #11–#13)</td></tr>
+    <tr><td>Speech-to-text (iOS Speech, Android SpeechRecognizer, Web Speech API)</td><td>Talking to Sous</td><td>Audio, handled by the OS or browser; on-device where available</td><td>Free</td><td>Planned</td></tr>
+    <tr><td>Platform AI backend hosting (e.g. Vercel Functions or similar, plus a database for the ledger)</td><td>Accounts, receipt validation, webhooks, credit ledger, AI proxy</td><td>Install ID, receipts, prompts in transit, ledger entries</td><td>AmpliFood; usage-based</td><td>Planned</td></tr>
+    <tr><td>AmpliFood's own AI provider account</td><td>Model calls for Plus and credit users</td><td>Prompts and images, with AmpliFood's server-side key</td><td>AmpliFood pays per token, recovered through Plus and credit packs</td><td>Planned</td></tr>
+    <tr><td>Expo / EAS</td><td>Native builds and over-the-air updates</td><td>Source and build artifacts (no user data)</td><td>AmpliFood; free tier or paid plan</td><td>Built (tooling)</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Open questions</h2>
+  <ul>
+    <li>Which host for the platform-AI backend (Vercel Functions, a small container service, or a managed BaaS), and which database for the ledger?</li>
+    <li>Is 30,000 characters/month the right Premium Sous voice cap, and can credit packs top it up?</li>
+    <li>Speech-to-text on the web: Web Speech API is missing or cloud-backed in some browsers. Is a typed fallback enough?</li>
+    <li>How do we restore credits if a user reinstalls (anonymous install ID is lost)?</li>
+    <li>Should the Sous chat-first home replace the tab layout by default or be opt-in?</li>
+  </ul>
+</main>
+<footer>Source of truth: <code>docs/architecture.html</code>. Served at <a href="https://amplifood.vercel.app/architecture">amplifood.vercel.app/architecture</a>.</footer>
+
+<script>
+(function(){
+var NS="http://www.w3.org/2000/svg";
+var N=[
+{id:"core",x:30,y:60,w:290,h:50,k:"built",t:"Expo / React Native app",s:["One codebase: iOS, Android, web"],d:"One Expo / React Native codebase for iOS, Android and the web (react-native-web, static export with npm run build:web)."},
+{id:"nav",x:30,y:125,w:140,h:60,k:"built",t:"React Navigation",s:["Tabs + stack screens"],d:"Bottom tabs (Recipes, Planner, Pantry, Grocery, AI Chef) plus stack screens (Recipe detail, Add/Import recipe, pantry and grocery forms, Estimate cost, Party, Account). On web, a linking config gives URLs like /pantry and /recipe/:id."},
+{id:"sousui",x:180,y:125,w:140,h:60,k:"planned",t:"Sous chat UI",s:["Chat-first home screen"],d:"Home screen becomes a chat with Sous (the AI sous chef, pronounced \"Soo\"). Sous performs app actions through tool calls (find/import recipe, add to plan, pantry, grocery, estimate cost) and shows rich cards. Existing tabs stay reachable."},
+{id:"sqlite",x:30,y:200,w:92,h:70,k:"built",t:"SQLite",s:["expo-sqlite;","web: wa-sqlite","in OPFS"],d:"Local database (expo-sqlite; on web wa-sqlite stored in the browser's Origin Private File System). Holds recipes, meal plans, pantry, grocery, parties, AI chat history and profile."},
+{id:"secure",x:130,y:200,w:100,h:70,k:"built",t:"SecureStore",s:["Keychain /","Keystore; web:","localStorage"],d:"Holds the user's AI API keys: iOS Keychain or Android Keystore on native; localStorage (via AsyncStorage) on web."},
+{id:"async",x:238,y:200,w:82,h:70,k:"built",t:"AsyncStorage",s:["Theme,","UI prefs"],d:"Small key-value store for theme and UI preferences."},
+{id:"byok",x:30,y:280,w:290,h:65,k:"built",t:"BYOK AI client",s:["Anthropic, OpenAI, xAI, Gemini"],d:"User picks a provider and pastes their own key; requests go directly from the device to the provider. Powers AI Chef chat, recipe import from text/links/screenshots, grocery cost estimate, recipe image generation (Gemini) and pantry-based recipes."},
+{id:"link",x:30,y:365,w:290,h:65,k:"built",t:"Recipe link import",s:["Fetch URL, then AI parses text"],d:"The device fetches the recipe URL the user supplied, then sends the page text to the chosen AI provider for parsing. Also: camera for barcodes only, system photo picker for screenshots/photos, and share-sheet intake on native (expo-share-intent)."},
+{id:"scan",x:30,y:450,w:290,h:65,k:"built",t:"Barcode scanner",s:["expo-camera; web BarcodeDetector / zxing"],d:"Scans barcodes with expo-camera on native; on web getUserMedia plus BarcodeDetector or a lazy-loaded zxing. Looks the number up in Open Food Facts."},
+{id:"iap",x:30,y:535,w:290,h:100,k:"draft",pr:"PR #11",t:"Paywall + expo-iap",s:["AmpliFood Plus: $6.99/mo, $59.99/yr,","200 platform-AI credits/month","Packs: 40/$1.99, 120/$4.99, 350/$12.99"],d:"Draft PR #11: in-app purchases via expo-iap on App Store and Google Play. Plus subscription ($6.99/mo or $59.99/yr, 200 credits/month) and credit packs (40 for $1.99, 120 for $4.99, 350 for $12.99), plus a paywall screen."},
+{id:"ent",x:30,y:655,w:290,h:70,k:"draft",pr:"PR #11",t:"Local entitlement cache",s:["Unverified until server validation exists"],d:"Draft PR #11: purchases are cached locally as an unverified entitlement. Real verification arrives with the planned receipt-validation backend."},
+{id:"pac",x:30,y:760,w:290,h:70,k:"draft",pr:"PR #11",t:"PlatformAiClient (stub)",s:["Interface only; no backend yet"],d:"Draft PR #11: the interface the app will use to call the AmpliFood AI proxy. Currently a stub that returns nothing; BYOK remains the only working AI path."},
+{id:"sous",x:30,y:850,w:290,h:70,k:"planned",t:"Sous voice (TTS)",s:["Default: phone voice (expo-speech)","Plus: Premium Sous voice; or BYOK key"],d:"Everyone gets the free on-device phone voice (expo-speech / OS TTS). The Premium Sous voice (ElevenLabs) is a Plus perk served through the AmpliFood voice proxy, so no ElevenLabs key ships in the app; a user's own ElevenLabs key can also unlock it and calls ElevenLabs directly. Captions, mute, and auto-off with screen readers on every voice output. Client side in draft PRs #12/#13; paywall preview in #11."},
+{id:"stt",x:30,y:940,w:290,h:60,k:"planned",t:"Speech-to-text (on-device)",s:["iOS Speech, Android SpeechRecognizer, Web Speech"],d:"Talk to Sous using on-device recognition where available (iOS Speech framework, Android SpeechRecognizer, Web Speech API). The microphone is requested only when the user taps talk. No AmpliFood server involved."},
+
+{id:"val",x:400,y:590,w:260,h:65,k:"planned",t:"Receipt validation + webhooks",s:["App Store Server API / Play Developer API,","ASSN v2, Play RTDN via Pub/Sub"],d:"Validates purchases with the App Store Server API and Google Play Developer API, and receives renewals/refunds via App Store Server Notifications v2 and Google Real-time Developer Notifications (Pub/Sub)."},
+{id:"ledger",x:400,y:675,w:260,h:65,k:"planned",t:"Accounts + credit ledger",s:["Install UUID; grants, debits, refunds"],d:"Anonymous accounts keyed by install UUID (passed as appAccountToken / obfuscatedAccountId). Ledger records the monthly 200-credit grant, pack grants, per-feature debits and refunds."},
+{id:"proxy",x:400,y:760,w:260,h:150,k:"planned",t:"AI + voice proxy",s:["Provider + ElevenLabs keys","server-side; rate limits;","credits + voice char cap"],d:"AI proxy: checks and debits credits, applies rate limits, and forwards to the AI provider with AmpliFood's server-side key. Voice proxy (Plus only): POST /v1/voice/tts streams ElevenLabs audio back to the app, enforces a per-user monthly character cap (provisional 30,000), and meters characters per request. No provider or ElevenLabs key ships in the app."},
+
+{id:"vercel",x:740,y:60,w:260,h:70,k:"third",t:"Vercel static hosting",s:["amplifood.vercel.app","Files only; auto-deploys from main"],d:"Serves the static web build (https://amplifood.vercel.app) with an SPA fallback from vercel.json. No backend, no user data. Auto-deploys from main."},
+{id:"info",x:740,y:145,w:260,h:55,k:"draft",pr:"PR #10",t:"Info pages",s:["/about /privacy /support /terms"],d:"Draft PR #10: plain static HTML pages in public/ served through Vercel rewrites."},
+{id:"prov",x:740,y:280,w:260,h:65,k:"third",t:"AI providers",s:["Anthropic, OpenAI, xAI, Google Gemini"],d:"Third-party model APIs. Today the user's own key is billed per token by the provider they chose."},
+{id:"web",x:740,y:365,w:260,h:65,k:"third",t:"Recipe websites",s:["Any URL the user supplies"],d:"Arbitrary third-party sites fetched when the user imports a recipe link."},
+{id:"off",x:740,y:450,w:260,h:65,k:"third",t:"Open Food Facts",s:["Free, open product database"],d:"Open product database. Only the barcode number is sent; it returns name, category and image URL."},
+{id:"stores",x:740,y:535,w:260,h:70,k:"third",t:"App Store + Google Play",s:["StoreKit / Play Billing"],d:"Process subscriptions and consumable purchases and take a 15-30% commission. Later they send renewal/refund webhooks to the backend."},
+{id:"pacct",x:740,y:770,w:260,h:65,k:"planned",t:"AmpliFood AI provider account",s:["AmpliFood pays per token"],d:"AmpliFood's own account with a model provider for platform AI. Costs are recovered through Plus and credit packs."},
+{id:"eleven",x:740,y:855,w:260,h:65,k:"third",t:"ElevenLabs",s:["Premium Sous voice (Plus / BYOK)"],d:"Streaming text-to-speech for the Premium Sous voice. Plus: called by the AmpliFood voice proxy (AmpliFood pays per character, capped per user per month). BYOK: the user's own key, billed to them. Final voice: Voice Design voice, Starter-or-higher plan, training opt-out (pending spend approval)."},
+{id:"eas",x:740,y:945,w:260,h:55,k:"third",t:"Expo / EAS",s:["Builds + OTA updates (tooling)"],d:"Builds native binaries and delivers updates. Free tier or paid plan; no user data."}
+];
+var KL={built:"Built (in main)",draft:"In draft PR",planned:"Planned",third:"Third-party service"};
+var A=[
+{d:"M740 95H322",l:[[530,87,"static files: HTML, JS, wasm (web only)"]]},
+{d:"M322 305H738",both:1,l:[[530,296,"prompt + images + user's API key"],[530,324,"model reply (text / JSON / image)"]]},
+{d:"M322 395H738",both:1,l:[[530,386,"recipe URL \u2192 HTML"],[530,414,"page HTML (then sent to AI provider)"]]},
+{d:"M322 480H738",both:1,l:[[530,471,"barcode number"],[530,499,"product name / category / image URL"]]},
+{d:"M322 555H738",both:1,l:[[500,546,"purchase request \u2192 signed transaction / purchase token"]]},
+{d:"M322 615H398",p:1,l:[[360,609,"token + ID",1]]},
+{d:"M800 605V640H662",p:1,l:[[690,658,"webhooks: renewals, refunds"]],a:"start"},
+{d:"M530 655V673",p:1,both:1,l:[[540,668,"grant credits",0,"start"]]},
+{d:"M530 740V758",p:1,both:1,l:[[540,753,"check / debit",0,"start"]]},
+{d:"M322 795H398",p:1,l:[[360,788,"prompt + ID",1]]},
+{d:"M322 885H398",p:1,l:[[360,878,"text (Plus)",1]]},
+{d:"M662 800H738",p:1,both:1,l:[[700,792,"prompt",1]]},
+{d:"M662 885H738",p:1,both:1,l:[[700,877,"streamed audio",1]]}
+];
+var svg=document.getElementById("svg");
+function el(n,a,p){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);(p||svg).appendChild(e);return e}
+var defs=el("defs",{});
+["end","start"].forEach(function(w){var m=el("marker",{id:"m"+w,viewBox:"0 0 10 10",refX:w=="end"?9:1,refY:5,markerWidth:7,markerHeight:7,orient:"auto-start-reverse"},defs);el("path",{d:"M0 0L10 5L0 10z",fill:"context-stroke"},m)});
+el("rect",{x:10,y:38,width:330,height:980,rx:14,class:"zone"});
+el("text",{x:22,y:54,class:"zonelbl"}).textContent="USER'S DEVICE (browser, iOS, Android)";
+el("rect",{x:380,y:560,width:300,height:365,rx:14,class:"zone",style:"stroke:var(--tomato)"});
+el("text",{x:392,y:578,class:"zonelbl"}).textContent="AMPLIFOOD BACKEND (planned)";
+el("text",{x:735,y:42,class:"zonelbl"}).textContent="INTERNET / THIRD PARTIES";
+A.forEach(function(a){
+  var p=el("path",{d:a.d,class:"arrow"+(a.p?" planned":""),"marker-end":"url(#mend)"});
+  if(a.both)p.setAttribute("marker-start","url(#mstart)");
+});
+A.forEach(function(a){(a.l||[]).forEach(function(l){var t=el("text",{x:l[0],y:l[1],class:"lbl","text-anchor":l[4]||a.a||"middle"});t.textContent=l[2]})});
+var det=document.getElementById("details"),cur=null;
+function show(n,g){
+  if(cur)cur.classList.remove("sel");g.classList.add("sel");cur=g;
+  var tag=n.k=="draft"?"In draft PR "+n.pr:KL[n.k];
+  det.style.borderLeftColor=n.k=="planned"?"var(--tomato)":n.k=="third"?"var(--green)":"var(--orange)";
+  det.innerHTML="";
+  var b=document.createElement("b");b.textContent=n.t;det.appendChild(b);
+  var s=document.createElement("span");s.className="tag"+(n.k=="planned"?" planned":n.k=="third"?" third":"");s.textContent=tag;det.appendChild(s);
+  det.appendChild(document.createElement("br"));det.appendChild(document.createTextNode(n.d));
+}
+N.forEach(function(n){
+  var g=el("g",{class:"node "+n.k,tabindex:0,role:"button","aria-label":n.t+" ("+KL[n.k]+"): "+n.d});
+  var ti=el("title",{},g);ti.textContent=n.t+" - "+n.d.split(". ")[0].replace(/\.$/,"");
+  el("rect",{x:n.x,y:n.y,width:n.w,height:n.h,rx:9},g);
+  var lines=1+n.s.length,lh=14,y0=n.y+n.h/2-(lines*lh)/2+11;
+  el("text",{x:n.x+n.w/2,y:y0,"text-anchor":"middle",class:"t"},g).textContent=n.t;
+  n.s.forEach(function(s,i){el("text",{x:n.x+n.w/2,y:y0+lh*(i+1),"text-anchor":"middle",class:"s"},g).textContent=s});
+  if(n.pr){el("rect",{x:n.x+n.w-52,y:n.y-8,width:46,height:16,rx:8,class:"tagr"},g);el("text",{x:n.x+n.w-29,y:n.y+4,"text-anchor":"middle",class:"pr"},g).textContent=n.pr}
+  g.addEventListener("click",function(){show(n,g)});
+  g.addEventListener("mouseenter",function(){show(n,g)});
+  g.addEventListener("focus",function(){show(n,g)});
+  g.addEventListener("keydown",function(e){if(e.key=="Enter"||e.key==" "){e.preventDefault();show(n,g)}});
+});
+var btn=document.getElementById("themeBtn"),root=document.documentElement,modes=["auto","light","dark"],i=0;
+try{var sv=localStorage.getItem("amplifood-arch-theme");if(sv&&modes.indexOf(sv)>0){i=modes.indexOf(sv)}}catch(e){}
+function apply(){if(modes[i]=="auto")root.removeAttribute("data-theme");else root.setAttribute("data-theme",modes[i]);btn.textContent="Theme: "+modes[i]}
+apply();
+btn.addEventListener("click",function(){i=(i+1)%3;apply();try{localStorage.setItem("amplifood-arch-theme",modes[i])}catch(e){}});
+})();
+</script>
+</body>
+</html>

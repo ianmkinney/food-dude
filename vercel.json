@@ -26,6 +26,10 @@
       "destination": "/accessibility.html"
     },
     {
+      "source": "/architecture",
+      "destination": "/architecture.html"
+    },
+    {
       "source": "/((?!_expo/|assets/).*)",
       "destination": "/index.html"
     }

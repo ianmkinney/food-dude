@@ -89,3 +89,5 @@ EAS Hosting is a reasonable choice if you'd rather keep everything under the Exp
 - **Refreshing a page gives a 404.** The host has no SPA fallback. On Vercel it comes from `vercel.json`. Elsewhere, rewrite unknown paths to `/index.html`.
 - **"AmpliFood is open in another tab".** Close the other tab, then press Try again.
 - **AI says "Couldn't reach the provider".** The browser blocked the request. Check that an ad or privacy blocker isn't stopping `api.anthropic.com`, `api.openai.com`, `api.x.ai`, or `generativelanguage.googleapis.com`.
+
+- **`/architecture`** is served from `public/architecture.html` (a copy of `docs/architecture.html`; keep them identical).
