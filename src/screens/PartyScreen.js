@@ -19,16 +19,15 @@ import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { partyOperations, partyMealOperations, partyMemberOperations, recipeOperations, userOperations, partyMealIngredientClaimOperations, pantryOperations } from '../database/operations';
 import aiChefService from '../services/aiChefService';
-import { generatePartyUuid, generateSyncSecret } from '../services/partySync';
-import PartySyncPanel from '../components/PartySyncPanel';
 import PartyInviteModal from '../components/PartyInviteModal';
-import { completePartyJoin } from '../services/partySync/joinFlow';
-import { generateMemberId } from '../services/partySync';
-import { usePartyDeepLink } from '../hooks/usePartyDeepLink';
+import PartyLiveNotice from '../components/PartyLiveNotice';
+import PartyMembersList from '../components/PartyMembersList';
 import { usePartyLivePoll } from '../hooks/usePartyLivePoll';
+import { getOwnerSession } from '../platform/ownerSession';
 import {
     applyLivePartySnapshot,
     attachOrCreateLocalLiveParty,
+    createLiveParty,
     joinLiveParty,
     pushLocalPartyMealsToLive,
 } from '../services/partyLiveSync';
@@ -48,7 +47,7 @@ const PartyScreen = ({ navigation }) => {
     const [newMealDescription, setNewMealDescription] = useState('');
     const [selectedRecipes, setSelectedRecipes] = useState([]);
     const [availableRecipes, setAvailableRecipes] = useState([]);
-    const [joinDisplayName, setJoinDisplayName] = useState('');
+    const [googleSession, setGoogleSession] = useState(null);
     const [showMealDetailModal, setShowMealDetailModal] = useState(false);
     const [selectedMeal, setSelectedMeal] = useState(null);
     const [editingMealName, setEditingMealName] = useState('');
@@ -68,32 +67,10 @@ const PartyScreen = ({ navigation }) => {
     const [estimatingStatus, setEstimatingStatus] = useState('');
     const [pendingLiveInvite, setPendingLiveInvite] = useState(null);
 
-    const {
-        pendingReview,
-        clearPendingReview,
-        pendingJoin,
-        clearPendingJoin,
-        importSummary,
-        clearImportSummary,
-    } = usePartyDeepLink({
-        viewerEmail: currentUser?.email,
-        onImported: async (partyId) => {
-            const party = await partyOperations.getById(partyId);
-            if (party) setSelectedParty(party);
-            const allParties = await partyOperations.getAll();
-            setParties(allParties);
-        },
-    });
-
-    useEffect(() => {
-        if (importSummary) {
-            Alert.alert('Party link', importSummary, [{ text: 'OK', onPress: clearImportSummary }]);
-        }
-    }, [importSummary, clearImportSummary]);
-
     useFocusEffect(
         useCallback(() => {
             loadCurrentUser();
+            getOwnerSession().then(setGoogleSession);
             loadParties();
             if (Platform.OS === 'web' && typeof window !== 'undefined') {
                 const params = new URLSearchParams(window.location.search);
@@ -177,14 +154,6 @@ const PartyScreen = ({ navigation }) => {
         }
     }, [selectedParty?.id]);
 
-    useEffect(() => {
-        if (pendingReview?.localPartyId) {
-            partyOperations.getById(pendingReview.localPartyId).then((party) => {
-                if (party) setSelectedParty(party);
-            });
-        }
-    }, [pendingReview?.localPartyId]);
-
     const loadMeals = async (partyId) => {
         try {
             const partyMeals = await partyMealOperations.getByPartyId(partyId);
@@ -194,41 +163,37 @@ const PartyScreen = ({ navigation }) => {
         }
     };
 
+    const promptSignIn = () => {
+        Alert.alert(
+            'Sign in required',
+            'Create and join parties with Sign in with Google on the Account tab.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Go to Account', onPress: () => navigation.navigate('Account') },
+            ]
+        );
+    };
+
     const handleCreateParty = async () => {
         if (!newPartyName.trim()) {
             Alert.alert('Error', 'Please enter a party name');
             return;
         }
 
-        try {
-            const user = currentUser || await userOperations.getCurrent();
-            if (!user) {
-                Alert.alert('Error', 'User not found. Please set up your account first.');
-                return;
-            }
+        const session = googleSession || (await getOwnerSession());
+        if (!session?.token) {
+            promptSignIn();
+            return;
+        }
 
-            const ownerEmail = (user.email || '').trim().toLowerCase();
-            const partyId = await partyOperations.create({
-                name: newPartyName.trim(),
-                description: newPartyDescription.trim() || null,
-                createdBy: user.user_id,
-                partyUuid: generatePartyUuid(),
-                ownerEmail: ownerEmail || null,
-                syncSecret: generateSyncSecret(),
-                syncVersion: 1,
-            });
-            
-            // Add creator as owner member
-            await partyMemberOperations.add({
-                partyId: partyId,
-                userId: user.user_id,
-                userName: user.name || user.username || 'You',
-                memberEmail: ownerEmail || null,
-                syncMemberId: generateMemberId(),
-                memberStatus: 'confirmed',
-                role: 'owner',
-            });
-            
+        try {
+            const data = await createLiveParty({ name: newPartyName.trim() });
+            const localId = await attachOrCreateLocalLiveParty(data.party);
+            if (newPartyDescription.trim()) {
+                await partyOperations.update(localId, { description: newPartyDescription.trim() });
+            }
+            const party = await partyOperations.getById(localId);
+            if (party) setSelectedParty(party);
             setNewPartyName('');
             setNewPartyDescription('');
             setShowCreatePartyModal(false);
@@ -236,7 +201,7 @@ const PartyScreen = ({ navigation }) => {
             Alert.alert('Success', 'Party created!');
         } catch (error) {
             console.error('Error creating party:', error);
-            Alert.alert('Error', 'Failed to create party');
+            Alert.alert('Error', error?.message || 'Failed to create party');
         }
     };
 
@@ -381,18 +346,22 @@ const PartyScreen = ({ navigation }) => {
     };
 
     const handleCompleteLiveJoin = async () => {
-        if (!joinDisplayName.trim() || !pendingLiveInvite) return;
+        if (!pendingLiveInvite) return;
+        const session = googleSession || (await getOwnerSession());
+        if (!session?.token) {
+            promptSignIn();
+            return;
+        }
         try {
             const data = await joinLiveParty({
                 inviteToken: pendingLiveInvite,
-                displayName: joinDisplayName.trim(),
-                email: currentUser?.email,
+                displayName: session.name || session.email?.split('@')[0] || 'Guest',
+                email: session.email,
             });
             const partyId = await attachOrCreateLocalLiveParty(data.party);
             const party = await partyOperations.getById(partyId);
             if (party) setSelectedParty(party);
             setPendingLiveInvite(null);
-            setJoinDisplayName('');
             await loadParties();
             Alert.alert('Joined', `You joined "${data.party.name}".`);
         } catch (error) {
@@ -400,31 +369,11 @@ const PartyScreen = ({ navigation }) => {
         }
     };
 
-    const handleCompleteJoin = async () => {
-        if (!joinDisplayName.trim()) {
-            Alert.alert('Name required', 'Enter a display name so the owner knows who joined.');
-            return;
+    useEffect(() => {
+        if (pendingLiveInvite && googleSession?.token) {
+            handleCompleteLiveJoin();
         }
-        if (!pendingJoin) return;
-        try {
-            const user = currentUser || await userOperations.getCurrent();
-            const partyName = pendingJoin.doc.name;
-            const { partyId } = await completePartyJoin({
-                doc: pendingJoin.doc,
-                secret: pendingJoin.secret,
-                displayName: joinDisplayName.trim(),
-                currentUser: user,
-            });
-            const party = await partyOperations.getById(partyId);
-            if (party) setSelectedParty(party);
-            setJoinDisplayName('');
-            clearPendingJoin();
-            await loadParties();
-            Alert.alert('Joined', `You joined "${partyName}".`);
-        } catch (error) {
-            Alert.alert('Could not join', error?.message || 'Invalid or expired invite link.');
-        }
-    };
+    }, [pendingLiveInvite, googleSession?.token]);
 
     const loadRecipesForMeal = async () => {
         try {
@@ -825,8 +774,15 @@ const PartyScreen = ({ navigation }) => {
         </TouchableOpacity>
     );
 
+    const viewerEmail = (googleSession?.email || currentUser?.email || '').toLowerCase();
+    const ownerEmail = (selectedParty?.owner_email || '').toLowerCase();
+    const isPartyOwner =
+        partyMembers?.some((m) => m.role === 'owner' && m.user_id === currentUser?.user_id) ||
+        (viewerEmail && ownerEmail && viewerEmail === ownerEmail);
+
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            <PartyLiveNotice theme={theme} />
             {/* Party List */}
             <View style={[styles.partyListContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
                 <FlatList
@@ -846,7 +802,10 @@ const PartyScreen = ({ navigation }) => {
                 />
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="Create a party"
                     style={[styles.addPartyButton, { backgroundColor: theme.primary[500] }]}
-                    onPress={() => setShowCreatePartyModal(true)}
+                    onPress={() => {
+                        if (!googleSession?.token) promptSignIn();
+                        else setShowCreatePartyModal(true);
+                    }}
                 >
                     <Ionicons name="add" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
@@ -855,21 +814,20 @@ const PartyScreen = ({ navigation }) => {
             {/* Meals List */}
             {selectedParty ? (
                 <View style={styles.mealsContainer}>
-                    <PartySyncPanel
+                    <PartyMembersList
                         theme={theme}
-                        selectedParty={selectedParty}
-                        currentUser={currentUser}
-                        partyMembers={partyMembers}
-                        onPartyUpdated={async () => {
+                        members={partyMembers}
+                        isOwner={isPartyOwner}
+                        partyId={selectedParty.id}
+                        livePartyId={selectedParty.live_party_id}
+                        syncMode={selectedParty.sync_mode}
+                        onChanged={async () => {
                             await refreshParty();
-                            if (selectedParty?.id) await loadPartyMembers(selectedParty.id);
+                            await loadPartyMembers(selectedParty.id);
                         }}
-                        pendingImport={
-                            pendingReview
-                                ? { doc: pendingReview.doc, secret: pendingReview.secret }
-                                : null
-                        }
-                        onClearPendingImport={clearPendingReview}
+                        onInviteRotated={async () => {
+                            await refreshParty();
+                        }}
                     />
                     <View style={styles.mealsHeader}>
                         <Text style={[styles.mealsTitle, { color: theme.colors.text.primary }]}>
@@ -1047,67 +1005,21 @@ const PartyScreen = ({ navigation }) => {
                 onClose={() => setShowInviteModal(false)}
                 theme={theme}
                 selectedParty={selectedParty}
-                currentUser={currentUser}
-                onUpdated={refreshParty}
             />
 
-            <Modal visible={Boolean(pendingJoin)} transparent animationType="slide" onRequestClose={clearPendingJoin}>
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-                        <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>
-                            Join {pendingJoin?.doc?.name || 'party'}
-                        </Text>
-                        <Text style={{ color: theme.colors.text.secondary, marginBottom: 12 }}>
-                            Your display name is shared with the owner via a join receipt link. Membership syncs via links
-                            only — nothing is stored on our servers.
-                        </Text>
-                        <TextInput
-                            accessibilityLabel="Display name"
-                            style={[styles.modalInput, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
-                            placeholder="Your name"
-                            placeholderTextColor={theme.colors.text.tertiary}
-                            value={joinDisplayName}
-                            onChangeText={setJoinDisplayName}
-                        />
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity
-                                style={[styles.modalButton, { backgroundColor: theme.colors.border }]}
-                                onPress={clearPendingJoin}
-                            >
-                                <Text style={[styles.modalButtonText, { color: theme.colors.text.primary }]}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.modalButton, { backgroundColor: theme.primary[500] }]}
-                                onPress={handleCompleteJoin}
-                            >
-                                <Text style={styles.modalButtonText}>Join party</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
-
             <Modal
-                visible={Boolean(pendingLiveInvite)}
+                visible={Boolean(pendingLiveInvite && !googleSession?.token)}
                 transparent
                 animationType="slide"
                 onRequestClose={() => setPendingLiveInvite(null)}
             >
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-                        <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>Join live party</Text>
+                        <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>Join party</Text>
                         <Text style={{ color: theme.colors.text.secondary, marginBottom: 12 }}>
-                            Enter a display name. Party name, photo, meals, and member names sync on our server for
-                            live parties.
+                            Sign in with Google on the Account tab to join this party. Your Google name is shared with
+                            other members.
                         </Text>
-                        <TextInput
-                            accessibilityLabel="Display name"
-                            style={[styles.modalInput, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
-                            placeholder="Your name"
-                            placeholderTextColor={theme.colors.text.tertiary}
-                            value={joinDisplayName}
-                            onChangeText={setJoinDisplayName}
-                        />
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
                                 style={[styles.modalButton, { backgroundColor: theme.colors.border }]}
@@ -1117,9 +1029,12 @@ const PartyScreen = ({ navigation }) => {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.modalButton, { backgroundColor: theme.primary[500] }]}
-                                onPress={handleCompleteLiveJoin}
+                                onPress={() => {
+                                    setPendingLiveInvite(null);
+                                    navigation.navigate('Account');
+                                }}
                             >
-                                <Text style={styles.modalButtonText}>Join party</Text>
+                                <Text style={styles.modalButtonText}>Account</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

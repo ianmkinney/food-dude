@@ -17,6 +17,12 @@ export function isOwnerGateConfigured() {
     return getAllowedEmails().length > 0;
 }
 
+/** Google sign-in for all users (parties, backups). Requires SESSION_SECRET + GOOGLE_CLIENT_IDS. */
+export function isGoogleSignInConfigured() {
+    if (!process.env.SESSION_SECRET?.trim()) return false;
+    return getGoogleClientIds().length > 0;
+}
+
 export function isEmailAllowed(email) {
     const allowed = getAllowedEmails();
     if (!allowed.length) return false;

@@ -5,18 +5,18 @@ import * as WebBrowser from 'expo-web-browser';
 import {
     clearOwnerSession,
     exchangeGoogleIdToken,
-    fetchOwnerUsage,
+    fetchAuthSessionProfile,
     getOwnerSession,
     type OwnerSession,
-    type OwnerUsage,
 } from '../platform/ownerSession';
-import { getOwnerGoogleClientIds, isOwnerSignInConfigured } from '../platform/ownerSignInConfig';
+import { getOwnerGoogleClientIds, isGoogleSignInConfigured } from '../platform/ownerSignInConfig';
 import {
     signInWithGooglePopup,
     takePendingGoogleSignIn,
     type GoogleSignInPayload,
 } from '../platform/googleWebAuth';
 import { testOwnerAi } from '../monetization/livePlatformAi';
+import { autoMigrateLocalPartiesAfterSignIn } from '../services/partyAutoMigrate';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -26,7 +26,7 @@ type Props = {
 
 /** Renders nothing unless Google client IDs are configured for this platform (avoids hook crash). */
 export default function OwnerSignInSettings(props: Props) {
-    if (!isOwnerSignInConfigured()) {
+    if (!isGoogleSignInConfigured()) {
         return null;
     }
     return <OwnerSignInSettingsInner {...props} />;
@@ -35,9 +35,8 @@ export default function OwnerSignInSettings(props: Props) {
 function OwnerSignInSettingsInner({ theme }: Props) {
     const { webClientId, iosClientId, androidClientId } = getOwnerGoogleClientIds();
     const [session, setSession] = useState<OwnerSession | null>(null);
-    const [usage, setUsage] = useState<OwnerUsage | null>(null);
+    const [platformAiAllowed, setPlatformAiAllowed] = useState(false);
     const [busy, setBusy] = useState(false);
-    // One Tap is often suppressed on iOS Safari; then sign in through a popup.
     const [usePopup, setUsePopup] = useState(false);
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
@@ -56,15 +55,21 @@ function OwnerSignInSettingsInner({ theme }: Props) {
         const current = await getOwnerSession();
         setSession(current);
         if (current) {
-            setUsage(await fetchOwnerUsage());
+            const profile = await fetchAuthSessionProfile();
+            setPlatformAiAllowed(Boolean(profile?.platformAiAllowed));
         } else {
-            setUsage(null);
+            setPlatformAiAllowed(false);
         }
     }, []);
 
     useEffect(() => {
         refresh();
     }, [refresh]);
+
+    const afterSignIn = async () => {
+        await autoMigrateLocalPartiesAfterSignIn();
+        await refresh();
+    };
 
     const signInNative = async () => {
         if (!request) {
@@ -80,7 +85,7 @@ function OwnerSignInSettingsInner({ theme }: Props) {
                 throw new Error('Google did not return an ID token.');
             }
             await exchangeGoogleIdToken(idToken, googleNonce);
-            await refresh();
+            await afterSignIn();
         } catch (error) {
             Alert.alert('Sign-in failed', error instanceof Error ? error.message : 'Try again.');
         } finally {
@@ -94,17 +99,17 @@ function OwnerSignInSettingsInner({ theme }: Props) {
         if (!pending) return;
         setBusy(true);
         exchangeGoogleIdToken(pending.idToken, pending.nonce)
-            .then(refresh)
+            .then(afterSignIn)
             .catch((error) => Alert.alert('Sign-in failed', error instanceof Error ? error.message : 'Try again.'))
             .finally(() => setBusy(false));
-    }, [refresh]);
+    }, []);
 
     const finishWebSignIn = async (getPayload: () => Promise<GoogleSignInPayload>) => {
         setBusy(true);
         try {
             const { idToken, nonce } = await getPayload();
             await exchangeGoogleIdToken(idToken, nonce);
-            await refresh();
+            await afterSignIn();
         } catch (error) {
             if (error instanceof Error && error.message === 'not-displayed') {
                 setUsePopup(true);
@@ -123,7 +128,6 @@ function OwnerSignInSettingsInner({ theme }: Props) {
             return;
         }
         if (usePopup) {
-            // Opened synchronously in the tap handler so Safari allows the popup.
             const pending = signInWithGooglePopup(webClientId);
             finishWebSignIn(() => pending);
             return;
@@ -138,7 +142,6 @@ function OwnerSignInSettingsInner({ theme }: Props) {
             const result = await testOwnerAi();
             const fallback = result.fallbackFrom ? ` (configured ${result.fallbackFrom} was rejected)` : '';
             setTestResult({ ok: true, text: `Working · ${result.model} · ${result.latencyMs} ms${fallback}` });
-            setUsage(await fetchOwnerUsage());
         } catch (error) {
             setTestResult({ ok: false, text: error instanceof Error ? error.message : 'Test failed.' });
         } finally {
@@ -149,46 +152,48 @@ function OwnerSignInSettingsInner({ theme }: Props) {
     const signOut = async () => {
         await clearOwnerSession();
         setSession(null);
-        setUsage(null);
+        setPlatformAiAllowed(false);
     };
 
     const text = theme.colors.text;
 
     return (
         <View style={styles.wrap}>
-            <Text style={[styles.title, { color: text.primary }]}>Owner sign-in</Text>
+            <Text style={[styles.title, { color: text.primary }]}>Sign in with Google</Text>
             <Text style={[styles.hint, { color: text.secondary }]}>
-                For the app owner only. Uses AmpliFood&apos;s server-side OpenRouter key. Everyone else uses bring-your-own-key AI.
+                Sign in to create or join parties and use optional cloud backup. Your recipes and pantry stay on this
+                device unless you back them up. Platform AI still requires an allowlisted account or your own API key.
             </Text>
             {session ? (
                 <>
-                    <View style={styles.statusRow}>
-                        <Text style={[styles.value, styles.statusText, { color: text.primary }]}>
-                            Owner AI: connected as {session.email}
-                        </Text>
-                        <Pressable
-                            onPress={runTest}
-                            disabled={testing}
-                            style={[styles.testButton, { borderColor: theme.colors.border }]}
-                            accessibilityRole="button"
-                            accessibilityLabel="Test owner AI"
-                        >
-                            <Text style={[styles.testText, { color: theme.primary[500] }]}>{testing ? 'Testing…' : 'Test'}</Text>
-                        </Pressable>
-                    </View>
-                    {testResult ? (
-                        <Text
-                            accessibilityLiveRegion="polite"
-                            style={[styles.hint, { color: testResult.ok ? text.secondary : theme.colors.error }]}
-                        >
-                            {testResult.text}
-                        </Text>
-                    ) : null}
-                    {usage ? (
-                        <Text style={[styles.hint, { color: text.tertiary }]}>
-                            Today: {usage.requests}/{usage.requestLimit} requests · ~
-                            {usage.tokens.toLocaleString()}/{usage.tokenLimit.toLocaleString()} estimated tokens
-                        </Text>
+                    <Text style={[styles.value, { color: text.primary }]}>
+                        Signed in as {session.name || session.email}
+                    </Text>
+                    {platformAiAllowed ? (
+                        <>
+                            <View style={styles.statusRow}>
+                                <Text style={[styles.hint, { color: text.secondary }]}>Platform AI is enabled.</Text>
+                                <Pressable
+                                    onPress={runTest}
+                                    disabled={testing}
+                                    style={[styles.testButton, { borderColor: theme.colors.border }]}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Test platform AI"
+                                >
+                                    <Text style={[styles.testText, { color: theme.primary[500] }]}>
+                                        {testing ? 'Testing…' : 'Test'}
+                                    </Text>
+                                </Pressable>
+                            </View>
+                            {testResult ? (
+                                <Text
+                                    accessibilityLiveRegion="polite"
+                                    style={[styles.hint, { color: testResult.ok ? text.secondary : theme.colors.error }]}
+                                >
+                                    {testResult.text}
+                                </Text>
+                            ) : null}
+                        </>
                     ) : null}
                     <Pressable
                         style={[styles.button, { backgroundColor: theme.colors.surfaceMuted }]}
@@ -269,7 +274,6 @@ const styles = StyleSheet.create({
     hint: { fontSize: 14, lineHeight: 20 },
     value: { fontSize: 15, fontWeight: '500' },
     statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    statusText: { flex: 1 },
     testButton: {
         minHeight: 44,
         minWidth: 64,

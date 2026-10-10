@@ -43,6 +43,7 @@ const modules = [
     'recipes/import.js',
     'party/email.js',
     'party/index.js',
+    'backup/index.js',
     '_lib/partyDb.js',
     '_lib/partySchema.js',
     '_lib/partyConstants.js',
@@ -67,6 +68,7 @@ for (const rel of modules) {
         rel.startsWith('ai/') ||
         rel.startsWith('recipes/') ||
         rel.startsWith('party/') ||
+        rel.startsWith('backup/') ||
         rel === 'p.js' ||
         rel === 'p-og.js'
     ) {

@@ -1,5 +1,5 @@
 import { applyCors } from '../_lib/cors.js';
-import { isOwnerGateConfigured, isEmailAllowed, requireSecrets } from '../_lib/env.js';
+import { isEmailAllowed, isGoogleSignInConfigured, requireSecrets } from '../_lib/env.js';
 import { isElevenLabsConfigured } from '../_lib/elevenLabs.js';
 import { bearerToken, verifySession } from '../_lib/session.js';
 
@@ -10,10 +10,10 @@ export default async function handler(req, res) {
         return;
     }
 
-    if (!isOwnerGateConfigured()) {
+    if (!isGoogleSignInConfigured()) {
         res.status(503).json({
-            error: 'platform_disabled',
-            message: 'Owner platform AI is not enabled.',
+            error: 'sign_in_disabled',
+            message: 'Google sign-in is not enabled on this server.',
         });
         return;
     }
@@ -34,16 +34,16 @@ export default async function handler(req, res) {
 
     try {
         const session = await verifySession(token);
-        if (!isEmailAllowed(session.email)) {
-            res.status(403).json({ error: 'not_allowed', message: 'This Google account is not authorized.' });
-            return;
-        }
+        const platformAiAllowed = isEmailAllowed(session.email);
         res.status(200).json({
             email: session.email,
             name: session.name,
-            elevenlabsAvailable: isElevenLabsConfigured(),
+            sub: session.sub,
+            platformAiAllowed,
+            elevenlabsAvailable: platformAiAllowed && isElevenLabsConfigured(),
         });
     } catch {
         res.status(401).json({ error: 'unauthorized', message: 'Sign in again in Account.' });
+        return;
     }
 }

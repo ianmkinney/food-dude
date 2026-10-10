@@ -76,8 +76,11 @@ export async function createLiveParty({ name }) {
 }
 
 export async function joinLiveParty({ inviteToken, displayName, email }) {
+    const sessionToken = await getOwnerSessionToken();
+    if (!sessionToken) throw new Error('Sign in on Account to join a party.');
     const data = await partyFetch('/party?action=join', {
         body: { action: 'join', inviteToken, displayName, email },
+        sessionToken,
     });
     await setStoredMemberToken(data.party.id, data.memberToken);
     await setStoredLiveVersion(data.party.id, data.party.version);
