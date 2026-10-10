@@ -373,6 +373,7 @@ export const glowFor = (color, opacity = 0.35) => ({
 
 // Helper function to get theme based on color scheme
 export const getTheme = (isDark, platform, accentId = 'galley') => ({
+  isDark: !!isDark,
   colors: isDark ? colors.dark : colors.light,
   brand,
   primary: isDark ? colors.primary : colors.primaryLight,
