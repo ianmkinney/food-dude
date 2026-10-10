@@ -31,6 +31,7 @@ import { INTRO_LINES, LINES, type LineId } from './script';
 import { playLine, stopLine } from './onboardingVoice';
 import { isVoiceMuted, setVoiceMuted } from './onboardingStore';
 import { SAMPLE_RECIPES, type DemoRecipe } from './sampleRecipes';
+import PrivacyDataExplainer from '../components/PrivacyDataExplainer';
 
 export type OnboardingResult = { skipped: boolean; savedRecipeId: number | null; savedRecipeTitle: string | null };
 
@@ -251,6 +252,7 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
                         </View>
                         <Text style={[styles.lead, { color: c.text.primary }]}>{INTRO_LINES[0]}</Text>
                         <Text style={[styles.body, { color: c.text.secondary }]}>{INTRO_LINES[1]}</Text>
+                        <PrivacyDataExplainer theme={theme} variant="intro" />
                         <View style={styles.row}>
                             <Button label="Let's go" primary onPress={() => go('agree')} />
                             <Button

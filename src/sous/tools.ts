@@ -43,7 +43,13 @@ export type SousCard =
     | { type: 'meal_plan'; recipeTitle: string; date: string; mealType: MealType }
     | { type: 'pantry'; items: string[] }
     | { type: 'grocery'; items: string[] }
-    | { type: 'cost'; total: number | null; currency: string; store: string | null }
+    | {
+          type: 'cost';
+          total: number | null;
+          currency: string;
+          store: string | null;
+          lineItems?: { name: string; estimatedCost: number }[];
+      }
     | { type: 'error'; message: string };
 
 /** Tool reference shown to the model inside the system prompt. */
@@ -54,7 +60,7 @@ export const TOOL_SPEC = `
 - add_to_meal_plan {"recipe_id"?: number, "recipe_title"?: string, "date": "YYYY-MM-DD", "meal_type": "breakfast"|"lunch"|"dinner"}: schedule a saved recipe.
 - add_to_pantry {"items": [{"name", "quantity"?, "unit"?, "category"?}]}: record items the user has at home.
 - add_to_grocery {"items": [{"name", "quantity"?, "unit"?}]}: add items to the shopping list.
-- estimate_cost {"store"?: string}: estimate what the current grocery list will cost.`.trim();
+- estimate_cost {"store"?: string}: estimate what the current grocery list will cost (run after add_to_grocery when pricing a meal).`.trim();
 
 const asText = (value: unknown) => (value == null || value === '' ? null : String(value));
 const isUrl = (value?: string) => !!value && /^https?:\/\/\S+$/i.test(value.trim());
@@ -144,11 +150,20 @@ async function run(call: ToolCall): Promise<SousCard> {
             if (!list.length) throw new Error('Your grocery list is empty, so there is nothing to price yet.');
             const result = await estimateGroceryCost(list, call.args.store || '');
             if (!result?.success) throw new Error(result?.error || "Couldn't estimate the cost.");
+            const items = Array.isArray(result.estimate?.items)
+                ? result.estimate.items
+                      .filter((row: { name?: string; estimatedCost?: number }) => row?.name && typeof row.estimatedCost === 'number')
+                      .map((row: { name: string; estimatedCost: number }) => ({
+                          name: row.name,
+                          estimatedCost: row.estimatedCost,
+                      }))
+                : [];
             return {
                 type: 'cost',
                 total: typeof result.estimate?.totalCost === 'number' ? result.estimate.totalCost : null,
                 currency: result.estimate?.currency || 'USD',
                 store: call.args.store || null,
+                lineItems: items.length ? items : undefined,
             };
         }
         default:

@@ -28,16 +28,18 @@
 
       <h2>Your data stays on your device</h2>
       <ul>
-        <li>Recipes, meal plans, pantry items, grocery lists, parties, AI chat history, and your profile are saved in a local SQLite database on your device. In the web version, that database lives in your browser's storage for this site.</li>
-        <li>Theme and display settings are saved locally on your device.</li>
+        <li>Recipes, meal plans, pantry items, grocery lists, parties, AI chat history, assistant memory, and your profile are saved in a local SQLite database on your device. In the web version, that database lives in your browser's storage for this site.</li>
+        <li>Theme, voice, and display settings are saved locally on your device.</li>
         <li>We don't upload, back up, or sync any of it. If you delete the app or clear the site's data, it's gone.</li>
+        <li>We don't sell your data. Nothing in this list is used for advertising.</li>
       </ul>
 
-      <h2>Your AI key</h2>
+      <h2>Your AI and voice keys (BYOK)</h2>
       <ul>
-        <li>On iPhone and Android, the API key you add is stored with SecureStore in the system's encrypted storage (iOS Keychain / Android Keystore).</li>
-        <li>In the web version, there is no system keychain, so the key is kept in your browser's local storage for this site. Anyone with access to that browser profile could read it, so use Account → Clear on shared computers.</li>
-        <li>The key is never sent to AmpliFood. It's only sent, with your requests, to the AI provider you picked (unless you are the signed-in owner using platform AI; see above).</li>
+        <li>On iPhone and Android, API keys you add (AI provider and optional ElevenLabs voice) are stored with SecureStore in the system's encrypted storage (iOS Keychain / Android Keystore).</li>
+        <li>In the web version, there is no system keychain, so keys are kept in your browser's local storage for this site. Anyone with access to that browser profile could read them, so use Account → Clear on shared computers.</li>
+        <li>Keys are never sent to AmpliFood. Your AI key is sent only with your requests to the AI provider you picked (unless you are the signed-in owner using platform AI via OpenRouter; see above).</li>
+        <li><strong>ElevenLabs (optional):</strong> If you add an ElevenLabs API key in Account → Voice, Ampi's spoken replies are synthesized by calling ElevenLabs directly from your device. Reply text is sent to ElevenLabs under your own account; AmpliFood does not receive or store that audio on a server.</li>
       </ul>
 
       <h2>What leaves your device, and where it goes</h2>
@@ -76,6 +78,7 @@
       <h2>Deleting your data</h2>
       <ul>
         <li>Remove an AI key: Account → AI provider → Clear.</li>
+        <li>Remove an ElevenLabs key: Account → Voice → Remove key.</li>
         <li>Remove everything: delete the app, or in the web version, clear this site's data in your browser settings.</li>
       </ul>
 

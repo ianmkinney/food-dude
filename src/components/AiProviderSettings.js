@@ -254,7 +254,12 @@ const AiProviderSettings = ({ theme }) => {
             <Text style={[styles.help, { color: theme.colors.text.secondary }]}>
                 BYOK: paste your own Anthropic, OpenAI, xAI, or Gemini key. It is saved in the OS
                 encrypted keychain (or this browser on web). AmpliFood never embeds a shared key and
-                has no server that stores yours. Requests go only to the provider you pick.
+                has no server that stores yours. Requests go only to the provider you pick—not through
+                AmpliFood. Owner platform AI (OpenRouter) is separate and only applies when signed in as owner.
+            </Text>
+            <Text style={[styles.help, { color: theme.colors.text.tertiary, fontSize: 12 }]}>
+                Your key stays on this device. Messages you send to Ampi are forwarded to your chosen AI provider to
+                generate replies.
             </Text>
             <Text style={[styles.help, { color: theme.colors.text.secondary }]}>
                 Claude, OpenAI, and Grok live model lists work in Expo Go; the web app may fall back
