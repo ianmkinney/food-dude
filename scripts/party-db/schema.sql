@@ -1,4 +1,5 @@
 -- AmpliFood party-only server schema (Neon Postgres). Idempotent.
+-- Canonical statement list for runtime ensure: api/_lib/partySchema.js (keep in sync).
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS parties (
