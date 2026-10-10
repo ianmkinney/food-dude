@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
-import { BrandMark } from '../components/Brand';
+import GuitarMark from '../brand/GuitarMark';
 import { MINIMUM_AGE, TERMS_VERSION } from '../config/legal';
 import {
     PRIVACY_URL,
@@ -90,7 +90,7 @@ export function LegalGate({ children }: { children: React.ReactNode }) {
     const c = theme.colors;
     return (
         <ScrollView style={{ backgroundColor: c.background }} contentContainerStyle={styles.gate}>
-            <BrandMark size={110} style={null} />
+            <GuitarMark size={110} waves="idle" />
             <Text style={[styles.gateTitle, { color: c.text.primary, fontFamily: theme.typography.fonts.display }]} accessibilityRole="header">
                 Welcome to AmpliFood
             </Text>

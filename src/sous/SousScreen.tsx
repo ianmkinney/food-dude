@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     AccessibilityInfo,
-    ActivityIndicator,
     FlatList,
     KeyboardAvoidingView,
     Platform,
     Pressable,
+    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -13,9 +13,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { getTheme } from '../theme';
+import { getTheme, motion } from '../theme';
 import { useTheme } from '../context/ThemeContext';
-import { BrandMark } from '../components/Brand';
+import GuitarMark from '../brand/GuitarMark';
+import AnimatedPressable from '../components/AnimatedPressable';
+import StrumIndicator from '../components/StrumIndicator';
+import WordFade from '../components/WordFade';
+import { Enter, useReducedMotion } from '../motion';
 import { AiBadge, AiDisclaimer, AllergenWarning, AllergyNotice, ReportButton } from '../ai/AiLabel';
 import { useAllergies } from '../safety/useAllergies';
 import { findAllergenMatches } from '../safety/allergens';
@@ -43,6 +47,9 @@ const SUGGESTIONS = [
 let nextId = 0;
 const newId = () => `m${Date.now()}-${nextId++}`;
 
+// How long a new message keeps its entrance treatment if the list re-renders mid-animation.
+const FRESH_MS = 2000;
+
 // The navigator is untyped JS; this keeps the calls readable without `any`.
 type Nav = { navigate: (name: string, params?: object) => void };
 
@@ -60,6 +67,8 @@ export default function SousScreen() {
     const [speakingId, setSpeakingId] = useState<string | null>(null);
     const engineRef = useRef<SpeechEngine | null>(null);
     const listRef = useRef<FlatList<Message>>(null);
+    const reduceMotion = useReducedMotion();
+    const freshUntil = useRef(new Map<string, number>());
 
     useEffect(() => {
         getVoiceSettings().then((s) => setAutoSpeakState(s.autoSpeak));
@@ -225,20 +234,31 @@ export default function SousScreen() {
         }
     };
 
+    const isFresh = (id: string) => {
+        const now = Date.now();
+        let until = freshUntil.current.get(id);
+        if (until === undefined) {
+            until = now + FRESH_MS;
+            freshUntil.current.set(id, until);
+        }
+        return now < until;
+    };
+
     const renderMessage = ({ item }: { item: Message }) => {
+        const fresh = isFresh(item.id);
         if (item.role === 'user') {
             return (
-                <View style={[styles.bubble, styles.userBubble, { backgroundColor: theme.primary[500] }]}>
+                <Enter enabled={fresh} springy distance={24} style={[styles.bubble, styles.userBubble, { backgroundColor: theme.primary[500] }]}>
                     <Text style={styles.userText}>{item.text}</Text>
-                </View>
+                </Enter>
             );
         }
         return (
-            <View style={styles.sousBlock}>
-                <View style={[styles.bubble, styles.sousBubble, { backgroundColor: c.surfaceElevated, borderColor: c.border }]}>
-                    <Text style={[styles.sousText, { color: c.text.primary }]}>{item.text}</Text>
+            <Enter enabled={fresh} springy distance={24} style={styles.sousBlock}>
+                <View style={[styles.bubble, styles.sousBubble, { backgroundColor: c.surface, borderColor: c.border }]}>
+                    <WordFade text={item.text} animate={fresh && !reduceMotion} style={[styles.sousText, { color: c.text.primary }]} />
                     {item.needsKey && (
-                        <Pressable onPress={() => navigation.navigate('Account')} style={[styles.inlineButton, { backgroundColor: theme.primary[500] }]}>
+                        <Pressable onPress={() => navigation.navigate('Account')} style={[styles.inlineButton, { backgroundColor: theme.primary[500] }]} accessibilityRole="button">
                             <Text style={styles.inlineButtonText}>Open Account</Text>
                         </Pressable>
                     )}
@@ -257,50 +277,90 @@ export default function SousScreen() {
                                 primeSpeechOnWeb();
                                 speak(item);
                             }}
+                            style={styles.metaButton}
                             accessibilityRole="button"
                             accessibilityLabel={speakingId === item.id ? 'Stop reading aloud' : 'Read this reply aloud'}
-                            hitSlop={8}
                         >
                             <Ionicons name={speakingId === item.id ? 'stop-circle-outline' : 'volume-high-outline'} size={18} color={c.text.tertiary} />
                         </Pressable>
                     </View>
                 )}
                 {!item.needsKey && <AiDisclaimer kind="chat" showBadge={false} style={{ paddingLeft: 4, maxWidth: '92%' }} />}
-            </View>
+            </Enter>
         );
     };
 
-    const empty = (
-        <View style={styles.empty}>
-            <BrandMark size={110} style={null} />
-            <Text style={[styles.hello, display, { color: c.text.primary }]}>AmpliFood · {ASSISTANT_NAME}</Text>
-            <Text style={[styles.pronounce, { color: c.text.tertiary }]}>{ASSISTANT_NAME} ({ASSISTANT_PRONUNCIATION}) · {ASSISTANT_TAGLINE}</Text>
-            <Text style={[styles.helloSub, { color: c.text.secondary }]}>
-                Ask me what to cook, and I can find or import recipes, plan meals, and fill your pantry and grocery list.
+    const started = messages.length > 0;
+
+    const hero = (
+        <View style={styles.hero}>
+            <GuitarMark size={112} waves={thinking ? 'thinking' : 'idle'} />
+            <Text style={[styles.hello, display, { color: c.text.primary }]} accessibilityRole="header">
+                Hi, I&apos;m {ASSISTANT_NAME}
             </Text>
-            <View style={styles.chips}>
-                {SUGGESTIONS.map((s) => (
-                    <Pressable key={s} onPress={() => send(s)} style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }]}>
-                        <Text style={[styles.chipText, { color: c.text.primary }]}>{s}</Text>
-                    </Pressable>
-                ))}
-            </View>
+            <Text style={[styles.pronounce, { color: c.text.tertiary }]}>
+                {ASSISTANT_PRONUNCIATION} · {ASSISTANT_TAGLINE}
+            </Text>
+            <Text style={[styles.helloSub, { color: c.text.secondary }]}>
+                Ask what to cook. I can find or import recipes, plan meals, and fill your pantry and grocery list.
+            </Text>
             {mic.isWeb && mic.isSupported && (
                 <Text style={[styles.webVoiceNote, { color: c.text.tertiary }]}>Tap the mic to talk. {WEB_SPEECH_NOTICE}</Text>
             )}
         </View>
     );
 
+    const chips = (
+        <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            style={styles.chipScroll}
+            contentContainerStyle={styles.chips}
+            accessibilityLabel="Suggestions"
+        >
+            {SUGGESTIONS.map((s, i) => (
+                <Enter key={s} index={i}>
+                    <AnimatedPressable
+                        onPress={() => send(s)}
+                        scaleTo={motion.scale.press}
+                        style={[styles.chip, { borderColor: c.border, backgroundColor: c.surface }]}
+                        accessibilityRole="button"
+                    >
+                        <Text style={[styles.chipText, { color: c.text.primary }]} numberOfLines={1}>{s}</Text>
+                    </AnimatedPressable>
+                </Enter>
+            ))}
+        </ScrollView>
+    );
+
     return (
         <KeyboardAvoidingView style={[styles.root, { backgroundColor: c.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
-            <View style={styles.topBar}>
-                <Text style={[styles.topTitle, display, { color: c.text.primary }]}>AmpliFood · {ASSISTANT_NAME}</Text>
-                <Text style={[styles.pronounceInline, { color: c.text.tertiary }]}>({ASSISTANT_PRONUNCIATION})</Text>
-                <AiBadge style={{ alignSelf: 'center' }} />
+            <View style={styles.iconRow}>
+                {started ? (
+                    <View style={styles.identity}>
+                        <GuitarMark size={32} waves={thinking ? 'thinking' : 'idle'} />
+                        <Text style={[styles.identityName, display, { color: c.text.primary }]}>{ASSISTANT_NAME}</Text>
+                    </View>
+                ) : null}
                 <View style={{ flex: 1 }} />
-                <Pressable onPress={toggleAutoSpeak} style={[styles.toggle, { borderColor: c.border }]} accessibilityRole="switch" accessibilityLabel={`Read ${ASSISTANT_NAME} replies aloud`} accessibilityState={{ checked: autoSpeak }}>
-                    <Ionicons name={autoSpeak ? 'volume-high' : 'volume-mute-outline'} size={16} color={autoSpeak ? theme.primary[500] : c.text.tertiary} />
-                    <Text style={[styles.toggleText, { color: c.text.secondary }]}>{autoSpeak ? 'Voice on' : 'Voice off'}</Text>
+                <AiBadge style={{ alignSelf: 'center' }} />
+                <Pressable
+                    onPress={() => navigation.navigate('AiChef')}
+                    style={styles.iconButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open AI Chef for recipes from your pantry or a photo"
+                >
+                    <Ionicons name="restaurant-outline" size={20} color={c.text.secondary} />
+                </Pressable>
+                <Pressable
+                    onPress={toggleAutoSpeak}
+                    style={[styles.iconButton, autoSpeak && { backgroundColor: theme.primary[500] + '22' }]}
+                    accessibilityRole="switch"
+                    accessibilityLabel={`Read ${ASSISTANT_NAME} replies aloud`}
+                    accessibilityState={{ checked: autoSpeak }}
+                >
+                    <Ionicons name={autoSpeak ? 'volume-high' : 'volume-mute-outline'} size={20} color={autoSpeak ? theme.primary[500] : c.text.secondary} />
                 </Pressable>
             </View>
             <FlatList
@@ -308,13 +368,16 @@ export default function SousScreen() {
                 data={messages}
                 keyExtractor={(m) => m.id}
                 renderItem={renderMessage}
-                ListEmptyComponent={empty}
-                contentContainerStyle={[styles.list, !messages.length && { flexGrow: 1, justifyContent: 'center' }]}
+                ListEmptyComponent={hero}
+                contentContainerStyle={[styles.list, !started && styles.listEmpty]}
+                keyboardShouldPersistTaps="handled"
                 ListFooterComponent={thinking ? (
-                    <View style={styles.thinking} accessibilityLiveRegion="polite">
-                        <ActivityIndicator size="small" color={theme.primary[500]} />
-                        <Text style={{ color: c.text.tertiary }}>{ASSISTANT_NAME} is on it…</Text>
-                    </View>
+                    <Enter springy distance={24} style={styles.thinking} accessibilityLiveRegion="polite">
+                        <View style={[styles.thinkingBubble, { backgroundColor: c.surface, borderColor: c.border }]}>
+                            <StrumIndicator color={theme.primary[500]} />
+                        </View>
+                        <Text style={[styles.thinkingText, { color: c.text.tertiary }]}>{ASSISTANT_NAME} is on it…</Text>
+                    </Enter>
                 ) : null}
             />
             {!!voiceNote && !listening && !mic.error && (
@@ -328,7 +391,8 @@ export default function SousScreen() {
                             : 'Listening while you hold the mic. Speech is turned into text on this device.')}
                 </Text>
             )}
-            <View style={[styles.composer, { borderTopColor: c.borderSoft, backgroundColor: c.surfaceGlass }]}>
+            {!started && chips}
+            <View style={[styles.composer, { borderTopColor: c.borderSoft, backgroundColor: c.background }]}>
                 {mic.isSupported ? (
                     <Pressable
                         ref={micTarget}
@@ -341,7 +405,7 @@ export default function SousScreen() {
                                   }
                                 : undefined
                         }
-                        style={[styles.roundButton, { backgroundColor: listening ? theme.colors.error : c.surfaceMuted }]}
+                        style={[styles.roundButton, { backgroundColor: listening ? theme.colors.error : c.surface, borderColor: c.border }]}
                         accessibilityRole="button"
                         accessibilityLabel={mic.isWeb ? `Tap to talk to ${ASSISTANT_NAME}` : `Hold to talk to ${ASSISTANT_NAME}`}
                         accessibilityHint={
@@ -361,19 +425,21 @@ export default function SousScreen() {
                     placeholderTextColor={c.text.tertiary}
                     style={[styles.input, { color: c.text.primary, backgroundColor: c.surface, borderColor: c.border }]}
                     multiline
+                    numberOfLines={Platform.OS === 'web' ? 1 : undefined}
                     editable={!listening}
                     onSubmitEditing={() => send(input)}
                     blurOnSubmit
                 />
-                <Pressable
+                <AnimatedPressable
                     onPress={() => send(input)}
                     disabled={!input.trim() || thinking}
-                    style={[styles.roundButton, { backgroundColor: theme.primary[500], opacity: !input.trim() || thinking ? 0.5 : 1 }]}
+                    scaleTo={motion.scale.press}
+                    style={[styles.roundButton, styles.sendButton, { backgroundColor: theme.primary[500], opacity: !input.trim() || thinking ? 0.5 : 1 }]}
                     accessibilityRole="button"
                     accessibilityLabel="Send"
                 >
                     <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
-                </Pressable>
+                </AnimatedPressable>
             </View>
         </KeyboardAvoidingView>
     );
@@ -381,40 +447,44 @@ export default function SousScreen() {
 
 const styles = StyleSheet.create({
     root: { flex: 1 },
-    topBar: { flexDirection: 'row', alignItems: 'baseline', gap: 6, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 4 },
-    topTitle: { fontSize: 24 },
-    pronounceInline: { fontSize: 13 },
-    toggle: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'center' },
-    toggleText: { fontSize: 12, fontWeight: '700' },
-    list: { padding: 16, gap: 12, maxWidth: 720, width: '100%', alignSelf: 'center' },
-    empty: { alignItems: 'center', paddingHorizontal: 12 },
-    hello: { fontSize: 30, marginTop: 12 },
-    pronounce: { fontSize: 13, marginTop: 2 },
-    helloSub: { fontSize: 15, lineHeight: 22, textAlign: 'center', marginTop: 10, maxWidth: 420 },
-    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 18 },
-    chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
-    chipText: { fontSize: 14, fontWeight: '600' },
-    bubble: { borderRadius: 20, paddingHorizontal: 15, paddingVertical: 11, maxWidth: '88%' },
-    userBubble: { alignSelf: 'flex-end', borderBottomRightRadius: 6 },
-    userText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22 },
+    iconRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, minHeight: 52 },
+    identity: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 4 },
+    identityName: { fontSize: 18 },
+    iconButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    list: { paddingHorizontal: 16, paddingVertical: 8, gap: 16 },
+    listEmpty: { flexGrow: 1, justifyContent: 'center' },
+    hero: { alignItems: 'center', paddingHorizontal: 8, paddingBottom: 16 },
+    hello: { fontSize: 30, marginTop: 16, textAlign: 'center' },
+    pronounce: { fontSize: 13, marginTop: 4, textAlign: 'center' },
+    helloSub: { fontSize: 16, lineHeight: 24, textAlign: 'center', marginTop: 12, maxWidth: 360 },
+    chipScroll: { flexGrow: 0, flexShrink: 0 },
+    chips: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
+    chip: { minHeight: 44, borderWidth: 1, borderRadius: 22, paddingHorizontal: 16, justifyContent: 'center' },
+    chipText: { fontSize: 15, fontWeight: '600' },
+    bubble: { borderRadius: 24, paddingHorizontal: 16, paddingVertical: 12, maxWidth: '88%' },
+    userBubble: { alignSelf: 'flex-end', borderBottomRightRadius: 8 },
+    userText: { color: '#FFFFFF', fontSize: 16, lineHeight: 24 },
     sousBlock: { gap: 8, alignItems: 'flex-start' },
-    sousBubble: { borderWidth: 1, borderBottomLeftRadius: 6 },
-    sousText: { fontSize: 16, lineHeight: 23 },
-    meta: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 4 },
-    fine: { fontSize: 11.5, lineHeight: 16, paddingLeft: 4, maxWidth: '92%' },
-    card: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 8, width: '92%' },
+    sousBubble: { borderWidth: 1, borderBottomLeftRadius: 8 },
+    sousText: { fontSize: 16, lineHeight: 24 },
+    meta: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 4 },
+    metaButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -8 },
+    card: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 8, width: '92%' },
     cardTitle: { fontSize: 14, fontWeight: '800' },
     cardKicker: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-    cardRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    cardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
     cardRowText: { flex: 1, fontSize: 15 },
-    cardFooter: { gap: 6 },
+    cardFooter: { gap: 8 },
     cost: { fontSize: 28 },
-    inlineButton: { marginTop: 10, alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+    inlineButton: { marginTop: 8, alignSelf: 'flex-start', borderRadius: 22, paddingHorizontal: 16, minHeight: 44, justifyContent: 'center' },
     inlineButtonText: { color: '#FFFFFF', fontWeight: '800' },
-    thinking: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 4 },
-    webVoiceNote: { fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 14, maxWidth: 420 },
-    micStatus: { textAlign: 'center', fontSize: 13, paddingHorizontal: 16, paddingBottom: 6 },
-    composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 10, borderTopWidth: 1 },
-    input: { flex: 1, minHeight: 42, maxHeight: 120, borderWidth: 1, borderRadius: 21, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, fontSize: 16 },
-    roundButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+    thinking: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    thinkingBubble: { borderWidth: 1, borderRadius: 24, borderBottomLeftRadius: 8, paddingHorizontal: 16, paddingVertical: 14 },
+    thinkingText: { fontSize: 14 },
+    webVoiceNote: { fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 16, maxWidth: 360 },
+    micStatus: { textAlign: 'center', fontSize: 13, paddingHorizontal: 16, paddingBottom: 8 },
+    composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
+    input: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderRadius: 22, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11, fontSize: 16, lineHeight: 20 },
+    roundButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+    sendButton: { borderWidth: 0 },
 });

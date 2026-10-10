@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { BrandMark } from '../components/Brand';
+import GuitarMark from '../brand/GuitarMark';
 import SourceLabel from '../components/SourceLabel';
 import { AiBadge, AiDisclaimer, AllergyNotice } from '../ai/AiLabel';
 import {
@@ -21,7 +21,7 @@ import { getApiKey, getSelectedProvider } from '../services/aiSettings';
 import { generateText, stripCodeFences } from '../services/aiClient';
 import { recipeOperations, userOperations } from '../database/operations';
 import { findAllergenMatches, parseAllergies } from '../safety/allergens';
-import { ASSISTANT_NAME, ASSISTANT_TAGLINE } from '../config/assistant';
+import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION, ASSISTANT_TAGLINE } from '../config/assistant';
 import { MINIMUM_AGE } from '../config/legal';
 import { useSpeechInput } from '../voice/useSpeechInput';
 import { WEB_SPEECH_NOTICE } from '../voice/webSpeechRecognition';
@@ -443,11 +443,11 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
     return (
         <ScrollView style={{ backgroundColor: c.background }} contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
             <View style={styles.topBar}>
-                <BrandMark size={44} style={null} />
+                <GuitarMark size={44} waves="idle" />
                 <View style={{ flex: 1 }}>
                     <View style={styles.nameRow}>
                         <Text style={[styles.sous, display, { color: c.text.primary }]}>AmpliFood · {ASSISTANT_NAME}</Text>
-                        <Text style={[styles.small, { color: c.text.tertiary }]}>(Soo)</Text>
+                        <Text style={[styles.small, { color: c.text.tertiary }]}>({ASSISTANT_PRONUNCIATION})</Text>
                         <AiBadge />
                     </View>
                 </View>

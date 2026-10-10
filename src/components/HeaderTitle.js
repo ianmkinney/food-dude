@@ -7,7 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import AnimatedPressable from './AnimatedPressable';
 import { Wordmark } from './Brand';
 
-const HeaderTitle = () => <Wordmark />;
+const HeaderTitle = () => <Wordmark height={24} />;
 
 const HeaderIconButton = ({ icon, onPress, label, color }) => (
     <AnimatedPressable
@@ -65,16 +65,19 @@ const styles = StyleSheet.create({
     side: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        gap: 0,
     },
     leftSide: {
-        marginLeft: 12,
+        marginLeft: 6,
     },
     rightSide: {
-        marginRight: 12,
+        marginRight: 6,
     },
     headerButton: {
-        padding: 6,
+        width: 44,
+        height: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
 });
 
