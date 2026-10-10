@@ -21,6 +21,7 @@ import {
     sendPartyEmailViaApi,
     shareLink,
 } from '../services/partyEmail';
+import { buildLiveInviteUrl } from '../services/partyLiveSync';
 
 async function loadBundle(partyId) {
     const party = await partyOperations.getById(partyId);
@@ -40,6 +41,10 @@ export default function PartyInviteModal({ visible, onClose, theme, selectedPart
         (async () => {
             setBusy(true);
             try {
+                if (selectedParty.sync_mode === 'live' && selectedParty.live_invite_token) {
+                    if (!cancelled) setJoinLink(buildLiveInviteUrl(selectedParty.live_invite_token));
+                    return;
+                }
                 const bundle = await loadBundle(selectedParty.id);
                 let secret = bundle.party.sync_secret;
                 if (!secret) {

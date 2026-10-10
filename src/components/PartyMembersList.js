@@ -2,8 +2,17 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { partyOperations } from '../database/operations';
+import { removeLiveMember } from '../services/partyLiveSync';
 
-export default function PartyMembersList({ theme, members, isOwner, partyId, onChanged }) {
+export default function PartyMembersList({
+    theme,
+    members,
+    isOwner,
+    partyId,
+    onChanged,
+    livePartyId,
+    syncMode,
+}) {
     if (!members?.length) return null;
 
     const handleRemove = (member) => {
@@ -14,6 +23,12 @@ export default function PartyMembersList({ theme, members, isOwner, partyId, onC
                 text: 'Remove',
                 style: 'destructive',
                 onPress: async () => {
+                    if (syncMode === 'live' && livePartyId && member.sync_member_id) {
+                        await removeLiveMember({
+                            livePartyId,
+                            memberId: member.sync_member_id,
+                        });
+                    }
                     await partyOperations.removeMemberFromParty(partyId, member.sync_member_id);
                     onChanged?.();
                 },

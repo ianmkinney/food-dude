@@ -92,12 +92,33 @@ Party collaboration uses **email links** with signed payloads in the URL **fragm
 | `RESEND_API_KEY` | For server email | API key from [Resend](https://resend.com/). If unset, `/api/party/email` returns `503` and the app uses `mailto:`. |
 | `RESEND_FROM` | Optional | From address (default `onboarding@resend.dev` until a domain is verified). |
 
-Uses the same `ALLOWED_EMAILS` / owner session gate as `/api/ai/chat`. **No party data is stored on the server** — only recipient validation and rate limiting.
+Uses the same `ALLOWED_EMAILS` / owner session gate as `/api/ai/chat`. Signed-link parties still do not store party payloads on the server.
 
-## 7. Clerk / other auth vendors
+## 7. Neon Postgres + Vercel Blob (live parties only)
+
+Live party sync stores **party metadata only** (name, optional cover image, member display names, meals) in Neon. Everything else (recipes, pantry, grocery, meal plans) stays on device.
+
+1. In the [Vercel dashboard](https://vercel.com/dashboard), open the **amplifood** project → **Storage** → add **Neon** from the Marketplace. Vercel injects `POSTGRES_URL` (and often `DATABASE_URL`) into the project.
+2. Optionally add **Vercel Blob** for party cover photos (`BLOB_READ_WRITE_TOKEN`). If Blob is not configured, cover images are stored as `bytea` in Postgres and served from `/api/party?action=image&partyId=…`.
+3. After linking Neon, run the schema once from your machine or CI:
+
+```bash
+DATABASE_URL="$POSTGRES_URL" node scripts/party-db/migrate.mjs
+```
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `DATABASE_URL` or `POSTGRES_URL` | For live parties | Neon connection string from the Vercel Neon integration. |
+| `BLOB_READ_WRITE_TOKEN` | Recommended | Vercel Blob read/write token for public party cover images. |
+
+API surface (single serverless entrypoint `api/party/index.js`, actions via `?action=`): `create`, `get`, `join`, `leave`, `remove_member`, `update_meals`, `upload_image`, `changes_since`, `migrate`. Invite previews: `/p/<token>` → `api/p.js` (Open Graph HTML + redirect to `/party?inviteToken=…`).
+
+Owner-only actions require the same Google owner session as platform AI. Joiners authenticate with the invite token plus a per-member secret returned on join.
+
+## 8. Clerk / other auth vendors
 
 Not used. Google ID-token verification (JWKS) + nonce + a signed session JWT keeps the stack minimal.
 
-## 8. Privacy
+## 9. Privacy
 
 Prompts are not logged on the server. Per-minute rate limiting is **best-effort in-memory** per serverless instance (abuse throttle only, not a billing control). Billing and daily caps are enforced by **OpenRouter per-key limits**.

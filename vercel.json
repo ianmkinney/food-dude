@@ -34,7 +34,11 @@
       "destination": "/auth/google-callback.html"
     },
     {
-      "source": "/((?!_expo/|assets/).*)",
+      "source": "/p/:token",
+      "destination": "/api/p?token=:token"
+    },
+    {
+      "source": "/((?!_expo/|assets/|api/).*)",
       "destination": "/index.html"
     }
   ],
