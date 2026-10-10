@@ -54,6 +54,7 @@ const modules = [
     '_lib/partyHttp.js',
     '_lib/partySerialize.js',
     '_lib/partyBlob.js',
+    '_lib/partyOgRender.js',
     'p.js',
     'p-og.js',
 ];
@@ -75,6 +76,13 @@ for (const rel of modules) {
     }
     console.log('ok', rel);
 }
+
+const { renderPartyOgPng } = await import(pathToFileURL(join(apiRoot, '_lib/partyOgRender.js')).href);
+const ogSample = await renderPartyOgPng({ title: 'Test Party' });
+if (!ogSample?.length || ogSample.length < 500) {
+    throw new Error('partyOgRender: expected non-empty PNG buffer');
+}
+console.log('ok party OG render', ogSample.length, 'bytes');
 
 const { checkMinuteRateLimit } = await import(pathToFileURL(join(apiRoot, '_lib/store.js')).href);
 for (let i = 0; i < 10; i++) {

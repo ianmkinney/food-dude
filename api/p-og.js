@@ -1,70 +1,75 @@
 import { getPartySql, isPartyDatabaseConfigured } from './_lib/partyDb.js';
 import { isInviteRowValid } from './_lib/partyInvite.js';
+import { renderPartyOgPng } from './_lib/partyOgRender.js';
 
 export const config = {
     runtime: 'nodejs',
 };
 
-export async function GET(req) {
-    const { ImageResponse } = await import('@vercel/og');
-    const React = await import('react');
-    const { searchParams } = new URL(req.url);
-    const token = String(searchParams.get('token') || '').trim();
-    let title = 'AmpliFood Party';
-    if (token && isPartyDatabaseConfigured()) {
-        try {
-            const sql = await getPartySql();
-            const rows = await sql`
-                SELECT p.name, it.revoked, it.expires_at FROM invite_tokens it
-                JOIN parties p ON p.id = it.party_id
-                WHERE it.token = ${token}
-                LIMIT 1`;
-            if (isInviteRowValid(rows[0]) && rows[0]?.name) title = rows[0].name;
-        } catch (error) {
-            console.warn('[p-og] lookup failed', error?.message || error);
-        }
+function requestOrigin(req) {
+    const proto = req.headers['x-forwarded-proto'] || 'https';
+    const host = req.headers['x-forwarded-host'] || req.headers.host || 'amplifood.vercel.app';
+    return `${proto}://${host}`;
+}
+
+async function loadPartyOgContext(token) {
+    const fallback = { title: 'AmpliFood Party' };
+    if (!token || !isPartyDatabaseConfigured()) {
+        return fallback;
     }
-    return new ImageResponse(
-        React.createElement(
-            'div',
-            {
-                style: {
-                    width: '100%',
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    background: 'linear-gradient(135deg, #0f766e 0%, #134e4a 50%, #042f2e 100%)',
-                    color: 'white',
-                    fontFamily: 'system-ui, sans-serif',
-                    padding: 48,
-                },
-            },
-            React.createElement(
-                'div',
-                { style: { fontSize: 36, opacity: 0.9, marginBottom: 24 } },
-                'AmpliFood'
-            ),
-            React.createElement(
-                'div',
-                {
-                    style: {
-                        fontSize: 64,
-                        fontWeight: 700,
-                        textAlign: 'center',
-                        lineHeight: 1.1,
-                        maxWidth: 1000,
-                    },
-                },
-                title
-            ),
-            React.createElement(
-                'div',
-                { style: { fontSize: 28, marginTop: 32, opacity: 0.85 } },
-                'Join the party'
-            )
-        ),
-        { width: 1200, height: 630 }
-    );
+    try {
+        const sql = await getPartySql();
+        const rows = await sql`
+            SELECT p.id, p.name, p.image_url, p.image_bytea IS NOT NULL AS has_bytea,
+                   it.revoked, it.expires_at
+            FROM invite_tokens it
+            JOIN parties p ON p.id = it.party_id
+            WHERE it.token = ${token}
+            LIMIT 1`;
+        const row = rows[0];
+        if (!isInviteRowValid(row)) {
+            return fallback;
+        }
+        return {
+            title: row.name || fallback.title,
+            partyId: row.id,
+            imageUrl: row.image_url,
+            hasBytea: Boolean(row.has_bytea),
+        };
+    } catch (error) {
+        console.warn('[p-og] lookup failed', error?.message || error);
+        return fallback;
+    }
+}
+
+function resolveBackgroundUrl(req, ctx) {
+    if (ctx.imageUrl) return ctx.imageUrl;
+    if (ctx.partyId && ctx.hasBytea) {
+        const origin = requestOrigin(req);
+        return `${origin}/api/party?action=image&partyId=${encodeURIComponent(ctx.partyId)}`;
+    }
+    return null;
+}
+
+export default async function handler(req, res) {
+    if (req.method !== 'GET') {
+        res.status(405).send('Method not allowed');
+        return;
+    }
+    const token = String(req.query?.token || '').trim();
+    try {
+        const ctx = await loadPartyOgContext(token);
+        const backgroundImageUrl = resolveBackgroundUrl(req, ctx);
+        const png = await renderPartyOgPng({
+            title: ctx.title,
+            backgroundImageUrl,
+        });
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.status(200).send(png);
+    } catch (error) {
+        console.error('[p-og]', error);
+        res.status(500).send('Could not render image');
+    }
 }
