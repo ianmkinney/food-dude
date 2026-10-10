@@ -1,4 +1,4 @@
-function applyCors(req, res) {
+export function applyCors(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
@@ -8,5 +8,3 @@ function applyCors(req, res) {
     }
     return false;
 }
-
-module.exports = { applyCors };

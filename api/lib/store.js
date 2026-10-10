@@ -1,23 +1,28 @@
 const memory = new Map();
 
+/** @type {import('@upstash/redis').Redis | false | null} */
 let redis = null;
 
-function getRedis() {
-    if (redis !== null) return redis;
+async function getRedis() {
+    if (redis === false) return null;
+    if (redis) return redis;
+
     const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (url && token) {
-        try {
-            const { Redis } = require('@upstash/redis');
-            redis = new Redis({ url, token });
-            return redis;
-        } catch {
-            redis = false;
-            return null;
-        }
+    if (!url || !token) {
+        redis = false;
+        return null;
     }
-    redis = false;
-    return null;
+
+    try {
+        const { Redis } = await import('@upstash/redis');
+        redis = new Redis({ url, token });
+        return redis;
+    } catch (error) {
+        console.warn('[store] Upstash Redis unavailable, using in-memory counters:', error?.message || error);
+        redis = false;
+        return null;
+    }
 }
 
 function usageKey(userId) {
@@ -25,9 +30,9 @@ function usageKey(userId) {
     return `amplifood:owner-ai:${userId}:${day}`;
 }
 
-async function getUsage(userId) {
+export async function getUsage(userId) {
     const key = usageKey(userId);
-    const client = getRedis();
+    const client = await getRedis();
     if (client) {
         const row = await client.hgetall(key);
         return {
@@ -38,9 +43,9 @@ async function getUsage(userId) {
     return memory.get(key) || { requests: 0, tokens: 0 };
 }
 
-async function recordUsage(userId, { requestDelta = 0, tokenDelta = 0 }) {
+export async function recordUsage(userId, { requestDelta = 0, tokenDelta = 0 }) {
     const key = usageKey(userId);
-    const client = getRedis();
+    const client = await getRedis();
     if (client) {
         const pipe = client.pipeline();
         if (requestDelta) pipe.hincrby(key, 'requests', requestDelta);
@@ -57,5 +62,3 @@ async function recordUsage(userId, { requestDelta = 0, tokenDelta = 0 }) {
     memory.set(key, next);
     return next;
 }
-
-module.exports = { getUsage, recordUsage, getRedis };

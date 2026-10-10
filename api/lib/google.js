@@ -1,6 +1,6 @@
-const { getGoogleClientIds } = require('./env');
+import { getGoogleClientIds } from './env.js';
 
-async function verifyGoogleIdToken(idToken) {
+export async function verifyGoogleIdToken(idToken) {
     const clientIds = getGoogleClientIds();
     if (!clientIds.length) {
         throw new Error('GOOGLE_CLIENT_IDS is not set');
@@ -25,5 +25,3 @@ async function verifyGoogleIdToken(idToken) {
         name: data.name || data.given_name || '',
     };
 }
-
-module.exports = { verifyGoogleIdToken };
