@@ -16,7 +16,7 @@ import {
 import { assertVideoSupported, coerceImagesForProvider } from './mediaPrep';
 import { userOperations } from '../database/operations';
 import { safetyPreamble } from '../safety/foodSafety';
-import { ensureConsent } from '../consent/consentStore';
+import { ensureConsent, getIncludeHealthData } from '../consent/consentStore';
 import { describeMimeType, isImageMimeSupportedBy, normalizeMimeType } from './mediaTypes';
 
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -291,11 +291,15 @@ async function geminiGenerate({ apiKey, model, prompt, images, video }) {
     return text;
 }
 
-async function currentAllergies() {
+// Allergies and diet needs are only sent when the user ticked "Also include my
+// allergies & diet needs"; otherwise the on-device check is the only safeguard.
+async function currentHealthContext() {
+    if (!(await getIncludeHealthData())) return { allergies: null, diet: null };
     try {
-        return (await userOperations.getCurrent())?.allergies || null;
+        const user = await userOperations.getCurrent();
+        return { allergies: user?.allergies || null, diet: user?.diet || null };
     } catch {
-        return null;
+        return { allergies: null, diet: null };
     }
 }
 
@@ -305,7 +309,9 @@ async function currentAllergies() {
 async function prepareRequest(prompt) {
     const creds = await requireAiConfigured();
     await ensureConsent(creds.provider);
-    return { creds, prompt: `${safetyPreamble(await currentAllergies())}\n\n${prompt}` };
+    const { allergies, diet } = await currentHealthContext();
+    const dietLine = diet ? `\nThe user's diet needs: ${diet}. Follow them.` : '';
+    return { creds, prompt: `${safetyPreamble(allergies)}${dietLine}\n\n${prompt}` };
 }
 
 export async function generateText(rawPrompt, options = {}) {

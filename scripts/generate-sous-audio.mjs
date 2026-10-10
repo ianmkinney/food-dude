@@ -1,24 +1,25 @@
 #!/usr/bin/env node
 /**
- * Render the Premium Sous voice preview clip (the only bundled premium audio).
+ * Render Sous's scripted onboarding lines to static audio files.
  *
- * Run on a developer machine only; the key is read from the environment and is
- * never written into the app:
+ * Run on a developer machine only. The ElevenLabs key is read from the
+ * environment and is never written into the app bundle:
  *
  *   ELEVENLABS_API_KEY=... SOUS_VOICE_ID=... node scripts/generate-sous-audio.mjs
  *
- * Pending Ian's spend approval: ElevenLabs Starter plan or higher (commercial
- * rights), a Voice Design voice for Sous (not a clone of a real person), and
- * "use my data for training" turned off.
+ * Requirements (pending Ian's spend approval):
+ * - ElevenLabs Starter plan or higher (commercial use rights).
+ * - A Voice Design voice created for Sous (not a clone of a real person).
+ * - "Use my data for training" turned off in the ElevenLabs account.
  *
- * Writes assets/audio/premium-voice/preview.wav (16-bit PCM, 22.05 kHz) from the
- * caption in preview.json and sets "placeholder": false.
+ * Writes assets/audio/sous/<line>.wav (16-bit PCM, 22.05 kHz) for every line in
+ * script.json and flips manifest.json "placeholder" to false.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'audio', 'premium-voice');
+const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'audio', 'sous');
 const apiKey = process.env.ELEVENLABS_API_KEY;
 const voiceId = process.env.SOUS_VOICE_ID;
 const model = process.env.SOUS_MODEL_ID || 'eleven_multilingual_v2';
@@ -47,22 +48,29 @@ function wavFromPcm(pcm) {
     return Buffer.concat([header, pcm]);
 }
 
-const metaPath = join(dir, 'preview.json');
-const meta = JSON.parse(readFileSync(metaPath, 'utf8'));
 // "Sous" is pronounced "Soo".
-const text = meta.caption.replace(/\bSous\b/g, 'Soo');
+const spoken = (text) => text.replace(/\bSous\b/g, 'Soo');
 
-const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=pcm_${SAMPLE_RATE}`, {
-    method: 'POST',
-    headers: { 'xi-api-key': apiKey, 'content-type': 'application/json' },
-    body: JSON.stringify({ text, model_id: model }),
-});
-if (!res.ok) {
-    console.error(`HTTP ${res.status} ${await res.text()}`);
-    process.exit(1);
+const { lines } = JSON.parse(readFileSync(join(dir, 'script.json'), 'utf8'));
+for (const [id, text] of Object.entries(lines)) {
+    const res = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=pcm_${SAMPLE_RATE}`,
+        {
+            method: 'POST',
+            headers: { 'xi-api-key': apiKey, 'content-type': 'application/json' },
+            body: JSON.stringify({ text: spoken(text), model_id: model }),
+        }
+    );
+    if (!res.ok) {
+        console.error(`${id}: HTTP ${res.status} ${await res.text()}`);
+        process.exit(1);
+    }
+    writeFileSync(join(dir, `${id}.wav`), wavFromPcm(Buffer.from(await res.arrayBuffer())));
+    console.log(`wrote ${id}.wav`);
 }
-writeFileSync(join(dir, 'preview.wav'), wavFromPcm(Buffer.from(await res.arrayBuffer())));
-meta.placeholder = false;
-meta.note = `Rendered ${new Date().toISOString()} with voice ${voiceId} (${model}).`;
-writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`);
-console.log('wrote preview.wav');
+
+const manifestPath = join(dir, 'manifest.json');
+const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+manifest.placeholder = false;
+manifest.note = `Rendered ${new Date().toISOString()} with voice ${voiceId} (${model}).`;
+writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);

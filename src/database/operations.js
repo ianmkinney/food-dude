@@ -910,7 +910,7 @@ export const userOperations = {
             if (existing) {
                 // Update
                 await db.runAsync(
-                    `UPDATE users SET name = ?, username = ?, email = ?, avatar_uri = ?, recipes_cooked = ?, flavor_preferences = ?, allergies = ?, updated_at = ? WHERE user_id = ?`,
+                    `UPDATE users SET name = ?, username = ?, email = ?, avatar_uri = ?, recipes_cooked = ?, flavor_preferences = ?, allergies = ?, diet = ?, updated_at = ? WHERE user_id = ?`,
                     [
                         user.name || null,
                         user.username || null,
@@ -919,6 +919,7 @@ export const userOperations = {
                         user.recipesCooked !== undefined ? user.recipesCooked : existing.recipes_cooked || 0,
                         user.flavorPreferences || null,
                         user.allergies !== undefined ? user.allergies || null : existing.allergies || null,
+                        user.diet !== undefined ? user.diet || null : existing.diet || null,
                         now,
                         user.userId
                     ]
@@ -927,8 +928,8 @@ export const userOperations = {
             } else {
                 // Insert
                 const result = await db.runAsync(
-                    `INSERT INTO users (user_id, name, username, email, avatar_uri, recipes_cooked, flavor_preferences, allergies, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    `INSERT INTO users (user_id, name, username, email, avatar_uri, recipes_cooked, flavor_preferences, allergies, diet, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         user.userId,
                         user.name || null,
@@ -938,6 +939,7 @@ export const userOperations = {
                         user.recipesCooked || 0,
                         user.flavorPreferences || null,
                         user.allergies || null,
+                        user.diet || null,
                         now,
                         now
                     ]

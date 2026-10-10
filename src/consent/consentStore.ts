@@ -12,28 +12,29 @@ export const LEGAL_VERSION = TERMS_VERSION;
 
 const LEGAL_KEY = 'amplifood.legal.accepted';
 const CONSENT_KEY = 'amplifood.dataConsent.v1';
+const HEALTH_KEY = 'amplifood.dataConsent.includeAllergies';
 
 export type ConsentTarget = 'anthropic' | 'openai' | 'xai' | 'gemini';
 
 export const TARGETS: Record<ConsentTarget, { name: string; sends: string; policy: string }> = {
     anthropic: {
         name: 'Anthropic (Claude)',
-        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items, flavor preferences and allergies',
+        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items and food likes',
         policy: 'https://www.anthropic.com/legal/privacy',
     },
     openai: {
         name: 'OpenAI',
-        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items, flavor preferences and allergies',
+        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items and food likes',
         policy: 'https://openai.com/policies/privacy-policy',
     },
     xai: {
         name: 'xAI (Grok)',
-        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items, flavor preferences and allergies',
+        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items and food likes',
         policy: 'https://x.ai/legal/privacy-policy',
     },
     gemini: {
         name: 'Google (Gemini)',
-        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items, flavor preferences and allergies',
+        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items and food likes',
         policy: 'https://policies.google.com/privacy',
     },
 };
@@ -85,6 +86,18 @@ export async function revokeConsent(target: ConsentTarget): Promise<void> {
     await AsyncStorage.setItem(CONSENT_KEY, JSON.stringify(map));
 }
 
+/**
+ * Separate, opt-in permission to include allergies and diet needs in AI
+ * requests. Off by default; the on-device allergen check runs either way.
+ */
+export async function getIncludeHealthData(): Promise<boolean> {
+    return (await AsyncStorage.getItem(HEALTH_KEY)) === 'true';
+}
+
+export async function setIncludeHealthData(include: boolean): Promise<void> {
+    await AsyncStorage.setItem(HEALTH_KEY, String(include));
+}
+
 // The prompt UI registers itself here (ConsentHost); service code awaits it.
 type Asker = (target: ConsentTarget) => Promise<boolean>;
 let asker: Asker | null = null;
@@ -95,7 +108,7 @@ export function registerConsentAsker(fn: Asker | null) {
 export class ConsentDeclinedError extends Error {
     constructor(target: ConsentTarget) {
         super(
-            `Nothing was sent. AI features stay off until you allow sharing with ${TARGETS[target].name}. You can allow it next time, or in Account → Data sharing.`
+            `Nothing was sent. AI features stay off until you allow sharing with ${TARGETS[target].name}. You can allow it next time, or in Account → AI & privacy.`
         );
         this.name = 'ConsentDeclinedError';
     }

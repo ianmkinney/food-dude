@@ -31,24 +31,31 @@ AmpliFood asks for as little as possible. Each permission maps to one feature:
 | --- | --- | --- | --- |
 | Camera (`CAMERA` / `NSCameraUsageDescription`) | Android, iOS | Scanning a barcode in Pantry → Add / Edit item (`expo-camera`), and taking a photo of a dish when you choose **Use my photo → Take a photo** (`expo-image-picker`) | The first time you tap Scan or Take a photo |
 | Photo library (`NSPhotoLibraryUsageDescription`) | iOS | Picking recipe screenshots or a recipe photo (`expo-image-picker`) | iOS shows the system photo picker; only the photos you pick are shared with the app |
-| Microphone (`RECORD_AUDIO` / `NSMicrophoneUsageDescription`) | Android, iOS | Talking to Ampi (`expo-speech-recognition`, on-device only) | Only when you tap the mic in Ampi; never at launch |
-| Speech recognition (`NSSpeechRecognitionUsageDescription`) | iOS | Turning what you say into a message for Ampi; on-device recognition only | With the microphone prompt, when you tap the mic |
+| Microphone (`RECORD_AUDIO` / `NSMicrophoneUsageDescription`) | Android, iOS | Push-to-talk with Ampi (`expo-speech-recognition`): listens only while you hold the mic button; on-device recognition only | The first time you hold the mic; Android shows a short rationale first |
+| Speech recognition (`NSSpeechRecognitionUsageDescription`) | iOS | Turning what you say into a message for Ampi; on-device recognition only | With the microphone prompt, when you hold the mic |
 | Modify audio settings (`MODIFY_AUDIO_SETTINGS`) | Android | Playing Ampi's voice (`expo-speech` on-device TTS) | Granted at install (no prompt) |
 | Internet | Android | AI provider calls, Open Food Facts lookups, recipe URL import | Granted at install (no prompt) |
 | Vibrate | Android | Light haptics on some buttons | Granted at install (no prompt) |
 
 On Android, photo picking goes through the system Photo Picker, which needs no permission, so AmpliFood declares **no** storage or media permissions. Shared images and text come in through the share sheet (`expo-share-intent`), which grants access only to the shared item.
 
-**Microphone for Ampi.** It is only requested when you tap the mic. Speech recognition is on-device only where the platform supports it; there is no cloud speech fallback in the app. Audio is not sent to AmpliFood. Update Play Data Safety and the App Store privacy label ("Audio data" for app functionality, not collected by AmpliFood) before shipping.
+**Microphone for Ampi.** It is only requested when you hold the mic. Speech recognition is on-device only where the platform supports it; there is no cloud speech fallback in the app. Audio is not sent to AmpliFood. Update Play Data Safety and the App Store privacy label ("Audio data" for app functionality, not collected by AmpliFood) before shipping.
 
 Not requested, and actively blocked in the build so a library can't add them back: `READ/WRITE_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_MEDIA_AUDIO`, `READ_MEDIA_VISUAL_USER_SELECTED`, `ACCESS_MEDIA_LOCATION`, and `SYSTEM_ALERT_WINDOW`. There is no location, contacts, or Face ID use, and no "save to photo library" feature.
 
-On the web build, the browser's file picker is used for photos; the browser asks for the camera when you scan or take a photo. The Talk button appears only when on-device speech recognition is available in that browser.
+On the web build, the browser's file picker is used for photos; the browser asks for the camera when you scan or take a photo. The mic appears only when on-device speech recognition is available in that browser.
+
+## Allergies, diet and AI (consumer health data)
+
+- Allergies and diet needs are optional (onboarding step "Allergies & diet (optional)", or Account → Allergies & diet). They stay on this device and are never sold or used for ads.
+- They are sent to your AI provider **only** if you tick "Also include my allergies & diet needs" (onboarding AI consent, or Account → AI & privacy). The on-device allergen check runs either way.
+- AI use itself needs a per-provider "Allow" (Apple 5.1.2(i)), revocable in Account → AI & privacy.
 
 ## Ampi voice
 
 - **On-device TTS only at launch:** replies use the device's built-in text-to-speech (`expo-speech`). Nothing leaves the device.
 - Every voice output also shows its text, can be muted (the setting persists), and turns off automatically while VoiceOver/TalkBack is on (native only).
+- Scripted onboarding lines are read with the phone voice and always shown as captions.
 
 ## Bring Your Own Key
 
@@ -69,21 +76,8 @@ AmpliFood has no account server. The only network calls that carry your content 
 
 - **One provider key:** Account → AI provider → **Clear**.
 - **Profile / flavor preferences:** Account → Edit Profile and clear the fields, then Save. Rows stay local in SQLite.
-- **Everything:** uninstall the app, or clear the app’s storage. That removes SQLite, AsyncStorage, and Keychain/Keystore entries for AmpliFood.
+- **Everything on this device:** uninstall the app (native) or clear site data for amplifood.vercel.app (web). There is no cloud copy to delete.
 
-## Schema note (flavor preferences)
+## Reporting AI output
 
-Flavor preferences are a column on the local `users` table (`flavor_preferences`). New installs get it from `CREATE TABLE`. Existing Expo Go databases that already had `users` get the column from a versioned migration (`ALTER TABLE … ADD COLUMN`) plus a boot-time `PRAGMA table_info` check, so saving your profile does not require wiping the database.
-
-## What this is not
-
-- Not a medical device and not HIPAA-certified storage.
-- Not full-disk encryption of recipes or pantry.
-- Not a cloud backup. If you lose the phone and have no OS backup, the local database is gone.
-- Not a AmpliFood-hosted account. Email in Account is a local label only.
-
-## Further reading
-
-- Account screen disclaimer (above AI provider settings)
-- Account → Privacy
-- [README.md](./README.md) — Privacy & Data
+Use **Report** on AI Chef or Ampi replies if something looks unsafe or wrong. Reports stay on the device today (a future build may offer optional upload).

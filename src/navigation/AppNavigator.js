@@ -2,11 +2,12 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, StyleSheet, TouchableOpacity } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { getSurfaceStyle, getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import AnimatedPressable from '../components/AnimatedPressable';
+import { useTourTarget } from '../onboarding/tourTargets';
 
 // Import screens
 import RecipeBookScreen from '../screens/RecipeBookScreen';
@@ -33,7 +34,8 @@ const Stack = createNativeStackNavigator();
 const hasModifierKey = (e) => !!(e?.metaKey || e?.altKey || e?.ctrlKey || e?.shiftKey);
 
 const TabBarButton = (props) => {
-    const { children, style, onPress, onLongPress, accessibilityState, href, ...rest } = props;
+    const { children, style, onPress, onLongPress, accessibilityState, href, routeName, ...rest } = props;
+    const tourRef = useTourTarget(`tab-${routeName}`);
     // On web the tab renders as an <a href>; without preventDefault the browser
     // does a full page load instead of a tab switch. Modified clicks keep the
     // browser's own open-in-new-tab behaviour.
@@ -45,6 +47,7 @@ const TabBarButton = (props) => {
         onPress?.(e);
     };
     return (
+        <View ref={tourRef} collapsable={false} style={styles.tabButton}>
         <AnimatedPressable
             {...rest}
             href={href}
@@ -56,6 +59,7 @@ const TabBarButton = (props) => {
         >
             {children}
         </AnimatedPressable>
+        </View>
     );
 };
 
@@ -78,7 +82,7 @@ const TabNavigator = () => {
                         route.name === ASSISTANT_NAME
                             ? (props) => <HeaderAccountActions {...props} />
                             : undefined,
-                    tabBarButton: (props) => <TabBarButton {...props} />,
+                    tabBarButton: (props) => <TabBarButton {...props} routeName={route.name} />,
                 tabBarIcon: ({ focused, color, size }) => {
                     let iconName;
 

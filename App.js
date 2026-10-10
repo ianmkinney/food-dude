@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, View, Text, ActivityIndicator, Platform, Pressable } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,11 +11,17 @@ import { getTheme } from './src/theme';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { BrandMark, CheckerStrip } from './src/components/Brand';
 import { AlertHost, installAlertPolyfill } from './src/platform/alert';
-import { ConsentHost, LegalGate } from './src/consent/ConsentHost';
+import { ConsentHost } from './src/consent/ConsentHost';
+import OnboardingGate from './src/onboarding/OnboardingGate';
 
 import { ShareIntentProvider } from './src/platform/shareIntent';
 
 installAlertPolyfill();
+
+const navigationRef = createNavigationContainerRef();
+const navigateToTab = (route) => {
+  if (navigationRef.isReady()) navigationRef.navigate('Main', { screen: route });
+};
 
 // Browser URLs for the screens people land on or refresh. Native keeps its
 // existing (unconfigured) deep-link behaviour.
@@ -132,12 +138,12 @@ function AppContent() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ShareIntentProvider>
-        <LegalGate>
-          <NavigationContainer linking={linking} documentTitle={documentTitle}>
+        <OnboardingGate navigate={navigateToTab}>
+          <NavigationContainer ref={navigationRef} linking={linking} documentTitle={documentTitle}>
             <AppNavigator />
             <StatusBar style={theme.isDark ? 'light' : 'dark'} />
           </NavigationContainer>
-        </LegalGate>
+        </OnboardingGate>
         <ConsentHost />
         <AlertHost />
       </ShareIntentProvider>

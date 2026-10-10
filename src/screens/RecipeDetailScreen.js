@@ -11,7 +11,8 @@ import {
     TextInput,
     Modal,
     Platform,
-    KeyboardAvoidingView
+    KeyboardAvoidingView,
+    Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +21,8 @@ import { useTheme } from '../context/ThemeContext';
 import { recipeOperations, mealPlanOperations, groceryOperations, recipeCookingHistoryOperations, userOperations } from '../database/operations';
 import aiChefService from '../services/aiChefService';
 import { toPersistentImageUri } from '../services/mediaPrep';
-import { AiBadge, AiDisclaimer, AllergenWarning, AllergyNotice } from '../ai/AiLabel';
+import { AiBadge, AiDisclaimer, AllergenWarning, AllergyNotice, ReportButton } from '../ai/AiLabel';
+import SourceLabel from '../components/SourceLabel';
 import { useAllergies } from '../safety/useAllergies';
 import { findAllergenMatches } from '../safety/allergens';
 import ImageSourceChoice from '../components/ImageSourceChoice';
@@ -477,7 +479,17 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                         <Ionicons name="restaurant" size={80} color={theme.primary[300]} />
                     )}
                     {(isEditing ? editedRecipe.image_source : recipe.image_source) === 'ai' && (
-                        <AiBadge onDark style={styles.imageAiBadge} />
+                        <View style={[styles.imageAiBadge, styles.imageLabelRow]}>
+                            <AiBadge onDark />
+                            {!isEditing && (
+                                <View style={styles.imageReport}>
+                                    <ReportButton target={{ kind: 'image', content: `AI image for ${recipe.title}` }} />
+                                </View>
+                            )}
+                        </View>
+                    )}
+                    {(isEditing ? editedRecipe.image_source : recipe.image_source) === 'user' && (
+                        <SourceLabel source={{ kind: 'user_photo' }} style={styles.imageAiBadge} />
                     )}
                     {isEditing && (
                         <View style={styles.editImageOverlay}>
@@ -537,6 +549,22 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                             <Text style={[styles.title, { color: theme.colors.text.primary }]}>
                                 {recipe.title}
                             </Text>
+                            {recipe.is_ai_generated ? (
+                                <SourceLabel source={{ kind: 'ai' }} style={{ marginTop: 6 }} />
+                            ) : recipe.source_url ? (
+                                <View style={styles.sourceRow}>
+                                    <SourceLabel source={{ kind: 'site', site: recipe.source_platform || recipe.source_url }} />
+                                    <Text
+                                        style={[styles.sourceLink, { color: theme.primary[700] }]}
+                                        accessibilityRole="link"
+                                        onPress={() => Linking.openURL(recipe.source_url)}
+                                    >
+                                        View original recipe
+                                    </Text>
+                                </View>
+                            ) : recipe.source_platform === 'AmpliFood sample' ? (
+                                <SourceLabel source={{ kind: 'sample' }} style={{ marginTop: 6 }} />
+                            ) : null}
                             {!!recipe.is_ai_generated && (
                                 <View style={{ marginTop: 8, marginBottom: 4, gap: 8 }}>
                                     <AiDisclaimer
@@ -1123,6 +1151,28 @@ const RecipeDetailScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
+    imageLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    imageReport: {
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        borderRadius: 999,
+        paddingHorizontal: 8,
+    },
+    sourceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginTop: 6,
+        flexWrap: 'wrap',
+    },
+    sourceLink: {
+        fontSize: 13,
+        fontWeight: '700',
+        textDecorationLine: 'underline',
+    },
     imageAiBadge: {
         position: 'absolute',
         top: 12,
