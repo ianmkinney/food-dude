@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { userOperations, partyStatsOperations, recipeCookingHistoryOperations } from '../database/operations';
 import AiProviderSettings from '../components/AiProviderSettings';
 import VoicePreferences from '../components/VoicePreferences';
+import TextSizeSettings from '../components/TextSizeSettings';
 import DataSharingSettings from '../components/DataSharingSettings';
 import OwnerSignInSettings from '../components/OwnerSignInSettings';
 import { isOwnerSignInConfigured } from '../platform/ownerSignInConfig';
@@ -359,6 +360,10 @@ const AccountScreen = ({ navigation }) => {
 
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                 <AiProviderSettings theme={theme} />
+            </ElevatedCard>
+
+            <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
+                <TextSizeSettings theme={theme} />
             </ElevatedCard>
 
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
