@@ -3,27 +3,29 @@ import type { PlatformImage } from '../monetization/platformAi';
 
 // Copied by scripts/copy-pdfjs.js. pdf.js can't go through Metro: its `import.meta`
 // is a syntax error in a classic script and would break the main bundle.
-const PDFJS_URL = '/vendor/pdfjs/pdf.min.js';
+const PDFJS_LOADER_URL = '/vendor/pdfjs/loader.js';
 const PDFJS_WORKER_URL = '/vendor/pdfjs/pdf.worker.min.js';
 
 type PdfWindow = Window & {
     __afPdfjs?: Promise<typeof PdfJs>;
     __afPdfjsLoaded?: (mod: typeof PdfJs) => void;
-    __afPdfjsFailed?: () => void;
 };
 
 function loadPdfjs(): Promise<typeof PdfJs> {
     const w = window as PdfWindow;
     if (!w.__afPdfjs) {
         w.__afPdfjs = new Promise<typeof PdfJs>((resolve, reject) => {
+            const script = document.createElement('script');
             w.__afPdfjsLoaded = (mod) => {
                 mod.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
                 resolve(mod);
             };
-            w.__afPdfjsFailed = () => reject(new Error("Couldn't load the PDF reader. Check your connection and try again."));
-            const script = document.createElement('script');
             script.type = 'module';
-            script.textContent = `import('${PDFJS_URL}').then((m) => window.__afPdfjsLoaded(m), () => window.__afPdfjsFailed());`;
+            script.src = PDFJS_LOADER_URL;
+            script.onerror = () => {
+                script.remove();
+                reject(new Error("Couldn't load the PDF reader. Check your connection and try again."));
+            };
             document.head.appendChild(script);
         }).catch((error) => {
             w.__afPdfjs = undefined;
