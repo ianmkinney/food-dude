@@ -63,6 +63,7 @@ export const CheckerStrip = ({ squares = 12, size = 8, rows = 2, style }) => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
     const ink = isDark ? theme.brand.cream : theme.brand.ink;
+    const light = isDark ? theme.colors.background : theme.brand.cream;
     return (
         <View style={[styles.checker, style]} accessible={false}>
             {Array.from({ length: rows }).map((_, row) => (
@@ -73,7 +74,7 @@ export const CheckerStrip = ({ squares = 12, size = 8, rows = 2, style }) => {
                             style={{
                                 width: size,
                                 height: size,
-                                backgroundColor: (row + col) % 2 === 0 ? ink : 'transparent',
+                                backgroundColor: (row + col) % 2 === 0 ? ink : light,
                             }}
                         />
                     ))}
