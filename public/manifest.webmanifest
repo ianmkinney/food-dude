@@ -1,7 +1,7 @@
 {
   "name": "AmpliFood",
   "short_name": "AmpliFood",
-  "description": "A kitchen companion with a little attitude: recipes, meal plans, pantry, grocery lists and an AI chef.",
+  "description": "Your AI sous chef: recipes, meal plans, pantry, grocery lists, and Ampi.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

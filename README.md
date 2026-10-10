@@ -2,7 +2,7 @@
 
 <img src="./assets/brand/source/logo-color.png" alt="AmpliFood logo" width="180" />
 
-A kitchen companion with a little attitude: graphic, delicious, warm, and built for real-life cooking. AmpliFood is a cross-platform recipe app built with React Native and Expo, for iOS, Android and the web. Import recipes from social media, plan your meals, manage your pantry, create smart grocery lists, and get AI-powered cooking assistance.
+Your AI sous chef for real-life cooking: graphic, delicious, warm, and built for busy kitchens. AmpliFood is a cross-platform recipe app built with React Native and Expo, for iOS, Android and the web. Import recipes from social media, plan your meals, manage your pantry, create smart grocery lists, and chat with Ampi or the AI Chef.
 
 ## ✨ Features
 
