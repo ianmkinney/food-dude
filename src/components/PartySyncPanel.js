@@ -16,6 +16,14 @@ import {
 } from '../services/partyEmail';
 import { partyMealOperations, partyMemberOperations, partyOperations } from '../database/operations';
 import PartyMembersList from './PartyMembersList';
+import {
+    applyLivePartySnapshot,
+    buildLiveInviteUrl,
+    migrateLocalPartyToLive,
+    pushLocalPartyMealsToLive,
+    uploadLivePartyImage,
+} from '../services/partyLiveSync';
+import { pickPartyCoverImageBase64 } from '../utils/partyImage';
 
 async function loadPartyBundle(partyId) {
     const party = await partyOperations.getById(partyId);
@@ -212,6 +220,87 @@ export default function PartySyncPanel({
         })();
     }, [pendingImport, selectedParty]);
 
+    const isLive = selectedParty?.sync_mode === 'live' && selectedParty?.live_party_id;
+
+    const moveToLiveSync = async () => {
+        if (!isOwner) return;
+        setBusy(true);
+        try {
+            const bundle = await loadPartyBundle(selectedParty.id);
+            const meals = bundle.meals.map((m) => ({
+                name: m.name,
+                description: m.description,
+                recipeIds: m.recipeIds || [],
+                id: m.sync_meal_id,
+            }));
+            const members = bundle.members.map((m) => ({
+                displayName: m.user_name,
+                email: m.member_email,
+            }));
+            let imageBase64;
+            try {
+                imageBase64 = await pickPartyCoverImageBase64();
+            } catch {
+                imageBase64 = null;
+            }
+            const result = await migrateLocalPartyToLive({
+                name: bundle.party.name,
+                meals,
+                members,
+                imageBase64,
+            });
+            await partyOperations.setLiveSyncFields(selectedParty.id, {
+                livePartyId: result.partyId,
+                syncMode: 'live',
+                liveInviteToken: result.inviteToken,
+                liveVersion: result.party.version,
+            });
+            await applyLivePartySnapshot(selectedParty.id, result.party);
+            Alert.alert(
+                'Live sync enabled',
+                `Share invite link: ${buildLiveInviteUrl(result.inviteToken)}\n\nSigned email links still work as a fallback.`
+            );
+            onPartyUpdated?.();
+        } catch (error) {
+            Alert.alert('Could not enable live sync', error?.message || 'Try again after signing in on Account.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const uploadCoverPhoto = async () => {
+        if (!isLive || !isOwner) return;
+        setBusy(true);
+        try {
+            const imageBase64 = await pickPartyCoverImageBase64();
+            if (!imageBase64) return;
+            await uploadLivePartyImage({
+                livePartyId: selectedParty.live_party_id,
+                imageBase64,
+            });
+            Alert.alert('Uploaded', 'Party cover photo updated.');
+        } catch (error) {
+            Alert.alert('Upload failed', error?.message || 'Could not upload photo.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const syncLiveNow = async () => {
+        if (!isLive) return;
+        setBusy(true);
+        try {
+            const refreshed = await partyOperations.getById(selectedParty.id);
+            await pushLocalPartyMealsToLive(refreshed);
+            Alert.alert('Synced', 'Party meals pushed to live sync.');
+            onPartyUpdated?.();
+        } catch (error) {
+            Alert.alert('Sync failed', error?.message || 'Could not push to server.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
     if (!selectedParty) return null;
 
     return (
@@ -221,12 +310,15 @@ export default function PartySyncPanel({
                 members={partyMembers}
                 isOwner={isOwner}
                 partyId={selectedParty.id}
+                livePartyId={selectedParty.live_party_id}
+                syncMode={selectedParty.sync_mode}
                 onChanged={onPartyUpdated}
             />
             <View style={[styles.wrap, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
                 <Text style={[styles.note, { color: theme.colors.text.secondary }]}>
-                    Membership and party updates sync via shareable links and optional email. Nothing is stored on our
-                    servers.
+                    {isLive
+                        ? 'This party uses live sync: name, photo, member display names, and meals are stored on our server (Neon Postgres) so members see updates within seconds. Recipes and pantry data stay on your device.'
+                        : 'Local parties sync via signed share links and optional email (no server database). Enable live sync to share a /p/… invite link with automatic updates.'}
                 </Text>
                 <Text style={[styles.meta, { color: theme.colors.text.tertiary }]}>
                     Sync version {syncVersion}
@@ -243,7 +335,7 @@ export default function PartySyncPanel({
                             <Text style={styles.btnText}>Send update to owner</Text>
                         </TouchableOpacity>
                     ) : null}
-                    {isOwner ? (
+                    {isOwner && !isLive ? (
                         <TouchableOpacity
                             style={[styles.btn, { backgroundColor: theme.accent.green, opacity: busy ? 0.6 : 1 }]}
                             disabled={busy}
@@ -251,6 +343,36 @@ export default function PartySyncPanel({
                         >
                             <Ionicons name="send-outline" size={16} color="#fff" />
                             <Text style={styles.btnText}>Push update to everyone</Text>
+                        </TouchableOpacity>
+                    ) : null}
+                    {isOwner && !isLive ? (
+                        <TouchableOpacity
+                            style={[styles.btn, { backgroundColor: theme.primary[500], opacity: busy ? 0.6 : 1 }]}
+                            disabled={busy}
+                            onPress={moveToLiveSync}
+                        >
+                            <Ionicons name="cloud-upload-outline" size={16} color="#fff" />
+                            <Text style={styles.btnText}>Move to live sync</Text>
+                        </TouchableOpacity>
+                    ) : null}
+                    {isLive ? (
+                        <TouchableOpacity
+                            style={[styles.btn, { backgroundColor: theme.primary[500], opacity: busy ? 0.6 : 1 }]}
+                            disabled={busy}
+                            onPress={syncLiveNow}
+                        >
+                            <Ionicons name="sync-outline" size={16} color="#fff" />
+                            <Text style={styles.btnText}>Push meals to live</Text>
+                        </TouchableOpacity>
+                    ) : null}
+                    {isLive && isOwner ? (
+                        <TouchableOpacity
+                            style={[styles.btn, { backgroundColor: theme.colors.border, opacity: busy ? 0.6 : 1 }]}
+                            disabled={busy}
+                            onPress={uploadCoverPhoto}
+                        >
+                            <Ionicons name="image-outline" size={16} color={theme.colors.text.primary} />
+                            <Text style={[styles.btnText, { color: theme.colors.text.primary }]}>Party photo</Text>
                         </TouchableOpacity>
                     ) : null}
                 </View>

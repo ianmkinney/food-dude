@@ -458,6 +458,16 @@ export const MIGRATIONS = [
             await ensurePartyLinkMemberColumns(db);
         },
     },
+    {
+        version: 15,
+        name: 'party_live_neon',
+        up: async (db) => {
+            await addColumnIfMissing(db, 'parties', 'live_party_id', 'TEXT');
+            await addColumnIfMissing(db, 'parties', 'sync_mode', 'TEXT', "'local'");
+            await addColumnIfMissing(db, 'parties', 'live_invite_token', 'TEXT');
+            await addColumnIfMissing(db, 'parties', 'live_version', 'INTEGER', '0');
+        },
+    },
 ];
 
 // Cheap PRAGMA check on every boot so Expo Go installs that already sit at

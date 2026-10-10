@@ -42,12 +42,33 @@ const modules = [
     '_lib/recipeVideoAi.js',
     'recipes/import.js',
     'party/email.js',
+    'party/index.js',
+    '_lib/partyDb.js',
+    '_lib/partySchema.js',
+    '_lib/partyConstants.js',
+    '_lib/partyImageSniff.js',
+    '_lib/partyRateLimit.js',
+    '_lib/partyTxn.js',
+    '_lib/partyInvite.js',
+    '_lib/partyTokens.js',
+    '_lib/partyHttp.js',
+    '_lib/partySerialize.js',
+    '_lib/partyBlob.js',
+    'p.js',
+    'p-og.js',
 ];
 
 for (const rel of modules) {
     const url = pathToFileURL(join(apiRoot, rel)).href;
     const mod = await import(url);
-    if (rel.startsWith('auth/') || rel.startsWith('ai/') || rel.startsWith('recipes/') || rel.startsWith('party/')) {
+    if (
+        rel.startsWith('auth/') ||
+        rel.startsWith('ai/') ||
+        rel.startsWith('recipes/') ||
+        rel.startsWith('party/') ||
+        rel === 'p.js' ||
+        rel === 'p-og.js'
+    ) {
         if (typeof mod.default !== 'function') {
             throw new Error(`${rel}: missing default export handler`);
         }

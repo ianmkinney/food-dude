@@ -873,6 +873,32 @@ export const partyOperations = {
         await db.runAsync('UPDATE parties SET sync_secret = ? WHERE id = ?', [syncSecret, id]);
     },
 
+    async setLiveSyncFields(id, { livePartyId, syncMode, liveInviteToken, liveVersion }) {
+        const db = getDatabase();
+        await db.runAsync(
+            `UPDATE parties SET
+                live_party_id = COALESCE(?, live_party_id),
+                sync_mode = COALESCE(?, sync_mode),
+                live_invite_token = COALESCE(?, live_invite_token),
+                live_version = COALESCE(?, live_version),
+                updated_at = ?
+             WHERE id = ?`,
+            [
+                livePartyId ?? null,
+                syncMode ?? null,
+                liveInviteToken ?? null,
+                liveVersion ?? null,
+                Date.now(),
+                id,
+            ]
+        );
+    },
+
+    async getByLivePartyId(livePartyId) {
+        const db = getDatabase();
+        return db.getFirstAsync('SELECT * FROM parties WHERE live_party_id = ?', [livePartyId]);
+    },
+
     async getRemovedMemberIds(id) {
         const party = await partyOperations.getById(id);
         if (!party?.removed_member_ids) return [];

@@ -25,6 +25,13 @@ import PartyInviteModal from '../components/PartyInviteModal';
 import { completePartyJoin } from '../services/partySync/joinFlow';
 import { generateMemberId } from '../services/partySync';
 import { usePartyDeepLink } from '../hooks/usePartyDeepLink';
+import { usePartyLivePoll } from '../hooks/usePartyLivePoll';
+import {
+    applyLivePartySnapshot,
+    attachOrCreateLocalLiveParty,
+    joinLiveParty,
+    pushLocalPartyMealsToLive,
+} from '../services/partyLiveSync';
 
 const PartyScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -59,6 +66,7 @@ const PartyScreen = ({ navigation }) => {
     const [matchingIngredients, setMatchingIngredients] = useState(false);
     const [matchingStatus, setMatchingStatus] = useState('');
     const [estimatingStatus, setEstimatingStatus] = useState('');
+    const [pendingLiveInvite, setPendingLiveInvite] = useState(null);
 
     const {
         pendingReview,
@@ -87,8 +95,34 @@ const PartyScreen = ({ navigation }) => {
         useCallback(() => {
             loadCurrentUser();
             loadParties();
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                const params = new URLSearchParams(window.location.search);
+                const inviteToken = params.get('inviteToken');
+                if (inviteToken) {
+                    setPendingLiveInvite(inviteToken);
+                    const url = `${window.location.pathname}`;
+                    window.history.replaceState(null, '', url);
+                }
+            }
         }, [])
     );
+
+    const onLiveSnapshot = useCallback(
+        async (snapshot) => {
+            if (!selectedParty?.id) return;
+            await applyLivePartySnapshot(selectedParty.id, snapshot);
+            await loadMeals(selectedParty.id);
+            await loadPartyMembers(selectedParty.id);
+            await refreshParty();
+        },
+        [selectedParty?.id]
+    );
+
+    usePartyLivePoll({
+        livePartyId: selectedParty?.sync_mode === 'live' ? selectedParty?.live_party_id : null,
+        enabled: Boolean(selectedParty?.live_party_id),
+        onSnapshot: onLiveSnapshot,
+    });
 
     const loadCurrentUser = async () => {
         try {
@@ -335,10 +369,34 @@ const PartyScreen = ({ navigation }) => {
             await partyOperations.updateSyncFields(selectedParty.id, { updated_at: Date.now() });
             await loadMeals(selectedParty.id);
             await refreshParty();
+            if (selectedParty.sync_mode === 'live' && selectedParty.live_party_id) {
+                const refreshed = await partyOperations.getById(selectedParty.id);
+                await pushLocalPartyMealsToLive(refreshed);
+            }
             Alert.alert('Success', 'Meal created!');
         } catch (error) {
             console.error('Error creating meal:', error);
             Alert.alert('Error', 'Failed to create meal');
+        }
+    };
+
+    const handleCompleteLiveJoin = async () => {
+        if (!joinDisplayName.trim() || !pendingLiveInvite) return;
+        try {
+            const data = await joinLiveParty({
+                inviteToken: pendingLiveInvite,
+                displayName: joinDisplayName.trim(),
+                email: currentUser?.email,
+            });
+            const partyId = await attachOrCreateLocalLiveParty(data.party);
+            const party = await partyOperations.getById(partyId);
+            if (party) setSelectedParty(party);
+            setPendingLiveInvite(null);
+            setJoinDisplayName('');
+            await loadParties();
+            Alert.alert('Joined', `You joined "${data.party.name}".`);
+        } catch (error) {
+            Alert.alert('Could not join', error?.message || 'Invalid or expired invite link.');
         }
     };
 
@@ -1021,6 +1079,45 @@ const PartyScreen = ({ navigation }) => {
                             <TouchableOpacity
                                 style={[styles.modalButton, { backgroundColor: theme.primary[500] }]}
                                 onPress={handleCompleteJoin}
+                            >
+                                <Text style={styles.modalButtonText}>Join party</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal
+                visible={Boolean(pendingLiveInvite)}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setPendingLiveInvite(null)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+                        <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>Join live party</Text>
+                        <Text style={{ color: theme.colors.text.secondary, marginBottom: 12 }}>
+                            Enter a display name. Party name, photo, meals, and member names sync on our server for
+                            live parties.
+                        </Text>
+                        <TextInput
+                            accessibilityLabel="Display name"
+                            style={[styles.modalInput, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
+                            placeholder="Your name"
+                            placeholderTextColor={theme.colors.text.tertiary}
+                            value={joinDisplayName}
+                            onChangeText={setJoinDisplayName}
+                        />
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, { backgroundColor: theme.colors.border }]}
+                                onPress={() => setPendingLiveInvite(null)}
+                            >
+                                <Text style={[styles.modalButtonText, { color: theme.colors.text.primary }]}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, { backgroundColor: theme.primary[500] }]}
+                                onPress={handleCompleteLiveJoin}
                             >
                                 <Text style={styles.modalButtonText}>Join party</Text>
                             </TouchableOpacity>
