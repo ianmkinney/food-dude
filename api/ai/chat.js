@@ -25,7 +25,7 @@ const MSG = {
 };
 
 const IMAGE_MIME = /^image\/(png|jpeg|webp|gif)$/;
-const MAX_IMAGES = 4;
+const MAX_IMAGES = 6;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
 
@@ -61,8 +61,7 @@ function validateImages(images) {
     return out;
 }
 
-const MAX_IMAGES = 6;
-const MAX_IMAGE_BYTES = 4.5 * 1024 * 1024;
+const MAX_TOTAL_IMAGE_BYTES = 4.5 * 1024 * 1024;
 
 function validateMultimodalBody(body) {
     const images = Array.isArray(body?.images) ? body.images : [];
@@ -74,7 +73,7 @@ function validateMultimodalBody(body) {
         const len = String(img?.data || '').length;
         bytes += Math.floor(len * 0.75);
     }
-    if (bytes > MAX_IMAGE_BYTES) {
+    if (bytes > MAX_TOTAL_IMAGE_BYTES) {
         throw new Error('Attachment payload is too large. Send fewer or smaller images.');
     }
 }
