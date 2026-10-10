@@ -467,7 +467,18 @@ const AppNavigator = () => {
                     headerTintColor: theme.colors.text.primary,
                     headerTitleStyle: { fontFamily: theme.typography.fonts.display, fontSize: 20 },
                     headerLeft: () => (
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginLeft: 16 }}>
+                        <TouchableOpacity
+                            accessibilityRole="button"
+                            accessibilityLabel="Close AmpliFood Plus"
+                            onPress={() => {
+                                if (navigation.canGoBack()) {
+                                    navigation.goBack();
+                                } else {
+                                    navigation.navigate('Account');
+                                }
+                            }}
+                            style={{ marginLeft: 16, padding: 4 }}
+                        >
                             <Ionicons name="close" size={24} color={theme.colors.text.primary} />
                         </TouchableOpacity>
                     ),

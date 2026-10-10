@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -7,6 +7,8 @@ import {
     TextInput,
     Alert,
     Image,
+    Linking,
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
@@ -16,15 +18,13 @@ import AiProviderSettings from '../components/AiProviderSettings';
 import VoicePreferences from '../components/VoicePreferences';
 import DataSharingSettings from '../components/DataSharingSettings';
 import OwnerSignInSettings from '../components/OwnerSignInSettings';
+import AccountAboutSheet from '../components/AccountAboutSheet';
 import ElevatedCard from '../components/ElevatedCard';
+import { PRIVACY_URL } from '../consent/consentStore';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { BrandMark } from '../components/Brand';
 import { useMonetization } from '../monetization/MonetizationContext';
-import {
-    USER_SAFETY_DETAILS,
-    USER_SAFETY_SUMMARY,
-    USER_SAFETY_TITLE,
-} from '../constants/userSafety';
+import { USER_SAFETY_SUMMARY, USER_SAFETY_TITLE } from '../constants/userSafety';
 
 const DEFAULT_USER_NAME = 'AmpliFood Cook';
 // Untouched placeholder from before the rebrand; real names are left alone.
@@ -44,6 +44,16 @@ const AccountScreen = ({ navigation }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [recipesCooked, setRecipesCooked] = useState(0);
     const [partyMembersJoined, setPartyMembersJoined] = useState(0);
+    const [aboutOpen, setAboutOpen] = useState(false);
+    const [aiPrivacySectionY, setAiPrivacySectionY] = useState(0);
+    const scrollRef = useRef(null);
+
+    const openPrivacy = useCallback(() => {
+        Linking.openURL(PRIVACY_URL);
+        if (aiPrivacySectionY > 0 && scrollRef.current) {
+            scrollRef.current.scrollTo({ y: Math.max(0, aiPrivacySectionY - 12), animated: true });
+        }
+    }, [aiPrivacySectionY]);
 
     useEffect(() => {
         loadUser();
@@ -141,7 +151,12 @@ const AccountScreen = ({ navigation }) => {
     };
 
     return (
-        <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <ScrollView
+            ref={scrollRef}
+            style={[styles.container, { backgroundColor: theme.colors.background }]}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+        >
             <ElevatedCard theme={theme} variant="glass" style={styles.profileHeader}>
                 <View style={[styles.avatarContainer, { backgroundColor: theme.primary[100] }, theme.shadows.md]}>
                     {user?.avatar_uri ? (
@@ -335,9 +350,11 @@ const AccountScreen = ({ navigation }) => {
                 <VoicePreferences theme={theme} />
             </ElevatedCard>
 
-            <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
-                <DataSharingSettings theme={theme} />
-            </ElevatedCard>
+            <View onLayout={(e) => setAiPrivacySectionY(e.nativeEvent.layout.y)}>
+                <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
+                    <DataSharingSettings theme={theme} />
+                </ElevatedCard>
+            </View>
 
             {/* Settings Section */}
             <View style={styles.settingsContainer}>
@@ -346,6 +363,7 @@ const AccountScreen = ({ navigation }) => {
                 <ElevatedCard
                     theme={theme}
                     style={styles.settingItem}
+                    tilt={false}
                     onPress={() => navigation.navigate('Paywall')}
                 >
                     <Ionicons name="flash-outline" size={24} color={theme.primary[500]} />
@@ -361,17 +379,8 @@ const AccountScreen = ({ navigation }) => {
                 <ElevatedCard
                     theme={theme}
                     style={styles.settingItem}
-                    onPress={() => Alert.alert('Coming Soon', 'This feature will be available soon')}
-                >
-                    <Ionicons name="notifications-outline" size={24} color={theme.colors.text.primary} />
-                    <Text style={[styles.settingText, { color: theme.colors.text.primary }]}>Notifications</Text>
-                    <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
-                </ElevatedCard>
-
-                <ElevatedCard
-                    theme={theme}
-                    style={styles.settingItem}
-                    onPress={() => Alert.alert(USER_SAFETY_TITLE, USER_SAFETY_DETAILS)}
+                    tilt={false}
+                    onPress={openPrivacy}
                 >
                     <Ionicons name="shield-outline" size={24} color={theme.colors.text.primary} />
                     <Text style={[styles.settingText, { color: theme.colors.text.primary }]}>Privacy</Text>
@@ -381,18 +390,16 @@ const AccountScreen = ({ navigation }) => {
                 <ElevatedCard
                     theme={theme}
                     style={styles.settingItem}
-                    onPress={() =>
-                        Alert.alert(
-                            'About AmpliFood',
-                            'AmpliFood v1.0.0\n\nCooking, turned up. Bring your own AI key; your keys and kitchen data stay on this device.\n\nSee USER_SAFETY.md in the project for the full storage map.'
-                        )
-                    }
+                    tilt={false}
+                    onPress={() => setAboutOpen(true)}
                 >
                     <Ionicons name="information-circle-outline" size={24} color={theme.colors.text.primary} />
                     <Text style={[styles.settingText, { color: theme.colors.text.primary }]}>About</Text>
                     <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
                 </ElevatedCard>
             </View>
+
+            <AccountAboutSheet visible={aboutOpen} onClose={() => setAboutOpen(false)} theme={theme} />
 
             <View style={styles.stamp}>
                 <BrandMark variant="ink" size={56} />
@@ -430,6 +437,12 @@ const styles = StyleSheet.create({
     },
     container: {
         flex: 1,
+    },
+    scrollContent: {
+        paddingBottom: Platform.OS === 'web' ? 48 : 32,
+        maxWidth: 640,
+        width: '100%',
+        alignSelf: 'center',
     },
     profileHeader: {
         alignItems: 'center',
@@ -553,6 +566,8 @@ const styles = StyleSheet.create({
     },
     settingText: {
         flex: 1,
+        flexShrink: 1,
+        minWidth: 0,
         fontSize: 16,
     },
     statsContainer: {

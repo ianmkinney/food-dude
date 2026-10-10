@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     ActivityIndicator,
     Alert,
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -302,36 +303,75 @@ const AiProviderSettings = ({ theme }) => {
                 </Text>
             )}
 
-            <View
-                style={[
-                    styles.keyRow,
-                    { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
-                ]}
-            >
-                <TextInput accessibilityLabel="API key"
-                    style={[styles.keyInput, { color: theme.colors.text.primary }]}
-                    value={keyDraft}
-                    onChangeText={setKeyDraft}
-                    placeholder={hasKey ? 'Paste a new key to replace' : `Paste key (${currentProvider.hint})`}
-                    placeholderTextColor={theme.colors.text.tertiary}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="off"
-                    textContentType="password"
-                    secureTextEntry={!showKey}
-                />
-                <TouchableOpacity
-                    onPress={() => setShowKey((prev) => !prev)}
-                    accessibilityLabel={showKey ? 'Hide API key' : 'Show API key'}
-                    style={styles.iconButton}
+            {Platform.OS === 'web' ? (
+                <form
+                    style={[
+                        styles.keyRow,
+                        styles.keyForm,
+                        { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+                    ]}
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        handleSaveKey();
+                    }}
                 >
-                    <Ionicons
-                        name={showKey ? 'eye-off-outline' : 'eye-outline'}
-                        size={22}
-                        color={theme.colors.text.secondary}
+                    <TextInput
+                        accessibilityLabel="API key"
+                        style={[styles.keyInput, { color: theme.colors.text.primary }]}
+                        value={keyDraft}
+                        onChangeText={setKeyDraft}
+                        placeholder={hasKey ? 'Paste a new key to replace' : `Paste key (${currentProvider.hint})`}
+                        placeholderTextColor={theme.colors.text.tertiary}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoComplete="off"
+                        secureTextEntry={!showKey}
                     />
-                </TouchableOpacity>
-            </View>
+                    <TouchableOpacity
+                        onPress={() => setShowKey((prev) => !prev)}
+                        accessibilityLabel={showKey ? 'Hide API key' : 'Show API key'}
+                        style={styles.iconButton}
+                    >
+                        <Ionicons
+                            name={showKey ? 'eye-off-outline' : 'eye-outline'}
+                            size={22}
+                            color={theme.colors.text.secondary}
+                        />
+                    </TouchableOpacity>
+                </form>
+            ) : (
+                <View
+                    style={[
+                        styles.keyRow,
+                        { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+                    ]}
+                >
+                    <TextInput
+                        accessibilityLabel="API key"
+                        style={[styles.keyInput, { color: theme.colors.text.primary }]}
+                        value={keyDraft}
+                        onChangeText={setKeyDraft}
+                        placeholder={hasKey ? 'Paste a new key to replace' : `Paste key (${currentProvider.hint})`}
+                        placeholderTextColor={theme.colors.text.tertiary}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoComplete="off"
+                        textContentType="password"
+                        secureTextEntry={!showKey}
+                    />
+                    <TouchableOpacity
+                        onPress={() => setShowKey((prev) => !prev)}
+                        accessibilityLabel={showKey ? 'Hide API key' : 'Show API key'}
+                        style={styles.iconButton}
+                    >
+                        <Ionicons
+                            name={showKey ? 'eye-off-outline' : 'eye-outline'}
+                            size={22}
+                            color={theme.colors.text.secondary}
+                        />
+                    </TouchableOpacity>
+                </View>
+            )}
 
             <View style={styles.buttonRow}>
                 <TouchableOpacity
@@ -543,6 +583,10 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         paddingRight: 8,
         marginBottom: 12,
+    },
+    keyForm: {
+        width: '100%',
+        margin: 0,
     },
     keyInput: {
         flex: 1,
