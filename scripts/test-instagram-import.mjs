@@ -12,7 +12,7 @@ const {
     importInstagramPost,
     isInstagramPostUrl,
     looksLikeFullRecipe,
-} = await import('../api/lib/instagramImport.js');
+} = await import('../api/_lib/instagramImport.js');
 
 const FIXTURE = `<!DOCTYPE html><html><head>
 <meta property="og:title" content="ChefNina on Instagram: &quot;Creamy tuscan chicken&quot;" />
@@ -79,7 +79,7 @@ console.log(`fixture checks passed (${liveOk}/${LIVE.length} live captions)`);
 
 process.env.SESSION_SECRET = 'local-test-secret';
 process.env.ALLOWED_EMAILS = 'owner@example.com';
-const { signSession } = await import('../api/lib/session.js');
+const { signSession } = await import('../api/_lib/session.js');
 const { default: importHandler } = await import('../api/recipes/import.js');
 const token = await signSession({ sub: 'g-1', email: 'owner@example.com', name: 'Owner' });
 

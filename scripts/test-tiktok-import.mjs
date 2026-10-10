@@ -5,8 +5,8 @@
  */
 import assert from 'node:assert/strict';
 
-const { isTikTokPostUrl } = await import('../api/lib/tiktokImport.js');
-const { looksLikeFullRecipe } = await import('../api/lib/instagramImport.js');
+const { isTikTokPostUrl } = await import('../api/_lib/tiktokImport.js');
+const { looksLikeFullRecipe } = await import('../api/_lib/instagramImport.js');
 
 assert.ok(isTikTokPostUrl('https://www.tiktok.com/@chef/video/7123456789012345678'));
 assert.ok(isTikTokPostUrl('https://vm.tiktok.com/ZMabcdef/'));

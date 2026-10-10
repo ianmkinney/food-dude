@@ -1,7 +1,7 @@
-import { applyCors } from '../lib/cors.js';
-import { isOwnerGateConfigured, isEmailAllowed, requireSecrets } from '../lib/env.js';
-import { verifyGoogleIdToken } from '../lib/google.js';
-import { signSession } from '../lib/session.js';
+import { applyCors } from '../_lib/cors.js';
+import { isOwnerGateConfigured, isEmailAllowed, requireSecrets } from '../_lib/env.js';
+import { verifyGoogleIdToken } from '../_lib/google.js';
+import { signSession } from '../_lib/session.js';
 const MSG = {
     method_not_allowed: 'Method not allowed.',
     platform_disabled: 'Owner platform AI is not enabled.',

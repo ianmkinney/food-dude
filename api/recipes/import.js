@@ -1,13 +1,13 @@
-import { applyCors } from '../lib/cors.js';
-import { isEmailAllowed, isOwnerGateConfigured, requireSecrets, resolveOpenRouterApiKey } from '../lib/env.js';
-import { bearerToken, verifySession } from '../lib/session.js';
-import { checkMinuteRateLimit } from '../lib/store.js';
-import { assertHttpOrHttpsUrl, safeFetchHtml } from '../lib/ssrf.js';
-import { extractRecipeFromHtml, hasRecipeShape } from '../lib/recipeExtract.js';
-import { importInstagramPost, isInstagramPostUrl } from '../lib/instagramImport.js';
-import { importTikTokPost, isTikTokPostUrl } from '../lib/tiktokImport.js';
-import { isStructuredImportPayload, jsonFromSocialImport, mapSocialImportError } from '../lib/socialImportRespond.js';
-import { runVideoRecipeExtraction, validateUploadedVideo } from '../lib/importVideoShared.js';
+import { applyCors } from '../_lib/cors.js';
+import { isEmailAllowed, isOwnerGateConfigured, requireSecrets, resolveOpenRouterApiKey } from '../_lib/env.js';
+import { bearerToken, verifySession } from '../_lib/session.js';
+import { checkMinuteRateLimit } from '../_lib/store.js';
+import { assertHttpOrHttpsUrl, safeFetchHtml } from '../_lib/ssrf.js';
+import { extractRecipeFromHtml, hasRecipeShape } from '../_lib/recipeExtract.js';
+import { importInstagramPost, isInstagramPostUrl } from '../_lib/instagramImport.js';
+import { importTikTokPost, isTikTokPostUrl } from '../_lib/tiktokImport.js';
+import { isStructuredImportPayload, jsonFromSocialImport, mapSocialImportError } from '../_lib/socialImportRespond.js';
+import { runVideoRecipeExtraction, validateUploadedVideo } from '../_lib/importVideoShared.js';
 
 const HEAVY_RL_PER_MINUTE = 3;
 
