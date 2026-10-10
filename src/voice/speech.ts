@@ -2,11 +2,13 @@ import { AccessibilityInfo, Platform } from 'react-native';
 import * as DeviceSpeech from 'expo-speech';
 import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION } from '../config/assistant';
 import { isVoiceMuted } from './voiceSettings';
+import { getElevenLabsConfig } from './elevenLabsSettings';
+import { createElevenLabsEngine } from './elevenLabsEngine';
 
-// On-device text-to-speech via expo-speech. A different engine can plug in here later.
+// On-device text-to-speech via expo-speech, or optional ElevenLabs BYOK from the device.
 
 export interface SpeechEngine {
-    readonly id: 'device';
+    readonly id: 'device' | 'elevenlabs';
     speak(text: string): Promise<void>;
     stop(): void;
 }
@@ -76,5 +78,9 @@ export function primeSpeechOnWeb(): void {
 }
 
 export async function getSpeechEngine(): Promise<SpeechEngine> {
+    const { apiKey, voiceId } = await getElevenLabsConfig();
+    if (apiKey && voiceId) {
+        return createElevenLabsEngine();
+    }
     return deviceSpeechEngine;
 }

@@ -232,16 +232,24 @@ export default function SousScreen() {
                         </View>
                     </Pressable>
                 );
-            case 'cost':
+            case 'cost': {
+                const sym = card.currency === 'USD' ? '$' : '';
                 return (
                     <Pressable key={index} style={cardStyle} onPress={open('EstimateCost')} accessibilityRole="link">
                         <Text style={[styles.cardKicker, { color: c.text.tertiary }]}>Estimated grocery cost{card.store ? ` at ${card.store}` : ''}</Text>
                         <Text style={[styles.cost, display, { color: c.text.primary }]}>
-                            {card.total != null ? `${card.currency === 'USD' ? '$' : ''}${card.total.toFixed(2)}${card.currency !== 'USD' ? ` ${card.currency}` : ''}` : 'See breakdown'}
+                            {card.total != null ? `${sym}${card.total.toFixed(2)}${card.currency !== 'USD' ? ` ${card.currency}` : ''}` : 'See breakdown'}
                         </Text>
+                        {card.lineItems?.slice(0, 6).map((row) => (
+                            <Text key={row.name} style={[styles.costLine, { color: c.text.secondary }]} numberOfLines={1}>
+                                {row.name}: {sym}{row.estimatedCost.toFixed(2)}
+                            </Text>
+                        ))}
+                        <Text style={[styles.costNote, { color: c.text.tertiary }]}>AI estimate — prices vary by store and region.</Text>
                         <AiDisclaimer kind="estimate" report={{ kind: 'cost', content: `Estimated total ${card.total ?? ''} ${card.currency}` }} />
                     </Pressable>
                 );
+            }
             case 'error':
                 return (
                     <View key={index} style={[...cardStyle, { borderColor: c.error }]}>
@@ -517,6 +525,8 @@ const styles = StyleSheet.create({
     cardRowText: { flex: 1, fontSize: 15 },
     cardFooter: { gap: 8 },
     cost: { fontSize: 28 },
+    costLine: { fontSize: 13, marginTop: 4 },
+    costNote: { fontSize: 12, marginTop: 8, fontStyle: 'italic' },
     inlineButton: { marginTop: 8, alignSelf: 'flex-start', borderRadius: 22, paddingHorizontal: 16, minHeight: 44, justifyContent: 'center' },
     inlineButtonText: { color: '#FFFFFF', fontWeight: '800' },
     thinking: { flexDirection: 'row', alignItems: 'center', gap: 8 },

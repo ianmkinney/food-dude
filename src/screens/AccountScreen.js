@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { userOperations, partyStatsOperations, recipeCookingHistoryOperations } from '../database/operations';
 import AiProviderSettings from '../components/AiProviderSettings';
 import VoicePreferences from '../components/VoicePreferences';
+import PrivacyDataExplainer from '../components/PrivacyDataExplainer';
 import TextSizeSettings from '../components/TextSizeSettings';
 import DataSharingSettings from '../components/DataSharingSettings';
 import OwnerSignInSettings from '../components/OwnerSignInSettings';
@@ -368,6 +369,10 @@ const AccountScreen = ({ navigation }) => {
 
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                 <VoicePreferences theme={theme} />
+            </ElevatedCard>
+
+            <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
+                <PrivacyDataExplainer theme={theme} />
             </ElevatedCard>
 
             <View onLayout={(e) => setAiPrivacySectionY(e.nativeEvent.layout.y)}>
