@@ -78,7 +78,7 @@
         },
         {
           "key": "Content-Security-Policy-Report-Only",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' https://openrouter.ai https://api.elevenlabs.io https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://accounts.google.com"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: data: https:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' https://openrouter.ai https://api.elevenlabs.io https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://accounts.google.com"
         }
       ]
     }
