@@ -36,7 +36,7 @@ const PantryMatchModal = ({ visible, matches, onClose, onRemoveFromGroceryList }
                                 Items Found in Pantry
                             </Text>
                         </View>
-                        <TouchableOpacity onPress={onClose}>
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close" onPress={onClose}>
                             <Ionicons name="close" size={28} color={theme.colors.text.secondary} />
                         </TouchableOpacity>
                     </View>

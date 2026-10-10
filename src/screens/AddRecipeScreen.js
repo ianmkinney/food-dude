@@ -156,7 +156,7 @@ const AddRecipeScreen = ({ navigation }) => {
                     </View>
                 ) : (
                     <View style={[styles.inputContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                        <TextInput
+                        <TextInput accessibilityLabel="Recipe link or text"
                             style={[styles.input, { color: theme.colors.text.primary, minHeight: mode === 'text' ? 200 : 50 }]}
                             placeholder={mode === 'url' ? "https://..." : "Paste recipe text here..."}
                             placeholderTextColor={theme.colors.text.tertiary}

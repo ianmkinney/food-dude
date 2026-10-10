@@ -213,6 +213,18 @@ export const recipeOperations = {
         }
     },
 
+    // Record whether a recipe and its photo came from AI. Kept separate from
+    // create/update so existing call sites don't change.
+    async setProvenance(id, { isAiGenerated, imageSource } = {}) {
+        const db = getDatabase();
+        if (isAiGenerated !== undefined) {
+            await db.runAsync('UPDATE recipes SET is_ai_generated = ? WHERE id = ?', [isAiGenerated ? 1 : 0, id]);
+        }
+        if (imageSource !== undefined) {
+            await db.runAsync('UPDATE recipes SET image_source = ? WHERE id = ?', [imageSource, id]);
+        }
+    },
+
     // Update recipe
     async update(id, updates) {
         const db = getDatabase();
@@ -898,7 +910,7 @@ export const userOperations = {
             if (existing) {
                 // Update
                 await db.runAsync(
-                    `UPDATE users SET name = ?, username = ?, email = ?, avatar_uri = ?, recipes_cooked = ?, flavor_preferences = ?, updated_at = ? WHERE user_id = ?`,
+                    `UPDATE users SET name = ?, username = ?, email = ?, avatar_uri = ?, recipes_cooked = ?, flavor_preferences = ?, allergies = ?, updated_at = ? WHERE user_id = ?`,
                     [
                         user.name || null,
                         user.username || null,
@@ -906,6 +918,7 @@ export const userOperations = {
                         user.avatarUri || null,
                         user.recipesCooked !== undefined ? user.recipesCooked : existing.recipes_cooked || 0,
                         user.flavorPreferences || null,
+                        user.allergies !== undefined ? user.allergies || null : existing.allergies || null,
                         now,
                         user.userId
                     ]
@@ -914,8 +927,8 @@ export const userOperations = {
             } else {
                 // Insert
                 const result = await db.runAsync(
-                    `INSERT INTO users (user_id, name, username, email, avatar_uri, recipes_cooked, flavor_preferences, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    `INSERT INTO users (user_id, name, username, email, avatar_uri, recipes_cooked, flavor_preferences, allergies, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         user.userId,
                         user.name || null,
@@ -924,6 +937,7 @@ export const userOperations = {
                         user.avatarUri || null,
                         user.recipesCooked || 0,
                         user.flavorPreferences || null,
+                        user.allergies || null,
                         now,
                         now
                     ]

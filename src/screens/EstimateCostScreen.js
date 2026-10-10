@@ -10,6 +10,7 @@ import {
     Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AiDisclaimer } from '../ai/AiLabel';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { groceryOperations } from '../database/operations';
@@ -115,7 +116,7 @@ const EstimateCostScreen = ({ navigation }) => {
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>
                             Store Name
                         </Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Store Name"
                             style={[styles.input, {
                                 backgroundColor: theme.colors.background,
                                 color: theme.colors.text.primary,
@@ -132,7 +133,7 @@ const EstimateCostScreen = ({ navigation }) => {
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>
                             Location
                         </Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Location"
                             style={[styles.input, {
                                 backgroundColor: theme.colors.background,
                                 color: theme.colors.text.primary,
@@ -202,6 +203,11 @@ const EstimateCostScreen = ({ navigation }) => {
                                 Estimated Costs
                             </Text>
                         </View>
+                        <AiDisclaimer
+                            kind="estimate"
+                            style={{ marginBottom: 12 }}
+                            report={{ kind: 'cost', content: JSON.stringify(estimation).slice(0, 1500) }}
+                        />
 
                         {estimation.items.map((item, index) => (
                             <View key={index} style={[styles.resultItem, { borderBottomColor: theme.colors.border }]}>

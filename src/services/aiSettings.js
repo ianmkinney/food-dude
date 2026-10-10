@@ -294,3 +294,9 @@ export async function getAccountAiState() {
         imageCacheFetchedAt: imageCache?.fetchedAt || null,
     };
 }
+
+// Shared with other on-device secrets so they
+// get the same Keychain/Keystore storage and web fallback as AI keys.
+export const getSecret = (key) => secureGet(key);
+export const setSecret = (key, value) => secureSet(key, value);
+export const deleteSecret = (key) => secureDelete(key);

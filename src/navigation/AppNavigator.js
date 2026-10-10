@@ -10,6 +10,8 @@ import AnimatedPressable from '../components/AnimatedPressable';
 
 // Import screens
 import RecipeBookScreen from '../screens/RecipeBookScreen';
+import SousScreen from '../sous/SousScreen';
+import { ASSISTANT_NAME } from '../config/assistant';
 import MealPlannerScreen from '../screens/MealPlannerScreen';
 import PantryScreen from '../screens/PantryScreen';
 import GroceryListScreen from '../screens/GroceryListScreen';
@@ -73,7 +75,7 @@ const TabNavigator = () => {
                             ? (props) => <HeaderPartyButton {...props} />
                             : undefined,
                     headerRight:
-                        route.name === 'Recipes'
+                        route.name === ASSISTANT_NAME
                             ? (props) => <HeaderAccountActions {...props} />
                             : undefined,
                     tabBarButton: (props) => <TabBarButton {...props} />,
@@ -81,6 +83,9 @@ const TabNavigator = () => {
                     let iconName;
 
                     switch (route.name) {
+                        case ASSISTANT_NAME:
+                            iconName = focused ? 'sparkles' : 'sparkles-outline';
+                            break;
                         case 'Recipes':
                             iconName = focused ? 'book' : 'book-outline';
                             break;
@@ -138,6 +143,11 @@ const TabNavigator = () => {
                 };
             }}
         >
+            <Tab.Screen
+                name={ASSISTANT_NAME}
+                component={SousScreen}
+                options={{ title: ASSISTANT_NAME, tabBarLabel: ASSISTANT_NAME }}
+            />
             <Tab.Screen
                 name="Recipes"
                 component={RecipeBookScreen}
@@ -232,7 +242,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -257,7 +267,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -282,7 +292,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -307,7 +317,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -332,7 +342,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -357,7 +367,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -382,7 +392,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -407,7 +417,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >
@@ -432,7 +442,7 @@ const AppNavigator = () => {
                         fontSize: 20,
                     },
                     headerLeft: () => (
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
                             onPress={() => navigation.goBack()}
                             style={{ marginLeft: 16 }}
                         >

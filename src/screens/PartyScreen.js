@@ -768,7 +768,7 @@ ${userName}`;
                         </View>
                     }
                 />
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Create a party"
                     style={[styles.addPartyButton, { backgroundColor: theme.primary[500] }]}
                     onPress={() => setShowCreatePartyModal(true)}
                 >
@@ -847,14 +847,14 @@ ${userName}`;
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
                         <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>Create Party</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Party name"
                             style={[styles.modalInput, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                             placeholder="Party Name"
                             placeholderTextColor={theme.colors.text.tertiary}
                             value={newPartyName}
                             onChangeText={setNewPartyName}
                         />
-                        <TextInput
+                        <TextInput accessibilityLabel="Party description"
                             style={[styles.modalInput, styles.modalTextArea, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                             placeholder="Description (optional)"
                             placeholderTextColor={theme.colors.text.tertiary}
@@ -890,14 +890,14 @@ ${userName}`;
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
                         <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>Create Meal</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Meal name"
                             style={[styles.modalInput, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                             placeholder="Meal Name"
                             placeholderTextColor={theme.colors.text.tertiary}
                             value={newMealName}
                             onChangeText={setNewMealName}
                         />
-                        <TextInput
+                        <TextInput accessibilityLabel="Meal description"
                             style={[styles.modalInput, styles.modalTextArea, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                             placeholder="Description (optional)"
                             placeholderTextColor={theme.colors.text.tertiary}
@@ -960,7 +960,7 @@ ${userName}`;
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
                         <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>Invite Friend</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Friend's email"
                             style={[styles.modalInput, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                             placeholder="Email Address"
                             placeholderTextColor={theme.colors.text.tertiary}
@@ -998,7 +998,7 @@ ${userName}`;
                     <View style={[styles.modalContent, styles.mealDetailModal, { backgroundColor: theme.colors.surface }]}>
                         <View style={styles.modalHeader}>
                             <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>Meal Details</Text>
-                            <TouchableOpacity onPress={() => setShowMealDetailModal(false)}>
+                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close" onPress={() => setShowMealDetailModal(false)}>
                                 <Ionicons name="close" size={24} color={theme.colors.text.primary} />
                             </TouchableOpacity>
                         </View>
@@ -1007,7 +1007,7 @@ ${userName}`;
                             {/* Meal Name */}
                             <View style={styles.detailSection}>
                                 <Text style={[styles.detailLabel, { color: theme.colors.text.secondary }]}>Name</Text>
-                                <TextInput
+                                <TextInput accessibilityLabel="Name"
                                     style={[styles.modalInput, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                                     placeholder="Meal Name"
                                     placeholderTextColor={theme.colors.text.tertiary}
@@ -1019,7 +1019,7 @@ ${userName}`;
                             {/* Meal Description */}
                             <View style={styles.detailSection}>
                                 <Text style={[styles.detailLabel, { color: theme.colors.text.secondary }]}>Description</Text>
-                                <TextInput
+                                <TextInput accessibilityLabel="Description"
                                     style={[styles.modalInput, styles.modalTextArea, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                                     placeholder="Description (optional)"
                                     placeholderTextColor={theme.colors.text.tertiary}
@@ -1247,7 +1247,7 @@ ${userName}`;
                                                         </Text>
                                                     )}
                                                 </View>
-                                                <TouchableOpacity
+                                                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear"
                                                     onPress={() => toggleEditingMealRecipe(recipe.id)}
                                                     style={styles.removeRecipeButton}
                                                 >

@@ -308,7 +308,7 @@ const AiProviderSettings = ({ theme }) => {
                     { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
                 ]}
             >
-                <TextInput
+                <TextInput accessibilityLabel="API key"
                     style={[styles.keyInput, { color: theme.colors.text.primary }]}
                     value={keyDraft}
                     onChangeText={setKeyDraft}

@@ -15,16 +15,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { recipeOperations, mealPlanOperations, groceryOperations, recipeCookingHistoryOperations, userOperations } from '../database/operations';
 import aiChefService from '../services/aiChefService';
 import { toPersistentImageUri } from '../services/mediaPrep';
+import { AiBadge, AiDisclaimer, AllergenWarning, AllergyNotice } from '../ai/AiLabel';
+import { useAllergies } from '../safety/useAllergies';
+import { findAllergenMatches } from '../safety/allergens';
+import ImageSourceChoice from '../components/ImageSourceChoice';
 
 const RecipeDetailScreen = ({ route, navigation }) => {
     const { recipeId } = route.params;
     const { isDark } = useTheme();
+    const allergies = useAllergies();
     const theme = getTheme(isDark);
 
     const [recipe, setRecipe] = useState(null);
@@ -79,6 +83,9 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                 imageUri: editedRecipe.image_uri // Map snake_case to camelCase
             };
             await recipeOperations.update(recipeId, updatePayload);
+            if (editedRecipe.image_source !== recipe.image_source) {
+                await recipeOperations.setProvenance(recipeId, { imageSource: editedRecipe.image_source ?? null });
+            }
             setRecipe(editedRecipe);
             setIsEditing(false);
             Alert.alert('Success', 'Recipe updated successfully');
@@ -87,29 +94,6 @@ const RecipeDetailScreen = ({ route, navigation }) => {
             Alert.alert('Error', 'Failed to update recipe');
         } finally {
             setSaving(false);
-        }
-    };
-
-    const handlePickImage = async () => {
-        console.log('handlePickImage called');
-        try {
-            // The system photo picker needs no library permission.
-            console.log('Launching image library...');
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ['images'],
-                allowsEditing: true,
-                aspect: [4, 3],
-                quality: 0.8,
-            });
-            console.log('Image picker result:', result);
-
-            if (!result.canceled) {
-                const imageUri = await toPersistentImageUri(result.assets[0].uri);
-                setEditedRecipe({ ...editedRecipe, image_uri: imageUri });
-            }
-        } catch (error) {
-            console.error('Error picking image:', error);
-            Alert.alert('Error', 'Failed to pick image: ' + error.message);
         }
     };
 
@@ -423,6 +407,8 @@ const RecipeDetailScreen = ({ route, navigation }) => {
             }
 
             await recipeOperations.update(recipeId, updates);
+            // AI-edited recipes carry the same label as AI-written ones.
+            await recipeOperations.setProvenance(recipeId, { isAiGenerated: true });
             await loadRecipe();
             setAiUpdateModalVisible(false);
             setAiChanges([]);
@@ -443,7 +429,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
             if (result.success && result.imageUri) {
                 setGeneratingImageStatus('Finalizing...');
                 // Show success and apply the generated image
-                setEditedRecipe({ ...editedRecipe, image_uri: result.imageUri });
+                setEditedRecipe({ ...editedRecipe, image_uri: result.imageUri, image_source: 'ai' });
                 Alert.alert(
                     'Image Generated!',
                     'AI has created a professional photo for your recipe. You can see it above. Save the recipe to keep this image.',
@@ -481,11 +467,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
             >
                 <ScrollView contentContainerStyle={styles.content}>
                 {/* Header Image */}
-                <TouchableOpacity
-                    style={[styles.imageContainer, { backgroundColor: theme.primary[100] }]}
-                    onPress={isEditing ? handlePickImage : null}
-                    disabled={!isEditing}
-                >
+                <View style={[styles.imageContainer, { backgroundColor: theme.primary[100] }]}>
                     {(isEditing ? editedRecipe.image_uri : recipe.image_uri) ? (
                         <Image
                             source={{ uri: isEditing ? editedRecipe.image_uri : recipe.image_uri }}
@@ -494,32 +476,20 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                     ) : (
                         <Ionicons name="restaurant" size={80} color={theme.primary[300]} />
                     )}
+                    {(isEditing ? editedRecipe.image_source : recipe.image_source) === 'ai' && (
+                        <AiBadge onDark style={styles.imageAiBadge} />
+                    )}
                     {isEditing && (
                         <View style={styles.editImageOverlay}>
-                            <Ionicons name="camera" size={24} color="#FFF" />
-                            <Text style={styles.editImageText}>Tap to change photo</Text>
-                            <TouchableOpacity
-                                style={[styles.generateImageButton, { backgroundColor: theme.accent.purple }]}
-                                onPress={handleGenerateImage}
-                                disabled={generatingImage}
-                            >
-                                {generatingImage ? (
-                                    <>
-                                        <ActivityIndicator size="small" color="#FFF" />
-                                        <Text style={styles.generateImageText}>
-                                            {generatingImageStatus || 'Generating...'}
-                                        </Text>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Ionicons name="sparkles" size={18} color="#FFF" />
-                                        <Text style={styles.generateImageText}>Generate with AI</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
+                            <ImageSourceChoice
+                                onPhoto={(uri) => setEditedRecipe({ ...editedRecipe, image_uri: uri, image_source: 'user' })}
+                                onGenerate={handleGenerateImage}
+                                generating={generatingImage}
+                                generatingLabel={generatingImageStatus}
+                            />
                         </View>
                     )}
-                </TouchableOpacity>
+                </View>
 
                 <View style={styles.detailsContainer}>
                     {/* Header Actions */}
@@ -548,13 +518,13 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                     {/* Title & Description */}
                     {isEditing ? (
                         <>
-                            <TextInput
+                            <TextInput accessibilityLabel="Recipe title"
                                 style={[styles.editTitle, { color: theme.colors.text.primary, borderBottomColor: theme.colors.border }]}
                                 value={editedRecipe.title}
                                 onChangeText={(text) => setEditedRecipe({ ...editedRecipe, title: text })}
                                 placeholder="Recipe Title"
                             />
-                            <TextInput
+                            <TextInput accessibilityLabel="Description"
                                 style={[styles.editDescription, { color: theme.colors.text.secondary, borderBottomColor: theme.colors.border }]}
                                 value={editedRecipe.description}
                                 onChangeText={(text) => setEditedRecipe({ ...editedRecipe, description: text })}
@@ -567,6 +537,15 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                             <Text style={[styles.title, { color: theme.colors.text.primary }]}>
                                 {recipe.title}
                             </Text>
+                            {!!recipe.is_ai_generated && (
+                                <View style={{ marginTop: 8, marginBottom: 4, gap: 8 }}>
+                                    <AiDisclaimer
+                                        kind="recipe"
+                                        report={{ kind: 'recipe', content: `${recipe.title}\n${(recipe.ingredients || []).map((i) => i.ingredient).join('\n')}` }}
+                                    />
+                                    <AllergyNotice allergies={allergies.list} />
+                                </View>
+                            )}
                             {recipe.description && (
                                 <Text style={[styles.description, { color: theme.colors.text.secondary }]}>
                                     {recipe.description}
@@ -634,7 +613,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                         <View style={styles.metaItem}>
                             <Ionicons name="time-outline" size={20} color={theme.colors.text.secondary} />
                             {isEditing ? (
-                                <TextInput
+                                <TextInput accessibilityLabel="Total time in minutes"
                                     style={[styles.editMeta, { color: theme.colors.text.primary }]}
                                     value={String(editedRecipe.total_time || '')}
                                     onChangeText={(text) => setEditedRecipe({ ...editedRecipe, total_time: text })}
@@ -650,7 +629,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                         <View style={styles.metaItem}>
                             <Ionicons name="people-outline" size={20} color={theme.colors.text.secondary} />
                             {isEditing ? (
-                                <TextInput
+                                <TextInput accessibilityLabel="Servings"
                                     style={[styles.editMeta, { color: theme.colors.text.primary }]}
                                     value={String(editedRecipe.servings || '')}
                                     onChangeText={(text) => setEditedRecipe({ ...editedRecipe, servings: text })}
@@ -666,7 +645,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                         <View style={styles.metaItem}>
                             <Ionicons name="bar-chart-outline" size={20} color={theme.colors.text.secondary} />
                             {isEditing ? (
-                                <TextInput
+                                <TextInput accessibilityLabel="Difficulty"
                                     style={[styles.editMeta, { color: theme.colors.text.primary }]}
                                     value={editedRecipe.difficulty || ''}
                                     onChangeText={(text) => setEditedRecipe({ ...editedRecipe, difficulty: text })}
@@ -688,6 +667,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                                 <Text style={[styles.sectionSubtitle, { color: theme.colors.text.secondary }]}>
                                     Per serving
                                 </Text>
+                                <AiDisclaimer kind={recipe.is_ai_generated ? 'estimate' : 'recipe'} style={{ marginTop: 6 }} />
                             </View>
                             <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
                                 <View style={styles.nutritionGrid}>
@@ -781,10 +761,17 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                     )}
 
                     {/* Ingredients */}
+                    <AllergenWarning
+                        matches={findAllergenMatches(
+                            (isEditing ? editedRecipe.ingredients : recipe.ingredients || []).map((i) => [i.quantity, i.unit, i.ingredient].filter(Boolean).join(' ')),
+                            allergies.raw
+                        )}
+                        style={{ marginTop: 16 }}
+                    />
                     <View style={styles.sectionHeader}>
                         <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>Ingredients</Text>
                         {isEditing && (
-                            <TouchableOpacity onPress={() => {
+                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Add ingredient" onPress={() => {
                                 const newIngs = [...editedRecipe.ingredients, { ingredient: '', quantity: '', unit: '' }];
                                 setEditedRecipe({ ...editedRecipe, ingredients: newIngs });
                             }}>
@@ -797,25 +784,25 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                             <View key={index} style={[styles.ingredientRow, { borderBottomColor: theme.colors.border, borderBottomWidth: index === (isEditing ? editedRecipe.ingredients : recipe.ingredients).length - 1 ? 0 : 1 }]}>
                                 {isEditing ? (
                                     <View style={styles.editIngredientRow}>
-                                        <TextInput
+                                        <TextInput accessibilityLabel="Qty"
                                             style={[styles.editIngQty, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                                             value={item.quantity}
                                             onChangeText={(text) => updateIngredient(index, 'quantity', text)}
                                             placeholder="Qty"
                                         />
-                                        <TextInput
+                                        <TextInput accessibilityLabel="Unit"
                                             style={[styles.editIngUnit, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                                             value={item.unit}
                                             onChangeText={(text) => updateIngredient(index, 'unit', text)}
                                             placeholder="Unit"
                                         />
-                                        <TextInput
+                                        <TextInput accessibilityLabel="Ingredient"
                                             style={[styles.editIngName, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                                             value={item.ingredient}
                                             onChangeText={(text) => updateIngredient(index, 'ingredient', text)}
                                             placeholder="Ingredient"
                                         />
-                                        <TouchableOpacity onPress={() => {
+                                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove ingredient" onPress={() => {
                                             const newIngs = editedRecipe.ingredients.filter((_, i) => i !== index);
                                             setEditedRecipe({ ...editedRecipe, ingredients: newIngs });
                                         }}>
@@ -835,7 +822,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                     <View style={styles.sectionHeader}>
                         <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>Instructions</Text>
                         {isEditing && (
-                            <TouchableOpacity onPress={() => {
+                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Add step" onPress={() => {
                                 const newInst = [...editedRecipe.instructions, ''];
                                 setEditedRecipe({ ...editedRecipe, instructions: newInst });
                             }}>
@@ -874,14 +861,14 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                                 </View>
                                 {isEditing ? (
                                     <View style={{ flex: 1, flexDirection: 'row', gap: 8 }}>
-                                        <TextInput
+                                        <TextInput accessibilityLabel="Step instruction"
                                             style={[styles.editInstruction, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
                                             value={step}
                                             onChangeText={(text) => updateInstruction(index, text)}
                                             multiline
                                             placeholder="Step instruction"
                                         />
-                                        <TouchableOpacity onPress={() => {
+                                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove step" onPress={() => {
                                             const newInst = editedRecipe.instructions.filter((_, i) => i !== index);
                                             setEditedRecipe({ ...editedRecipe, instructions: newInst });
                                         }}>
@@ -983,7 +970,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                                         Custom Instructions
                                     </Text>
                                 </View>
-                                <TouchableOpacity onPress={() => {
+                                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close" onPress={() => {
                                     setCustomInstructionsModalVisible(false);
                                     setCustomInstructions('');
                                 }}>
@@ -995,7 +982,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                                 <Text style={[styles.modalLabel, { color: theme.colors.text.secondary }]}>
                                     Optional: Tell the AI how you'd like to modify this recipe
                                 </Text>
-                                <TextInput
+                                <TextInput accessibilityLabel="How should AI change this recipe?"
                                     style={[styles.modalTextArea, {
                                         backgroundColor: theme.colors.background,
                                         color: theme.colors.text.primary,
@@ -1136,6 +1123,11 @@ const RecipeDetailScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
+    imageAiBadge: {
+        position: 'absolute',
+        top: 12,
+        left: 12,
+    },
     container: {
         flex: 1,
     },
