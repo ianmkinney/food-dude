@@ -17,6 +17,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { parseRecipe, parseRecipeFromUrl, parseRecipeFromImages } from '../services/recipeParser';
+import { IMPORT_URL_FALLBACK_HINT } from '../services/recipeImportProxy';
 import { friendlyMediaErrorMessage } from '../services/mediaTypes';
 import { recipeOperations } from '../database/operations';
 import FunLoader from '../components/FunLoader';
@@ -221,7 +222,10 @@ const ImportRecipeScreen = () => {
                 {error && (
                     <View style={[styles.errorContainer, { backgroundColor: theme.colors.error + '20' }]}>
                         <Ionicons name="alert-circle" size={24} color={theme.colors.error} />
-                        <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
+                            <Text style={[styles.errorHint, { color: theme.colors.text.secondary }]}>{IMPORT_URL_FALLBACK_HINT}</Text>
+                        </View>
                     </View>
                 )}
 
@@ -318,8 +322,13 @@ const styles = StyleSheet.create({
     },
     errorText: {
         marginLeft: 12,
-        flex: 1,
         fontSize: 14,
+    },
+    errorHint: {
+        marginLeft: 12,
+        marginTop: 8,
+        fontSize: 13,
+        lineHeight: 18,
     },
     resultContainer: {
         padding: 20,
