@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { memoryOperations } from '../database/operations';
 import { isMemoryEnabled, setMemoryEnabled } from '../memory/memorySettings';
 
@@ -25,6 +25,13 @@ export default function MemorySettings({ theme }: { theme: Theme }) {
     }, [load]);
 
     const clearAll = () => {
+        // react-native-web's Alert.alert is a no-op.
+        if (Platform.OS === 'web') {
+            if (window.confirm('Clear all memories? Ampi will forget everything it saved about you.')) {
+                memoryOperations.clearAll().then(load);
+            }
+            return;
+        }
         Alert.alert('Clear all memories?', 'Ampi will forget everything it saved about you.', [
             { text: 'Cancel', style: 'cancel' },
             {
