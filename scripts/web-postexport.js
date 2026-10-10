@@ -69,12 +69,12 @@ if (leftovers.length) {
 // loaded, but the bundle only discovers them after it has downloaded and run.
 // Preloading lets them download alongside the bundle. Both live under
 // /assets/, which is served immutable, so the worker's fetch hits the cache.
+// The wa-sqlite wasm is fetched inside a worker, which can't use a document preload.
 const PRELOADS = [
-    { test: /\/wa-sqlite\.[^/]*\.wasm$/, as: 'fetch', type: 'application/wasm' },
     { test: /\/Fredoka_(600SemiBold|700Bold)\.[^/]*\.ttf$/, as: 'font', type: 'font/ttf' },
 ];
 const indexHtml = path.join(dist, 'index.html');
-const assetUrls = listFiles(assetsDir, ['.wasm', '.ttf']).map((file) => '/' + path.relative(dist, file).split(path.sep).join('/'));
+const assetUrls = listFiles(assetsDir, ['.ttf']).map((file) => '/' + path.relative(dist, file).split(path.sep).join('/'));
 const links = PRELOADS.flatMap(({ test, as, type }) =>
     assetUrls.filter((url) => test.test(url)).map((url) => `<link rel="preload" href="${url}" as="${as}" type="${type}" crossorigin>`)
 );
