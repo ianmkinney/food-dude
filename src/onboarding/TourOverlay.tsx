@@ -68,7 +68,7 @@ function buildSteps(recipeId: number | null, recipeTitle: string | null): TourSt
                 : undefined,
         },
         { line: 'tour_pantry', route: 'Pantry', target: 'tab-Pantry' },
-        { line: 'tour_sous', route: 'Sous', target: 'sous-composer' },
+        { line: 'tour_sous', route: 'Ampi', target: 'sous-composer' },
     ];
 }
 
@@ -189,7 +189,7 @@ export default function TourOverlay({
                 accessibilityLiveRegion="polite"
             >
                 <View style={styles.cardHeader}>
-                    <Text style={[styles.sous, { color: c.text.primary, fontFamily: theme.typography.fonts.display }]}>Sous</Text>
+                    <Text style={[styles.sous, { color: c.text.primary, fontFamily: theme.typography.fonts.display }]}>AmpliFood · Ampi</Text>
                     <AiBadge />
                     <View style={{ flex: 1 }} />
                     <Text style={[styles.counter, { color: c.text.tertiary }]}>{index + 1} of {steps.length}</Text>

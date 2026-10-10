@@ -21,6 +21,8 @@ import { getApiKey, getSelectedProvider } from '../services/aiSettings';
 import { generateText, stripCodeFences } from '../services/aiClient';
 import { recipeOperations, userOperations } from '../database/operations';
 import { findAllergenMatches, parseAllergies } from '../safety/allergens';
+import { ASSISTANT_NAME, ASSISTANT_TAGLINE } from '../config/assistant';
+import { MINIMUM_AGE } from '../config/legal';
 import { useSpeechInput } from '../voice/useSpeechInput';
 import { LINES, type LineId } from './script';
 import { playLine, stopLine } from './onboardingVoice';
@@ -188,7 +190,7 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
                 prepTime: recipe.prepTime,
                 cookTime: recipe.cookTime,
                 totalTime: (recipe.prepTime || 0) + (recipe.cookTime || 0) || null,
-                sourcePlatform: recipe.source === 'ai' ? 'Sous' : 'AmpliFood sample',
+                sourcePlatform: recipe.source === 'ai' ? ASSISTANT_NAME : 'AmpliFood sample',
                 ingredients: recipe.ingredients,
                 instructions: recipe.instructions,
             })
@@ -232,7 +234,7 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
                 return (
                     <>
                         <Text style={[styles.lead, { color: c.text.primary }]}>
-                            <Text style={styles.bold}>Hi, I'm Sous, your AI sous chef.</Text> I'm an AI assistant, not a person. My voice is AI-generated, and AI can make mistakes, so always check ingredients and labels yourself.
+                            <Text style={styles.bold}>Hi, I'm {ASSISTANT_NAME}, {ASSISTANT_TAGLINE}.</Text> I'm an AI assistant, not a person. My voice is generated on your device, and AI can make mistakes, so always check ingredients and labels yourself.
                         </Text>
                         <View style={styles.row}>
                             <Button label="Let's go" primary onPress={() => go('agree')} />
@@ -252,7 +254,7 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
                     <>
                         <Text style={[styles.h2, display, { color: c.text.primary }]} accessibilityRole="header">Before we start</Text>
                         <View style={styles.bullets}>
-                            <Text style={[styles.body, { color: c.text.secondary }]}>• Sous and its recipe ideas are AI. They can be wrong; nobody reviews them before you see them.</Text>
+                            <Text style={[styles.body, { color: c.text.secondary }]}>• {ASSISTANT_NAME} and its recipe ideas are AI. They can be wrong; nobody reviews them before you see them.</Text>
                             <Text style={[styles.body, { color: c.text.secondary }]}>• Check ingredients and labels for allergens, and cook meat, poultry, eggs and seafood to safe temperatures. Nothing here is medical or dietary advice.</Text>
                             <Text style={[styles.body, { color: c.text.secondary }]}>• Your kitchen stays on this device. We'll ask before anything is sent to an AI provider.</Text>
                         </View>
@@ -261,7 +263,7 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
                             onChange={setAgreed}
                             label={
                                 <>
-                                    I'm 13 or older (or have a parent's permission if under 18) and I agree to the {link('Terms of Use', TERMS_URL)} and {link('Privacy Policy', PRIVACY_URL)}.
+                                    I'm {MINIMUM_AGE} or older and I agree to the {link('Terms of Use', TERMS_URL)} and {link('Privacy Policy', PRIVACY_URL)}.
                                 </>
                             }
                         />
@@ -312,7 +314,7 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
                         <Text style={[styles.h2, display, { color: c.text.primary }]} accessibilityRole="header">Use AI with {info.name}?</Text>
                         <Text style={[styles.body, { color: c.text.secondary }]}>When you use AI features, AmpliFood sends this to {info.name}, using your own API key:</Text>
                         <View style={styles.bullets}>
-                            {['Your messages to Sous (including what you say by voice, sent as text)', 'Photos you attach', 'Your pantry items', 'Your saved recipes', 'Your food likes'].map((line) => (
+                            {[`Your messages to ${ASSISTANT_NAME} (including what you say by voice, sent as text)`, 'Photos you attach', 'Your pantry items', 'Your saved recipes', 'Your food likes'].map((line) => (
                                 <Text key={line} style={[styles.body, { color: c.text.secondary }]}>• {line}</Text>
                             ))}
                         </View>
@@ -379,7 +381,7 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
                                 onPressOut={() => mic.stop()}
                                 style={[styles.mic, { backgroundColor: mic.state === 'listening' ? c.error : c.surfaceMuted, opacity: mic.isSupported ? 1 : 0.4 }]}
                                 accessibilityRole="button"
-                                accessibilityLabel="Hold to tell Sous what you like"
+                                accessibilityLabel={`Hold to tell ${ASSISTANT_NAME} what you like`}
                             >
                                 <Ionicons name="mic" size={20} color={mic.state === 'listening' ? '#FFFFFF' : c.text.primary} />
                             </Pressable>
@@ -441,7 +443,7 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
                 <BrandMark size={44} style={null} />
                 <View style={{ flex: 1 }}>
                     <View style={styles.nameRow}>
-                        <Text style={[styles.sous, display, { color: c.text.primary }]}>Sous</Text>
+                        <Text style={[styles.sous, display, { color: c.text.primary }]}>AmpliFood · {ASSISTANT_NAME}</Text>
                         <Text style={[styles.small, { color: c.text.tertiary }]}>(Soo)</Text>
                         <AiBadge />
                     </View>

@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 11; // v10 drop_health_worlds on #12; v11 users_diet on #13
+export const CURRENT_SCHEMA_VERSION = 11;
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
