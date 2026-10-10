@@ -7,6 +7,7 @@ import {
 import { parseRecipe, parseRecipeFromUrl } from '../services/recipeParser';
 import { estimateGroceryCost } from '../services/groceryService';
 import { toPersistentImageUri } from '../services/mediaPrep';
+import { Platform } from 'react-native';
 import { ATTACHMENT_SOURCE_LABEL } from './attachmentLimits';
 
 // What Sous can actually do in the app. The model asks for these by name in its
@@ -19,7 +20,7 @@ type ItemArg = { name: string; quantity?: string | number | null; unit?: string 
 
 export type ToolCall =
     | { tool: 'find_recipes'; args: { query: string } }
-    | { tool: 'import_recipe'; args: { url?: string; text?: string; image_uri?: string } }
+    | { tool: 'import_recipe'; args: { url?: string; text?: string } }
     | {
           tool: 'create_recipe';
           args: {
@@ -30,7 +31,6 @@ export type ToolCall =
               cook_time?: number;
               ingredients: { ingredient: string; quantity?: string | number | null; unit?: string | null }[];
               instructions: string[];
-              image_uri?: string;
           };
       }
     | { tool: 'add_to_meal_plan'; args: { recipe_id?: number; recipe_title?: string; date: string; meal_type: MealType } }
@@ -66,8 +66,9 @@ export type SousCard =
 /** Tool reference shown to the model inside the system prompt. */
 export const TOOL_SPEC = `
 - find_recipes {"query": string}: search the user's saved recipes.
-- import_recipe {"url"?: string, "text"?: string, "image_uri"?: string}: import a recipe from a link, pasted text, or an attached file into the recipe book.
-- create_recipe {"title", "description"?, "servings"?, "prep_time"?, "cook_time"?, "ingredients": [{"ingredient", "quantity"?, "unit"?}], "instructions": [string], "image_uri"?: string}: save a NEW recipe (from an attachment or your draft). Use image_uri when the user's photo should be the recipe image.
+- import_recipe {"url"?: string, "text"?: string}: import a recipe from a link, pasted text, or an attached file into the recipe book.
+- create_recipe {"title", "description"?, "servings"?, "prep_time"?, "cook_time"?, "ingredients": [{"ingredient", "quantity"?, "unit"?}], "instructions": [string]}: save a NEW recipe (from an attachment or your draft).
+If the user attached a photo, the app uses it as the recipe image automatically; never put image URLs in tool arguments.
 - add_to_meal_plan {"recipe_id"?: number, "recipe_title"?: string, "date": "YYYY-MM-DD", "meal_type": "breakfast"|"lunch"|"dinner"}: schedule a saved recipe.
 - add_to_pantry {"items": [{"name", "quantity"?, "unit"?, "category"?}]}: record items the user has at home.
 - add_to_grocery {"items": [{"name", "quantity"?, "unit"?}]}: add items to the shopping list.
@@ -88,16 +89,36 @@ async function findRecipe(args: { recipe_id?: number; recipe_title?: string }): 
     return null;
 }
 
-type RunOptions = { userRecipeImageUri?: string | null };
+type RunOptions = {
+    /** First image the user attached in this chat turn; the only image Sous may store as a cover. */
+    userRecipeImageUri?: string | null;
+};
 
-async function persistRecipeImage(uri?: string | null) {
-    if (!uri) return null;
+// Native pickers hand back local file URIs; they never leave the device.
+const NATIVE_LOCAL_URI = /^(file|content|ph|assets-library):/i;
+
+function isLocalImageUri(uri: string) {
+    if (/^blob:/i.test(uri) || /^data:image\//i.test(uri)) return true;
+    return Platform.OS !== 'web' && NATIVE_LOCAL_URI.test(uri);
+}
+
+/**
+ * Recipe covers come only from the user's own attachment in this chat, never
+ * from the model's tool args: a prompt-injected http(s) URL saved as a cover
+ * would be fetched every time the recipe renders, leaking to whoever controls
+ * that server.
+ */
+export async function persistRecipeImage(attachmentUri: string | null | undefined) {
+    if (!attachmentUri || !isLocalImageUri(attachmentUri)) return null;
     try {
-        return await toPersistentImageUri(uri);
+        const stored = await toPersistentImageUri(attachmentUri);
+        return typeof stored === 'string' && isLocalImageUri(stored) ? stored : null;
     } catch {
         return null;
     }
 }
+
+const attachmentCover = (options: RunOptions) => persistRecipeImage(options.userRecipeImageUri);
 
 async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> {
     switch (call.tool) {
@@ -115,7 +136,7 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
             const aiExtracted = Boolean(
                 ('aiExtracted' in result && result.aiExtracted) || result.recipe.aiExtracted
             );
-            const userCover = await persistRecipeImage(options.userRecipeImageUri);
+            const userCover = await attachmentCover(options);
             const cover = userCover || result.recipe.imageUri || null;
             const id = Number(await recipeOperations.create({ ...result.recipe, imageUri: cover }));
             const fromFile = Boolean(userCover);
@@ -135,8 +156,8 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
         }
         case 'create_recipe': {
             const a = call.args;
-            const cover = (await persistRecipeImage(a.image_uri)) || (await persistRecipeImage(options.userRecipeImageUri));
-            const fromFile = Boolean(cover && (a.image_uri || options.userRecipeImageUri));
+            const cover = await attachmentCover(options);
+            const fromFile = Boolean(cover);
             const id = Number(
                 await recipeOperations.create({
                     title: a.title,
