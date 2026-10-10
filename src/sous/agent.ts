@@ -1,6 +1,9 @@
 import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION, ASSISTANT_TAGLINE } from '../config/assistant';
 import { pantryOperations, recipeOperations, userOperations } from '../database/operations';
-import { generateText, stripCodeFences } from '../services/aiClient';
+import { generateMultimodal, generateText, stripCodeFences } from '../services/aiClient';
+import type { PendingAttachment } from './chatAttachments';
+import { prepareAttachmentPayload } from './chatAttachments';
+import { isMutatingAction, summarizeActions } from './confirmActions';
 import { TOOL_SPEC, runTools, type SousCard, type ToolCall } from './tools';
 import { getIncludeHealthData } from '../consent/consentStore';
 
@@ -10,9 +13,14 @@ import { getIncludeHealthData } from '../consent/consentStore';
 
 export type SousTurn = { role: 'user' | 'sous'; text: string };
 
-export type SousResult = { reply: string; cards: SousCard[] };
-
-const MAX_HISTORY = 12;
+export type SousResult = {
+    reply: string;
+    cards: SousCard[];
+    /** Mutating tool calls waiting for the user to confirm in chat. */
+    pendingActions?: ToolCall[];
+    confirmSummary?: string;
+    userRecipeImageUri?: string | null;
+};
 
 export const CRISIS_REPLY =
     "I'm only a cooking assistant and can't help with this. If you're in crisis or thinking about hurting yourself, call or text 988 (Suicide & Crisis Lifeline, US). If you or someone else is in danger or having a medical emergency or a severe allergic reaction, call 911 now.";
@@ -75,6 +83,8 @@ Full meals & pairings:
 Rules:
 - Only call a tool when the user asked for that action or clearly agreed to it. Never invent recipe ids; use ids from the list below or a recipe_title.
 - When you write new recipes the user wants to keep, call create_recipe for each dish (main and sides) instead of pasting full recipes in the reply. Then add_to_grocery for missing ingredients and estimate_cost when they want pricing.
+- When the user attaches a photo, PDF, or recipe file, read it carefully. You can import it, answer questions, scale servings, convert units, or suggest allergy-safe substitutions in your reply. Only call tools when saving data to the app.
+- For add_to_grocery, only list ingredients they still need; the app skips items already in the pantry.
 - Never use the user's allergens, or ingredients that commonly contain them, in anything you suggest or save.
 - Mention allergens when they are obvious (nuts, shellfish, gluten, dairy, eggs). You are not a doctor or dietitian; don't give medical advice.
 - Follow the food-safety rules above: give safe internal temperatures, no canning instructions of your own, no infant or pregnancy feeding guidance, and refuse non-food or unsafe items.
@@ -101,10 +111,27 @@ function parseResponse(text: string): { reply: string; actions: ToolCall[] } {
     return { reply: cleaned, actions: [] };
 }
 
-export async function askSous(history: SousTurn[], message: string): Promise<SousResult> {
+const MAX_HISTORY = 12;
+
+export async function askSous(
+    history: SousTurn[],
+    message: string,
+    attachments: PendingAttachment[] = []
+): Promise<SousResult> {
     if (isCrisisMessage(message)) {
         return { reply: CRISIS_REPLY, cards: [] };
     }
+
+    let attachmentBlock = '';
+    let images: { data: string; mimeType: string }[] = [];
+    let userRecipeImageUri: string | null = null;
+    if (attachments.length) {
+        const prepared = await prepareAttachmentPayload(attachments);
+        attachmentBlock = prepared.promptExtra;
+        images = prepared.images;
+        userRecipeImageUri = prepared.attachments.find((a) => a.recipeImageUri)?.recipeImageUri || null;
+    }
+
     const transcript = history
         .slice(-MAX_HISTORY)
         .map((turn) => `${turn.role === 'user' ? 'User' : ASSISTANT_NAME}: ${turn.text}`)
@@ -113,10 +140,37 @@ export async function askSous(history: SousTurn[], message: string): Promise<Sou
 
 Conversation so far:
 ${transcript || '(new conversation)'}
-User: ${message}`;
+User: ${message}${attachmentBlock}`;
 
-    const raw = await generateText(prompt, { feature: 'chat' });
+    const raw = images.length
+        ? await generateMultimodal({ prompt, images, video: null, feature: 'chat' })
+        : await generateText(prompt, { feature: 'chat' });
     const { reply, actions } = parseResponse(raw);
-    const cards = actions.length ? await runTools(actions) : [];
-    return { reply: reply || (cards.length ? 'Done.' : "Sorry, I didn't get that. Try asking another way?"), cards };
+
+    const mutating = actions.filter(isMutatingAction);
+    const immediate = actions.filter((a) => !isMutatingAction(a));
+    const cards = immediate.length ? await runTools(immediate, { userRecipeImageUri }) : [];
+
+    if (mutating.length) {
+        return {
+            reply: reply || 'I can do that in AmpliFood — confirm below.',
+            cards,
+            pendingActions: mutating,
+            confirmSummary: summarizeActions(mutating),
+            userRecipeImageUri,
+        };
+    }
+
+    return {
+        reply: reply || (cards.length ? 'Done.' : "Sorry, I didn't get that. Try asking another way?"),
+        cards,
+        userRecipeImageUri,
+    };
+}
+
+export async function confirmSousActions(
+    actions: ToolCall[],
+    userRecipeImageUri?: string | null
+): Promise<SousCard[]> {
+    return runTools(actions, { userRecipeImageUri });
 }
