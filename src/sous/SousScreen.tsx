@@ -744,8 +744,8 @@ const styles = StyleSheet.create({
     },
     videoAttachText: { flex: 1, fontSize: 13 },
     composerWrap: { paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
-    composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-    input: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderRadius: 22, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11, fontSize: 16, lineHeight: 20 },
+    composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+    input: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderRadius: 22, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 11, fontSize: 16, lineHeight: 20 },
     roundButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
     sendButton: { borderWidth: 0 },
 });
