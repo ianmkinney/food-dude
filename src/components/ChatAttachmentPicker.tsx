@@ -130,6 +130,7 @@ export default function ChatAttachmentPicker({ attachments, onChange, theme, lay
                 mimeType: file.type,
                 sizeBytes: file.size,
                 previewUri: kind === 'image' ? uri : undefined,
+                file,
             });
         }
         if (picked.length) add(picked);

@@ -22,6 +22,8 @@ export type PendingAttachment = {
     mimeType?: string;
     sizeBytes?: number;
     previewUri?: string;
+    /** Web only: the picked file, read directly so CSP connect-src needn't allow blob: */
+    file?: Blob;
 };
 
 export type PreparedChatAttachment = {
@@ -56,11 +58,10 @@ export function classifyFile(name: string, mimeType?: string): PendingAttachment
     return null;
 }
 
-async function readBytes(uri: string): Promise<Uint8Array> {
+async function readBytes(uri: string, file?: Blob): Promise<Uint8Array> {
     if (Platform.OS === 'web') {
-        const blob = await (await fetch(uri)).blob();
-        const buf = await blob.arrayBuffer();
-        return new Uint8Array(buf);
+        const blob = file ?? (await (await fetch(uri)).blob());
+        return new Uint8Array(await blob.arrayBuffer());
     }
     const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
     const binary = atob(base64);
@@ -69,9 +70,9 @@ async function readBytes(uri: string): Promise<Uint8Array> {
     return bytes;
 }
 
-async function readText(uri: string): Promise<string> {
+async function readText(uri: string, file?: Blob): Promise<string> {
     if (Platform.OS === 'web') {
-        return fetch(uri).then((r) => r.text());
+        return file ? file.text() : fetch(uri).then((r) => r.text());
     }
     return FileSystem.readAsStringAsync(uri);
 }
@@ -116,7 +117,7 @@ export async function prepareAttachmentPayload(list: PendingAttachment[]): Promi
             continue;
         }
         if (item.kind === 'text') {
-            const raw = item.kind === 'text' && item.uri.startsWith('text:') ? decodeURIComponent(item.uri.slice(5)) : await readText(item.uri);
+            const raw = item.kind === 'text' && item.uri.startsWith('text:') ? decodeURIComponent(item.uri.slice(5)) : await readText(item.uri, item.file);
             const clipped = raw.length > 40_000 ? `${raw.slice(0, 40_000)}\n…(truncated)` : raw;
             const snippet = `--- ${item.name} ---\n${clipped}`;
             textParts.push(snippet);
@@ -130,7 +131,7 @@ export async function prepareAttachmentPayload(list: PendingAttachment[]): Promi
             continue;
         }
         if (item.kind === 'pdf') {
-            const bytes = await readBytes(item.uri);
+            const bytes = await readBytes(item.uri, item.file);
             const { text, pageImages } = await preparePdfFromBytes(bytes, item.name);
             for (const img of pageImages) {
                 if (images.length < MAX_VISION_IMAGES) images.push(img);
