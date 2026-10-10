@@ -40,9 +40,7 @@ export default async function handler(req, res) {
         }
         const partyName = row.name || 'AmpliFood party';
         const description = `Join ${partyName} on AmpliFood`;
-        const ogImage =
-            row.image_url ||
-            `${SITE}/api/p-og?token=${encodeURIComponent(token)}`;
+        const ogImage = `${SITE}/api/p-og?token=${encodeURIComponent(token)}`;
         const joinUrl = `${SITE}/party?inviteToken=${encodeURIComponent(token)}`;
         const html = `<!DOCTYPE html>
 <html lang="en">
