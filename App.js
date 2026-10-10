@@ -141,22 +141,15 @@ function AppContent() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ShareIntentProvider>
-<<<<<<< HEAD
         <OnboardingGate navigate={navigateToTab}>
-          <NavigationContainer ref={navigationRef} linking={linking} documentTitle={documentTitle}>
-            <AppNavigator />
-            <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-          </NavigationContainer>
+          <WebShell>
+            <NavigationContainer ref={navigationRef} linking={linking} documentTitle={documentTitle}>
+              <AppNavigator />
+              <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+            </NavigationContainer>
+          </WebShell>
         </OnboardingGate>
         <ConsentHost />
-=======
-        <WebShell>
-          <NavigationContainer linking={linking} documentTitle={documentTitle}>
-            <AppNavigator />
-            <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-          </NavigationContainer>
-        </WebShell>
->>>>>>> 76b9b3e (Web perf: lazy routes, deferred planner load, 480px shell, recipe empty states)
         <AlertHost />
       </ShareIntentProvider>
     </GestureHandlerRootView>
