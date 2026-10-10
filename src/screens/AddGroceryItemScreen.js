@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { useViewTransitionTarget } from '../motion/viewTransition';
 import { groceryOperations, recipeOperations } from '../database/operations';
 import { parseGroceryItemsWithAI, checkPantryForMatches } from '../services/intelligentGroceryService';
 import PantryMatchModal from '../components/PantryMatchModal';
@@ -22,6 +23,7 @@ const AddGroceryItemScreen = () => {
     const navigation = useNavigation();
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const sheetRef = useViewTransitionTarget('af-sheet');
 
     const [activeTab, setActiveTab] = useState('manual'); // manual, list, recipe
     const [loading, setLoading] = useState(false);
@@ -466,7 +468,7 @@ const AddGroceryItemScreen = () => {
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View ref={sheetRef} style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {renderTabs()}
             {loading && <ActivityIndicator size="large" color={theme.primary[500]} style={styles.loader} />}
 

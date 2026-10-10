@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -18,7 +18,9 @@ import { useTheme } from '../context/ThemeContext';
 import { groceryOperations } from '../database/operations';
 import { simplifyGroceryList } from '../services/intelligentGroceryService';
 import SimplifiedListModal from '../components/SimplifiedListModal';
-import ElevatedCard from '../components/ElevatedCard';
+import GroceryRow from '../components/GroceryRow';
+import EmptyState from '../components/EmptyState';
+import ScreenSkeleton from '../components/Skeleton';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
 
@@ -36,6 +38,10 @@ const GroceryListScreen = () => {
     const [storeName, setStoreName] = useState('');
     const [storeLocation, setStoreLocation] = useState('');
     const [simplifyingStatus, setSimplifyingStatus] = useState('');
+    const [pendingChecked, setPendingChecked] = useState({});
+    const settleTimer = useRef(null);
+
+    useEffect(() => () => clearTimeout(settleTimer.current), []);
 
     useEffect(() => {
         loadGroceryItems();
@@ -58,14 +64,35 @@ const GroceryListScreen = () => {
         }
     };
 
-    const toggleItemChecked = async (id) => {
+    // Flip the checkbox immediately, let the strike and pop play, then reload so
+    // the row moves into (or out of) the Done group.
+    const toggleItem = useCallback(async (item) => {
+        const next = !(pendingChecked[item.id] ?? !!item.is_checked);
+        setPendingChecked((prev) => ({ ...prev, [item.id]: next }));
         try {
-            await groceryOperations.toggleChecked(id);
-            loadGroceryItems();
+            await groceryOperations.toggleChecked(item.id);
         } catch (error) {
             console.error('Error toggling item:', error);
         }
-    };
+        clearTimeout(settleTimer.current);
+        settleTimer.current = setTimeout(async () => {
+            await loadGroceryItems();
+            setPendingChecked({});
+        }, 320);
+        // loadGroceryItems is recreated each render but only reads setters.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pendingChecked]);
+
+    const deleteItem = useCallback(async (item) => {
+        setGroceryItems((prev) => prev.filter((i) => i.id !== item.id));
+        try {
+            await groceryOperations.delete(item.id);
+        } catch (error) {
+            console.error('Error deleting item:', error);
+            loadGroceryItems();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const clearList = () => {
         Alert.alert(
@@ -155,54 +182,46 @@ const GroceryListScreen = () => {
         }
     };
 
-    const renderGroceryItem = ({ item, index }) => (
-        <ElevatedCard
-            theme={theme}
-            index={index}
-            style={[styles.itemCard, item.is_checked && { opacity: 0.7 }]}
-            onPress={() => toggleItemChecked(item.id)}
-        >
-            <View style={styles.itemContent}>
-                <Ionicons
-                    name={item.is_checked ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={28}
-                    color={item.is_checked ? theme.accent.green : theme.colors.text.tertiary}
-                />
-                <View style={styles.itemInfo}>
-                    <Text
-                        style={[
-                            styles.itemName,
-                            { color: theme.colors.text.primary },
-                            item.is_checked && styles.checkedText,
-                        ]}
-                    >
-                        {item.name}
-                    </Text>
-                    {item.quantity && (
-                        <Text style={[styles.itemQuantity, { color: theme.colors.text.secondary }]}>
-                            {item.quantity} {item.unit || ''}
-                        </Text>
-                    )}
-                    {item.recipe_name && (
-                        <Text style={[styles.recipeTag, { color: theme.primary[500] }]}>
-                            For: {item.recipe_name}
-                        </Text>
-                    )}
-                </View>
-            </View>
-        </ElevatedCard>
-    );
+    const rows = useMemo(() => {
+        const todo = groceryItems.filter((i) => !i.is_checked);
+        const done = groceryItems.filter((i) => i.is_checked);
+        const list = todo.map((item, i) => ({ key: `todo-${item.id}`, item, index: i, done: false }));
+        if (done.length) {
+            list.push({ key: 'done-header', header: true, count: done.length });
+            done.forEach((item, i) => list.push({ key: `done-${item.id}`, item, index: i, done: true }));
+        }
+        return list;
+    }, [groceryItems]);
+
+    const renderRow = ({ item: row }) => {
+        if (row.header) {
+            return (
+                <Text style={[styles.groupLabel, { color: theme.colors.text.secondary }]} accessibilityRole="header">
+                    Done · {row.count}
+                </Text>
+            );
+        }
+        const { item } = row;
+        return (
+            <GroceryRow
+                item={item}
+                theme={theme}
+                index={row.index}
+                enterFrom={row.done ? 'above' : 'below'}
+                checked={pendingChecked[item.id] ?? !!item.is_checked}
+                onToggle={toggleItem}
+                onDelete={deleteItem}
+            />
+        );
+    };
 
     const renderEmptyState = () => (
-        <View style={styles.emptyState}>
-            <Ionicons name="cart-outline" size={80} color={theme.colors.text.tertiary} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
-                Grocery List is Empty
-            </Text>
-            <Text style={[styles.emptyDescription, { color: theme.colors.text.secondary }]}>
-                Add items from recipes or create a list from your meal plan
-            </Text>
-        </View>
+        <EmptyState
+            title="Your list is clear"
+            description="Add items yourself, or send a recipe's ingredients here from its page."
+            actionLabel="Add an item"
+            onAction={() => navigation.navigate('AddGroceryItem')}
+        />
     );
 
     const handleSimplifyWithAI = () => {
@@ -289,66 +308,72 @@ const GroceryListScreen = () => {
                     </View>
                     <View style={styles.headerActions}>
                         <AnimatedPressable
-                            style={[styles.exportButton, { backgroundColor: theme.accent.green + '20' }]}
+                            style={[styles.exportButton, { borderColor: theme.colors.border }]}
                             onPress={exportListToClipboard}
+                            accessibilityRole="button"
+                            accessibilityLabel="Copy list"
                         >
-                            <Ionicons name="copy-outline" size={18} color={theme.accent.green} />
-                            <Text style={[styles.exportText, { color: theme.accent.green }]}>
-                                Export
-                            </Text>
+                            <Ionicons name="copy-outline" size={20} color={theme.colors.text.secondary} />
                         </AnimatedPressable>
                         <AnimatedPressable
                             style={[styles.estimateButton, { backgroundColor: theme.primary[100] }]}
                             onPress={() => navigation.navigate('EstimateCost')}
+                            accessibilityRole="button"
                         >
                             <Ionicons name="calculator-outline" size={20} color={theme.primary[500]} />
                             <Text style={[styles.estimateText, { color: theme.primary[500] }]}>
-                                Estimate Cost
+                                Estimate
                             </Text>
                         </AnimatedPressable>
                         <AnimatedPressable
-                            style={[styles.clearButton, { borderColor: theme.colors.error }]}
+                            style={[styles.clearButton, { borderColor: theme.colors.border }]}
                             onPress={clearList}
+                            accessibilityRole="button"
+                            accessibilityLabel="Clear list"
                         >
-                            <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
-                            <Text style={[styles.clearText, { color: theme.colors.error }]}>
-                                Clear
-                            </Text>
+                            <Ionicons name="trash-outline" size={20} color={theme.colors.error} />
                         </AnimatedPressable>
                     </View>
                 </View>
             )}
 
-            <FlatList
-                data={groceryItems}
-                renderItem={renderGroceryItem}
-                keyExtractor={(item) => item.id.toString()}
-                contentContainerStyle={styles.listContent}
-                ListEmptyComponent={!loading && renderEmptyState()}
-                refreshing={loading}
-                onRefresh={loadGroceryItems}
-            />
+            {loading && groceryItems.length === 0 ? (
+                <ScreenSkeleton />
+            ) : (
+                <FlatList
+                    data={rows}
+                    renderItem={renderRow}
+                    keyExtractor={(row) => row.key}
+                    contentContainerStyle={styles.listContent}
+                    ListEmptyComponent={renderEmptyState}
+                    refreshing={false}
+                    onRefresh={loadGroceryItems}
+                />
+            )}
 
             {/* Floating Action Buttons */}
             <View style={styles.fabContainer}>
+                {groceryItems.length > 0 && (
                 <FloatingActionButton
                     theme={theme}
-                    color={theme.accent.purple}
-                    style={styles.fabLeft}
+                    color={theme.colors.surfaceElevated}
+                    style={[styles.fabLeft, { borderColor: theme.colors.border }]}
                     accessibilityLabel="Simplify grocery list with AI"
                     onPress={handleSimplifyWithAI}
                     disabled={simplifying || groceryItems.filter(item => !item.is_checked).length === 0}
                 >
                     {simplifying ? (
-                        <ActivityIndicator color="#FFFFFF" size="small" />
+                        <ActivityIndicator color={theme.primary[500]} size="small" />
                     ) : (
-                        <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+                        <Ionicons name="sparkles" size={24} color={theme.primary[500]} />
                     )}
                 </FloatingActionButton>
+                )}
                 <FloatingActionButton
                     theme={theme}
                     accessibilityLabel="Add grocery item"
                     onPress={() => navigation.navigate('AddGroceryItem')}
+                    morphTo="af-sheet"
                 >
                     <Ionicons name="add" size={28} color="#FFFFFF" />
                 </FloatingActionButton>
@@ -477,28 +502,27 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     headerActions: {
+        flex: 1,
         flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
         gap: 8,
-        flexWrap: 'wrap',
+        marginLeft: 16,
     },
     exportButton: {
-        flexDirection: 'row',
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        borderWidth: 1,
         alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 8,
-        gap: 6,
-    },
-    exportText: {
-        fontSize: 13,
-        fontWeight: '600',
+        justifyContent: 'center',
     },
     estimateButton: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 8,
+        minHeight: 44,
+        borderRadius: 12,
         gap: 6,
     },
     estimateText: {
@@ -506,65 +530,25 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     clearButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 8,
+        width: 44,
+        height: 44,
+        borderRadius: 12,
         borderWidth: 1,
-        gap: 6,
-    },
-    clearText: {
-        fontSize: 13,
-        fontWeight: '600',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     listContent: {
         padding: 16,
+        paddingBottom: 104,
     },
-    itemCard: {
-        padding: 16,
-        marginBottom: 14,
-    },
-    itemContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    itemInfo: {
-        flex: 1,
-        marginLeft: 16,
-    },
-    itemName: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 4,
-    },
-    checkedText: {
-        textDecorationLine: 'line-through',
-        opacity: 0.5,
-    },
-    itemQuantity: {
-        fontSize: 14,
-        marginBottom: 2,
-    },
-    recipeTag: {
-        fontSize: 12,
-        fontWeight: '500',
-    },
-    emptyState: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 80,
-    },
-    emptyTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
+    groupLabel: {
+        fontSize: 13,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
         marginTop: 16,
         marginBottom: 8,
-    },
-    emptyDescription: {
-        fontSize: 16,
-        textAlign: 'center',
-        paddingHorizontal: 32,
+        marginLeft: 4,
     },
     fabContainer: {
         position: 'absolute',
@@ -574,7 +558,9 @@ const styles = StyleSheet.create({
         gap: 12,
         alignItems: 'center',
     },
-    fabLeft: {},
+    fabLeft: {
+        borderWidth: 1,
+    },
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',

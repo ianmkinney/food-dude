@@ -14,6 +14,8 @@ import { pantryOperations } from '../database/operations';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
+import EmptyState from '../components/EmptyState';
+import ScreenSkeleton from '../components/Skeleton';
 
 const PantryScreen = () => {
     const navigation = useNavigation();
@@ -116,34 +118,36 @@ const PantryScreen = () => {
     );
 
     const renderEmptyState = () => (
-        <View style={styles.emptyState}>
-            <Ionicons name="cube-outline" size={80} color={theme.colors.text.tertiary} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
-                Pantry is Empty
-            </Text>
-            <Text style={[styles.emptyDescription, { color: theme.colors.text.secondary }]}>
-                Add items by scanning barcodes or manually entering them
-            </Text>
-        </View>
+        <EmptyState
+            title="Your pantry is empty"
+            description="Add what you have on hand and recipes can work around it."
+            actionLabel="Add pantry item"
+            onAction={() => navigation.navigate('AddPantryItem')}
+        />
     );
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <FlatList
-                data={pantryItems}
-                renderItem={renderPantryItem}
-                keyExtractor={(item) => item.id.toString()}
-                contentContainerStyle={styles.listContent}
-                ListEmptyComponent={!loading && renderEmptyState()}
-                refreshing={loading}
-                onRefresh={loadPantryItems}
-            />
+            {loading && pantryItems.length === 0 ? (
+                <ScreenSkeleton />
+            ) : (
+                <FlatList
+                    data={pantryItems}
+                    renderItem={renderPantryItem}
+                    keyExtractor={(item) => item.id.toString()}
+                    contentContainerStyle={styles.listContent}
+                    ListEmptyComponent={renderEmptyState}
+                    refreshing={false}
+                    onRefresh={loadPantryItems}
+                />
+            )}
 
             <FloatingActionButton
                 theme={theme}
                 style={styles.fab}
                 accessibilityLabel="Add pantry item"
                 onPress={() => navigation.navigate('AddPantryItem')}
+                morphTo="af-sheet"
             >
                 <Ionicons name="add" size={28} color="#FFFFFF" />
             </FloatingActionButton>
@@ -208,27 +212,11 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     actionButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    emptyState: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 80,
-    },
-    emptyTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginTop: 16,
-        marginBottom: 8,
-    },
-    emptyDescription: {
-        fontSize: 16,
-        textAlign: 'center',
-        paddingHorizontal: 32,
     },
     fab: {
         position: 'absolute',

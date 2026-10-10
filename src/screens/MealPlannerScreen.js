@@ -16,6 +16,7 @@ import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
+import SlotSettle from '../components/SlotSettle';
 import { formatDisplayDate, getStartOfWeek, getWeekDates, addDays, subtractDays } from '../utils/dateHelpers';
 import { mealPlanOperations, recipeOperations, partyMealOperations, partyOperations } from '../database/operations';
 
@@ -294,11 +295,13 @@ const MealPlannerScreen = ({ route, navigation }) => {
                     }
                 }}
             >
-                {meal ? (
-                    <Ionicons name="checkmark-circle" size={24} color={theme.primary[500]} />
-                ) : (
-                    <Ionicons name="add-circle-outline" size={24} color={theme.colors.text.tertiary} />
-                )}
+                <SlotSettle filled={!!meal} color={theme.primary[500]}>
+                    {meal ? (
+                        <Ionicons name="checkmark-circle" size={24} color={theme.primary[500]} />
+                    ) : (
+                        <Ionicons name="add-circle-outline" size={24} color={theme.colors.text.tertiary} />
+                    )}
+                </SlotSettle>
             </AnimatedPressable>
         );
     };
@@ -590,7 +593,8 @@ const styles = StyleSheet.create({
     },
     mealSlot: {
         minHeight: 60,
-        borderRadius: 14,
+        borderRadius: 12,
+        overflow: 'hidden',
         borderWidth: 1,
         padding: 8,
         justifyContent: 'center',

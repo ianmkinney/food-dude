@@ -377,7 +377,8 @@ export const getTheme = (isDark, platform, accentId = 'galley') => ({
   brand,
   primary: isDark ? colors.primary : colors.primaryLight,
   secondary: isDark ? colors.primary : colors.primaryLight,
-  accent: colors.accent,
+  // Legacy "AI purple" call sites resolve to the single orange accent.
+  accent: { ...colors.accent, purple: (isDark ? colors.primary : colors.primaryLight)[500] },
   gray: colors.gray,
   typography,
   spacing,
