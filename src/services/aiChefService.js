@@ -455,7 +455,13 @@ For regular questions, respond naturally in text format.${groceryContext}${pantr
                 systemPrompt += `\n\nUser's flavor preferences: ${context.flavorPreferences}. When suggesting recipes or modifications, prioritize these preferences.`;
             }
 
-            const fullPrompt = `${systemPrompt}\n\nUser: ${message}`;
+            const { chatOperations } = await import('../database/operations');
+            const summary = await chatOperations.getSummary('ai_chef');
+            const recent = await chatOperations.getRecent('ai_chef', 20);
+            const transcript = recent.map((row) => `${row.role === 'user' ? 'User' : 'Assistant'}: ${row.text}`).join('\n');
+            const summaryBlock = summary ? `\nEarlier conversation summary:\n${summary}\n` : '';
+            const historyBlock = transcript ? `\nRecent messages:\n${transcript}\n` : '';
+            const fullPrompt = `${systemPrompt}${summaryBlock}${historyBlock}\nUser: ${message}`;
             console.log('[AI Chef Service] Full prompt length:', fullPrompt.length);
             const startTime = Date.now();
             const text = await this.retryOperation(async () => generateText(fullPrompt));

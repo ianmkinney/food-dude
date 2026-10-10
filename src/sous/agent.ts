@@ -4,6 +4,8 @@ import { generateMultimodal, generateText, stripCodeFences } from '../services/a
 import type { PendingAttachment } from './chatAttachments';
 import { prepareAttachmentPayload } from './chatAttachments';
 import { isMutatingAction, summarizeActions } from './confirmActions';
+import { loadThreadTurns, memoriesForPrompt } from '../chat/promptContext';
+import { CHAT_THREAD_AMPI } from '../chat/chatThreads';
 import { TOOL_SPEC, runTools, type SousCard, type ToolCall } from './tools';
 import { getIncludeHealthData } from '../consent/consentStore';
 
@@ -36,7 +38,7 @@ export function isCrisisMessage(text: string): boolean {
 
 const today = () => new Date().toISOString().split('T')[0];
 
-async function kitchenContext(): Promise<string> {
+async function kitchenContext(userMessage: string): Promise<string> {
     const [recipes, pantry, user, includeHealth] = await Promise.all([
         recipeOperations.getAll().catch(() => []),
         pantryOperations.getAll().catch(() => []),
@@ -54,13 +56,15 @@ async function kitchenContext(): Promise<string> {
     const flavor = (user as { flavor_preferences?: string } | null)?.flavor_preferences;
     const allergies = includeHealth ? (user as { allergies?: string } | null)?.allergies : null;
     const diet = includeHealth ? (user as { diet?: string } | null)?.diet : null;
+    const memories = await memoriesForPrompt(userMessage);
     return [
         `Today is ${today()}.`,
         `Saved recipes: ${recipeLines || 'none yet'}.`,
         `Pantry: ${pantryLines || 'empty'}.`,
         flavor ? `Flavor preferences: ${flavor}.` : '',
-        allergies ? `Allergies (hard exclusion, never include): ${allergies}.` : '',
+        allergies ? `Allergies (hard exclusion, never duplicate in memory — reference this field only): ${allergies}.` : '',
         diet ? `Diet needs: ${diet}.` : '',
+        memories ? `Things you remember about this user:\n${memories}` : '',
     ]
         .filter(Boolean)
         .join('\n');
@@ -132,12 +136,18 @@ export async function askSous(
         userRecipeImageUri = prepared.attachments.find((a) => a.recipeImageUri)?.recipeImageUri || null;
     }
 
-    const transcript = history
+    const persisted = await loadThreadTurns(CHAT_THREAD_AMPI, MAX_HISTORY);
+    const merged =
+        persisted.history.length >= history.length
+            ? persisted.history.map((t) => ({ role: t.role === 'assistant' ? 'sous' : t.role, text: t.text }))
+            : history;
+    const transcript = merged
         .slice(-MAX_HISTORY)
         .map((turn) => `${turn.role === 'user' ? 'User' : ASSISTANT_NAME}: ${turn.text}`)
         .join('\n');
-    const prompt = `${systemPrompt(await kitchenContext())}
-
+    const summaryBlock = persisted.summary ? `\nEarlier conversation summary:\n${persisted.summary}\n` : '';
+    const prompt = `${systemPrompt(await kitchenContext(message))}
+${summaryBlock}
 Conversation so far:
 ${transcript || '(new conversation)'}
 User: ${message}${attachmentBlock}`;
