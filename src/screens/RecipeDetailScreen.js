@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -13,6 +13,7 @@ import {
     Platform,
     KeyboardAvoidingView,
     Linking,
+    useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +29,10 @@ import { findAllergenMatches } from '../safety/allergens';
 import ImageSourceChoice from '../components/ImageSourceChoice';
 import { SkeletonBlock } from '../components/Skeleton';
 import { useViewTransitionTarget } from '../motion/viewTransition';
+import useReducedMotion from '../hooks/useReducedMotion';
+
+// Below this width the current/new photo comparison stacks vertically.
+const COMPARE_STACK_WIDTH = 520;
 
 const RecipeDetailScreen = ({ route, navigation }) => {
     const { recipeId } = route.params;
@@ -58,6 +63,15 @@ const RecipeDetailScreen = ({ route, navigation }) => {
     const [customInstructions, setCustomInstructions] = useState('');
     const [generatingImageStatus, setGeneratingImageStatus] = useState('');
     const [generatingInstructionsStatus, setGeneratingInstructionsStatus] = useState('');
+    // A generated image waiting for "Keep current" / "Use new"; it is never saved until picked.
+    const [imageCandidate, setImageCandidate] = useState(null);
+    const [applyingImage, setApplyingImage] = useState(false);
+    const [imageNotice, setImageNotice] = useState(null);
+    const editedRef = useRef(null);
+    editedRef.current = editedRecipe;
+    const scrollRef = useRef(null);
+    const { width: windowWidth } = useWindowDimensions();
+    const reduceMotion = useReducedMotion();
 
     useEffect(() => {
         loadRecipe();
@@ -425,32 +439,58 @@ const RecipeDetailScreen = ({ route, navigation }) => {
         }
     };
 
+    const saveAiImage = async (uri) => {
+        await recipeOperations.update(recipeId, { imageUri: uri });
+        await recipeOperations.setProvenance(recipeId, { imageSource: 'ai' });
+        setRecipe((prev) => (prev ? { ...prev, image_uri: uri, image_source: 'ai' } : prev));
+        setEditedRecipe((prev) => (prev ? { ...prev, image_uri: uri, image_source: 'ai' } : prev));
+    };
+
+    // Results show inline rather than in an alert: on web the alert is a modal
+    // over the header, which left the back button looking dead until OK was found.
     const handleGenerateImage = async () => {
         setGeneratingImage(true);
-        setGeneratingImageStatus('Creating image...');
+        setGeneratingImageStatus('Generating with AI...');
+        setImageNotice(null);
+        setImageCandidate(null);
         try {
-            setGeneratingImageStatus('Generating with AI...');
-            const result = await aiChefService.generateRecipeImage(editedRecipe);
-            if (result.success && result.imageUri) {
-                setGeneratingImageStatus('Finalizing...');
-                // Show success and apply the generated image
-                setEditedRecipe({ ...editedRecipe, image_uri: result.imageUri, image_source: 'ai' });
-                Alert.alert(
-                    'Image Generated!',
-                    'AI has created a professional photo for your recipe. You can see it above. Save the recipe to keep this image.',
-                    [{ text: 'OK' }]
-                );
+            const result = await aiChefService.generateRecipeImage(editedRef.current || recipe);
+            if (!result.success || !result.imageUri) {
+                throw new Error(result.error || 'The image model returned no photo.');
+            }
+            if (editedRef.current?.image_uri) {
+                setImageCandidate(result.imageUri);
             } else {
-                Alert.alert('Error', result.error || 'Failed to generate image. The response format may need adjustment.');
-                console.log('Full result:', result);
+                setGeneratingImageStatus('Saving...');
+                await saveAiImage(result.imageUri);
+                setImageNotice({ tone: 'info', text: 'Saved the AI image to this recipe.' });
             }
         } catch (error) {
             console.error('Error generating image:', error);
-            Alert.alert('Error', 'Failed to generate image with AI: ' + error.message);
+            setImageNotice({ tone: 'error', text: `Couldn't generate an image: ${error.message}` });
         } finally {
             setGeneratingImage(false);
             setGeneratingImageStatus('');
         }
+    };
+
+    const chooseNewImage = async () => {
+        if (!imageCandidate) return;
+        setApplyingImage(true);
+        try {
+            await saveAiImage(imageCandidate);
+            setImageCandidate(null);
+            setImageNotice({ tone: 'info', text: 'Now using the new AI image.' });
+        } catch (error) {
+            setImageNotice({ tone: 'error', text: `Couldn't save the new image: ${error.message}` });
+        } finally {
+            setApplyingImage(false);
+        }
+    };
+
+    const keepCurrentImage = () => {
+        setImageCandidate(null);
+        setImageNotice(null);
     };
 
     if (loading || !recipe) {
@@ -475,7 +515,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
             >
-                <ScrollView contentContainerStyle={styles.content}>
+                <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
                 {/* Header Image */}
                 <View ref={heroRef} style={[styles.imageContainer, { backgroundColor: theme.primary[100] }]}>
                     {(isEditing ? editedRecipe.image_uri : recipe.image_uri) ? (
@@ -512,6 +552,71 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                 </View>
 
                 <View style={styles.detailsContainer}>
+                    {imageCandidate && (
+                        <View
+                            style={[styles.compareCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+                            onLayout={(event) =>
+                                scrollRef.current?.scrollTo({
+                                    y: Math.max(0, 250 - 20 + event.nativeEvent.layout.y - 12),
+                                    animated: !reduceMotion,
+                                })
+                            }
+                        >
+                            <Text style={[styles.compareTitle, { color: theme.colors.text.primary }]}>
+                                Keep your current photo or use the new one?
+                            </Text>
+                            <View style={windowWidth < COMPARE_STACK_WIDTH ? styles.compareStack : styles.compareRow}>
+                                {[
+                                    { key: 'current', label: 'Current', uri: isEditing ? editedRecipe.image_uri : recipe.image_uri, ai: (isEditing ? editedRecipe.image_source : recipe.image_source) === 'ai' },
+                                    { key: 'new', label: 'New', uri: imageCandidate, ai: true },
+                                ].map((option) => (
+                                    <View key={option.key} style={windowWidth < COMPARE_STACK_WIDTH ? null : styles.compareItemRow}>
+                                        <View style={styles.compareLabelRow}>
+                                            <Text style={[styles.compareLabel, { color: theme.colors.text.secondary }]}>{option.label}</Text>
+                                            {option.ai && <AiBadge />}
+                                        </View>
+                                        <Image
+                                            source={{ uri: option.uri }}
+                                            style={[styles.compareImage, { backgroundColor: theme.primary[100] }]}
+                                            accessibilityLabel={option.key === 'current' ? 'Current recipe photo' : 'New AI-generated photo'}
+                                        />
+                                    </View>
+                                ))}
+                            </View>
+                            <View style={styles.compareButtons}>
+                                <TouchableOpacity
+                                    accessibilityRole="button"
+                                    onPress={keepCurrentImage}
+                                    disabled={applyingImage}
+                                    style={[styles.compareButton, { backgroundColor: theme.colors.surfaceMuted }]}
+                                >
+                                    <Text style={[styles.compareButtonText, { color: theme.colors.text.primary }]}>Keep current</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    accessibilityRole="button"
+                                    onPress={chooseNewImage}
+                                    disabled={applyingImage}
+                                    style={[styles.compareButton, { backgroundColor: theme.primary[500], opacity: applyingImage ? 0.7 : 1 }]}
+                                >
+                                    <Text style={[styles.compareButtonText, { color: '#FFFFFF' }]}>
+                                        {applyingImage ? 'Saving…' : 'Use new'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    )}
+                    {imageNotice && (
+                        <Text
+                            accessibilityLiveRegion="polite"
+                            accessibilityRole={imageNotice.tone === 'error' ? 'alert' : 'text'}
+                            style={[
+                                styles.imageNotice,
+                                { color: imageNotice.tone === 'error' ? theme.colors.error : theme.colors.text.secondary },
+                            ]}
+                        >
+                            {imageNotice.text}
+                        </Text>
+                    )}
                     {/* Header Actions */}
                     <View style={styles.headerActions}>
                         <TouchableOpacity
@@ -1213,6 +1318,66 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         resizeMode: 'cover',
+    },
+    compareCard: {
+        borderWidth: 1,
+        borderRadius: 20,
+        padding: 16,
+        gap: 12,
+        marginBottom: 16,
+    },
+    compareTitle: {
+        fontSize: 17,
+        fontWeight: '800',
+    },
+    compareRow: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    compareStack: {
+        gap: 12,
+    },
+    compareItemRow: {
+        flex: 1,
+    },
+    compareLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 6,
+    },
+    compareLabel: {
+        fontSize: 13,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+    },
+    compareImage: {
+        width: '100%',
+        aspectRatio: 16 / 10,
+        borderRadius: 12,
+        resizeMode: 'cover',
+    },
+    compareButtons: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    compareButton: {
+        flex: 1,
+        minHeight: 44,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 12,
+    },
+    compareButtonText: {
+        fontSize: 15,
+        fontWeight: '800',
+    },
+    imageNotice: {
+        fontSize: 14,
+        lineHeight: 20,
+        marginBottom: 12,
     },
     editImageOverlay: {
         ...StyleSheet.absoluteFillObject,
