@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Signing in · AmpliFood</title>
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body {
+      display: flex; align-items: center; justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #FFF8F2; color: #2A1E17; text-align: center; padding: 24px; box-sizing: border-box;
+    }
+    @media (prefers-color-scheme: dark) { body { background: #141012; color: #F5EDE6; } }
+    a { color: #F26B1D; }
+  </style>
+</head>
+<body>
+  <p id="status">Finishing sign-in…</p>
+  <!--
+    Google sends the browser here after sign-in. This page deliberately does not
+    load the AmpliFood app: a second app instance would compete with the original
+    tab for the on-device database. It hands the result back and closes.
+  -->
+  <script>
+    (function () {
+      var STORAGE_KEY = 'amplifood.auth.google.result';
+      var status = document.getElementById('status');
+      var params = new URLSearchParams((location.hash || '').replace(/^#/, '') || location.search.slice(1));
+      var result = {
+        idToken: params.get('id_token'),
+        state: params.get('state'),
+        error: params.get('error'),
+        at: Date.now()
+      };
+
+      try {
+        var channel = new BroadcastChannel('amplifood-auth');
+        channel.postMessage({ type: 'google-result', result: result });
+        channel.close();
+      } catch (e) {}
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
+      } catch (e) {}
+      history.replaceState(null, '', location.pathname);
+
+      var mode = null;
+      try { mode = sessionStorage.getItem('amplifood.auth.google.mode'); } catch (e) {}
+
+      if (mode === 'redirect') {
+        // Full-page sign-in (popup was blocked): this tab is the app tab, go back to it.
+        location.replace('/account');
+        return;
+      }
+
+      window.close();
+      setTimeout(function () {
+        status.innerHTML = result.error
+          ? 'Sign-in was cancelled. You can close this window.'
+          : 'Signed in. You can close this window and go back to <a href="/account">AmpliFood</a>.';
+      }, 400);
+    })();
+  </script>
+</body>
+</html>

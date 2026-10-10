@@ -11,6 +11,7 @@ import {
     type OwnerUsage,
 } from '../platform/ownerSession';
 import { getOwnerGoogleClientIds, isOwnerSignInConfigured } from '../platform/ownerSignInConfig';
+import { signInWithGooglePopup, takePendingGoogleIdToken } from '../platform/googleWebAuth';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -31,6 +32,8 @@ function OwnerSignInSettingsInner({ theme }: Props) {
     const [session, setSession] = useState<OwnerSession | null>(null);
     const [usage, setUsage] = useState<OwnerUsage | null>(null);
     const [busy, setBusy] = useState(false);
+    // One Tap is often suppressed on iOS Safari; then sign in through a popup.
+    const [usePopup, setUsePopup] = useState(false);
 
     const [request, , promptAsync] = Google.useAuthRequest({
         webClientId: webClientId!,
@@ -76,22 +79,47 @@ function OwnerSignInSettingsInner({ theme }: Props) {
         }
     };
 
-    const signInWeb = async () => {
-        if (!webClientId) {
-            Alert.alert('Not configured', 'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not set in this build.');
-            return;
-        }
+    useEffect(() => {
+        if (Platform.OS !== 'web') return;
+        const pending = takePendingGoogleIdToken();
+        if (!pending) return;
+        setBusy(true);
+        exchangeGoogleIdToken(pending)
+            .then(refresh)
+            .catch((error) => Alert.alert('Sign-in failed', error instanceof Error ? error.message : 'Try again.'))
+            .finally(() => setBusy(false));
+    }, [refresh]);
+
+    const finishWebSignIn = async (getIdToken: () => Promise<string>) => {
         setBusy(true);
         try {
-            const idToken = await promptGoogleIdTokenWeb(webClientId);
+            const idToken = await getIdToken();
             await exchangeGoogleIdToken(idToken);
             await refresh();
         } catch (error) {
+            if (error instanceof Error && error.message === 'not-displayed') {
+                setUsePopup(true);
+                return;
+            }
             if (error instanceof Error && error.message === 'cancelled') return;
             Alert.alert('Sign-in failed', error instanceof Error ? error.message : 'Try again.');
         } finally {
             setBusy(false);
         }
+    };
+
+    const signInWeb = () => {
+        if (!webClientId) {
+            Alert.alert('Not configured', 'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not set in this build.');
+            return;
+        }
+        if (usePopup) {
+            // Opened synchronously in the tap handler so Safari allows the popup.
+            const pending = signInWithGooglePopup(webClientId);
+            finishWebSignIn(() => pending);
+            return;
+        }
+        finishWebSignIn(() => promptGoogleIdTokenWeb(webClientId));
     };
 
     const signOut = async () => {
@@ -134,7 +162,7 @@ function OwnerSignInSettingsInner({ theme }: Props) {
                     accessibilityRole="button"
                 >
                     <Text style={[styles.buttonText, { color: '#FFFFFF' }]}>
-                        {busy ? 'Signing in…' : 'Sign in with Google'}
+                        {busy ? 'Signing in…' : usePopup ? 'Continue with Google' : 'Sign in with Google'}
                     </Text>
                 </Pressable>
             )}
@@ -176,7 +204,7 @@ function promptGoogleIdTokenWeb(clientId: string): Promise<string> {
                 });
                 google.accounts.id.prompt((notification: { isNotDisplayed: () => boolean; isSkippedMoment: () => boolean }) => {
                     if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                        reject(new Error('cancelled'));
+                        reject(new Error('not-displayed'));
                     }
                 });
             })

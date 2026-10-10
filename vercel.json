@@ -30,6 +30,10 @@
       "destination": "/architecture.html"
     },
     {
+      "source": "/auth/google-callback",
+      "destination": "/auth/google-callback.html"
+    },
+    {
       "source": "/((?!_expo/|assets/).*)",
       "destination": "/index.html"
     }
