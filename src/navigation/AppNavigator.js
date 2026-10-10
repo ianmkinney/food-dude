@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,24 +9,25 @@ import { useTheme } from '../context/ThemeContext';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { useTourTarget } from '../onboarding/tourTargets';
 
-// Import screens
 import RecipeBookScreen from '../screens/RecipeBookScreen';
 import SousScreen from '../sous/SousScreen';
 import { ASSISTANT_NAME } from '../config/assistant';
-import MealPlannerScreen from '../screens/MealPlannerScreen';
-import PantryScreen from '../screens/PantryScreen';
-import GroceryListScreen from '../screens/GroceryListScreen';
-import AiChefScreen from '../screens/AiChefScreen';
-import ImportRecipeScreen from '../screens/ImportRecipeScreen';
-import RecipeDetailScreen from '../screens/RecipeDetailScreen';
-import AddRecipeScreen from '../screens/AddRecipeScreen';
-import AddPantryItemScreen from '../screens/AddPantryItemScreen';
-import EditPantryItemScreen from '../screens/EditPantryItemScreen';
-import AddGroceryItemScreen from '../screens/AddGroceryItemScreen';
-import EstimateCostScreen from '../screens/EstimateCostScreen';
-import PartyScreen from '../screens/PartyScreen';
-import AccountScreen from '../screens/AccountScreen';
-import PaywallScreen from '../screens/PaywallScreen';
+import { lazyScreen } from './lazyScreen';
+
+const MealPlannerScreen = lazyScreen(() => import('../screens/MealPlannerScreen'));
+const PantryScreen = lazyScreen(() => import('../screens/PantryScreen'));
+const GroceryListScreen = lazyScreen(() => import('../screens/GroceryListScreen'));
+const AiChefScreen = lazyScreen(() => import('../screens/AiChefScreen'));
+const ImportRecipeScreen = lazyScreen(() => import('../screens/ImportRecipeScreen'));
+const RecipeDetailScreen = lazyScreen(() => import('../screens/RecipeDetailScreen'));
+const AddRecipeScreen = lazyScreen(() => import('../screens/AddRecipeScreen'));
+const AddPantryItemScreen = lazyScreen(() => import('../screens/AddPantryItemScreen'));
+const EditPantryItemScreen = lazyScreen(() => import('../screens/EditPantryItemScreen'));
+const AddGroceryItemScreen = lazyScreen(() => import('../screens/AddGroceryItemScreen'));
+const EstimateCostScreen = lazyScreen(() => import('../screens/EstimateCostScreen'));
+const PartyScreen = lazyScreen(() => import('../screens/PartyScreen'));
+const AccountScreen = lazyScreen(() => import('../screens/AccountScreen'));
+const PaywallScreen = lazyScreen(() => import('../screens/PaywallScreen'));
 import HeaderTitle, { HeaderAccountActions, HeaderPartyButton } from '../components/HeaderTitle';
 
 const Tab = createBottomTabNavigator();
@@ -131,10 +132,11 @@ const TabNavigator = () => {
                     ...theme.shadows.tabBar,
                 },
                 tabBarLabelStyle: {
-                    fontSize: 12,
-                    lineHeight: 16,
+                    fontSize: 11,
+                    lineHeight: 14,
                     fontFamily: theme.typography.fonts.displayMedium,
                 },
+                tabBarItemStyle: Platform.OS === 'web' ? { paddingHorizontal: 2 } : undefined,
                 headerStyle: {
                     backgroundColor: theme.colors.background,
                     borderBottomColor: theme.colors.borderSoft,
@@ -183,7 +185,6 @@ const TabNavigator = () => {
 };
 
 import { useShareIntent } from '../platform/shareIntent';
-import { useEffect } from 'react';
 
 const AppNavigator = () => {
     const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();

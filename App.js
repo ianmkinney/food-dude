@@ -14,6 +14,7 @@ import { AlertHost, installAlertPolyfill } from './src/platform/alert';
 import { ConsentHost } from './src/consent/ConsentHost';
 import OnboardingGate from './src/onboarding/OnboardingGate';
 import { MonetizationProvider } from './src/monetization/MonetizationContext';
+import WebShell from './src/components/WebShell';
 
 import { ShareIntentProvider } from './src/platform/shareIntent';
 
@@ -141,10 +142,12 @@ function AppContent() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ShareIntentProvider>
         <OnboardingGate navigate={navigateToTab}>
-          <NavigationContainer ref={navigationRef} linking={linking} documentTitle={documentTitle}>
-            <AppNavigator />
-            <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-          </NavigationContainer>
+          <WebShell>
+            <NavigationContainer ref={navigationRef} linking={linking} documentTitle={documentTitle}>
+              <AppNavigator />
+              <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+            </NavigationContainer>
+          </WebShell>
         </OnboardingGate>
         <ConsentHost />
         <AlertHost />
