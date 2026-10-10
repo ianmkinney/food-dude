@@ -1,6 +1,16 @@
 // AmpliFood Design System
 // Burnt orange, tomato red, butter yellow, cream and ink black, sampled from the
-// AmpliFood logos and mood board.
+// AmpliFood logos and mood board. UI uses one accent: the burnt orange.
+import { UI_FONTS } from '../platform/rn-shim/fonts';
+
+export { UI_FONTS };
+
+export const TEXT_SCALES = {
+  small: 0.875,
+  default: 1,
+  large: 1.15,
+  xlarge: 1.3,
+};
 
 export const brand = {
   burntOrange: '#EB6A1C',
@@ -77,20 +87,22 @@ export const colors = {
     900: '#21141C',
   },
 
+  // Both schemes share one structure: a warm base, a single elevated surface,
+  // and 1px hairline borders instead of heavy shadows.
   light: {
-    background: '#FBF4E8',
-    surface: '#FFFBF4',
-    surfaceElevated: '#FFFDF9',
-    surfaceMuted: '#F3EADB',
-    surfaceGlass: 'rgba(255, 251, 244, 0.86)',
-    border: '#E9DCC8',
-    borderSoft: 'rgba(42, 20, 36, 0.08)',
-    overlay: 'rgba(42, 20, 36, 0.45)',
-    glow: 'rgba(235, 106, 28, 0.35)',
+    background: '#FBF6EE',
+    surface: '#FFFFFF',
+    surfaceElevated: '#FFFFFF',
+    surfaceMuted: '#F4EDE2',
+    surfaceGlass: 'rgba(251, 246, 238, 0.92)',
+    border: 'rgba(42, 20, 36, 0.12)',
+    borderSoft: 'rgba(42, 20, 36, 0.07)',
+    overlay: 'rgba(20, 16, 18, 0.45)',
+    glow: 'rgba(235, 106, 28, 0.3)',
     text: {
       primary: '#2A1424',
-      secondary: '#6A5560',
-      tertiary: '#756569',
+      secondary: '#5F4D57',
+      tertiary: '#73646A',
     },
     success: '#4F802F',
     warning: '#C98A0B',
@@ -99,19 +111,19 @@ export const colors = {
   },
 
   dark: {
-    background: '#1A1216',
-    surface: '#241A1F',
-    surfaceElevated: '#2E2228',
-    surfaceMuted: '#150E12',
-    surfaceGlass: 'rgba(36, 26, 31, 0.86)',
-    border: '#3F2F37',
-    borderSoft: 'rgba(255, 248, 236, 0.08)',
+    background: '#141012',
+    surface: '#1E1A1C',
+    surfaceElevated: '#1E1A1C',
+    surfaceMuted: '#191517',
+    surfaceGlass: 'rgba(20, 16, 18, 0.92)',
+    border: 'rgba(255, 244, 227, 0.12)',
+    borderSoft: 'rgba(255, 244, 227, 0.07)',
     overlay: 'rgba(0, 0, 0, 0.6)',
-    glow: 'rgba(235, 106, 28, 0.4)',
+    glow: 'rgba(235, 106, 28, 0.35)',
     text: {
       primary: '#FFF4E3',
-      secondary: '#E3D4C8',
-      tertiary: '#A8968F',
+      secondary: '#DDCFC4',
+      tertiary: '#A8988F',
     },
     success: '#7DB356',
     warning: '#F6C445',
@@ -121,16 +133,17 @@ export const colors = {
 };
 
 export const typography = {
+  // Inter for every piece of UI text (applied by default in
+  // `platform/rn-shim/ScaledText`); Fredoka only for headings and brand moments.
   fonts: {
-    regular: 'System',
-    medium: 'System',
-    semibold: 'System',
-    bold: 'System',
-    // Heavy, rounded display face for headers and brand moments; body copy
-    // stays on the system font. Loaded in App.js.
+    regular: UI_FONTS.regular,
+    medium: UI_FONTS.medium,
+    semibold: UI_FONTS.semibold,
+    bold: UI_FONTS.bold,
     display: 'Fredoka_700Bold',
     displayMedium: 'Fredoka_600SemiBold',
   },
+  textScales: TEXT_SCALES,
 
   sizes: {
     xs: 12,
@@ -151,6 +164,7 @@ export const typography = {
   },
 };
 
+// 8pt grid; `xs` is the only half step.
 export const spacing = {
   xs: 4,
   sm: 8,
@@ -159,20 +173,23 @@ export const spacing = {
   xl: 32,
   '2xl': 48,
   '3xl': 64,
-  gutter: 20,
+  gutter: 16,
 };
 
+// Radius scale is 12 / 16 / 24 (plus pills).
 export const borderRadius = {
-  sm: 8,
+  sm: 12,
   md: 12,
   lg: 16,
-  xl: 20,
-  '2xl': 28,
-  card: 18,
-  sheet: 28,
+  xl: 24,
+  '2xl': 24,
+  card: 16,
+  sheet: 24,
   pill: 9999,
   full: 9999,
 };
+
+export const minTapTarget = 44;
 
 const shadowBase = (color, offsetY, opacity, radius, elevation) => ({
   shadowColor: color,
@@ -190,50 +207,62 @@ export const shadows = {
     shadowRadius: 0,
     elevation: 0,
   },
-  sm: shadowBase('#2A1424', 1, 0.06, 3, 2),
-  md: shadowBase('#2A1424', 4, 0.1, 10, 5),
-  lg: shadowBase('#2A1424', 8, 0.14, 18, 10),
-  xl: shadowBase('#2A1424', 14, 0.18, 28, 16),
+  // Hairline borders carry the structure, so shadows stay faint.
+  sm: shadowBase('#140F12', 1, 0.04, 2, 1),
+  md: shadowBase('#140F12', 2, 0.06, 6, 2),
+  lg: shadowBase('#140F12', 6, 0.1, 14, 6),
+  xl: shadowBase('#140F12', 10, 0.14, 24, 10),
   card: {
-    ...shadowBase('#2A1424', 6, 0.1, 14, 6),
+    ...shadowBase('#140F12', 2, 0.05, 6, 2),
   },
   layered: {
-    ...shadowBase('#2A1424', 10, 0.12, 22, 12),
+    ...shadowBase('#140F12', 6, 0.08, 16, 6),
   },
   glow: {
     shadowColor: '#EB6A1C',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.38,
-    shadowRadius: 16,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    elevation: 8,
   },
-  tabBar: {
-    ...shadowBase('#2A1424', -4, 0.08, 16, 12),
-  },
+  tabBar: shadowBase('#140F12', 0, 0, 0, 0),
 };
 
-// Shared motion language — consume with Reanimated, not `motion`
+/**
+ * Motion tokens. Every animation in the app reads these; animate only
+ * transform and opacity, and skip motion when `useReducedMotion()` is true.
+ * `easing.bezier` feeds `Easing.bezier(...)`; `easing.css` is the same curve
+ * for CSS and the View Transitions API.
+ */
 export const motion = {
   duration: {
     instant: 80,
     fast: 150,
+    base: 250,
     normal: 250,
     slow: 400,
-    enter: 320,
+    enter: 250,
+  },
+  easing: {
+    bezier: [0.2, 0.8, 0.2, 1],
+    css: 'cubic-bezier(.2,.8,.2,1)',
   },
   scale: {
-    press: 0.97,
+    press: 0.96,
     pressHard: 0.93,
     hover: 1.02,
   },
   tilt: {
     press: 1.2,
   },
-  stagger: 42,
+  rise: 8,
+  stagger: 40,
+  letterStagger: 30,
   spring: {
-    press: { damping: 18, stiffness: 320, mass: 0.35 },
-    enter: { damping: 20, stiffness: 180, mass: 0.6 },
-    soft: { damping: 22, stiffness: 140, mass: 0.7 },
+    base: { stiffness: 400, damping: 30, mass: 1 },
+    press: { stiffness: 400, damping: 30, mass: 0.6 },
+    enter: { stiffness: 400, damping: 30, mass: 1 },
+    soft: { stiffness: 220, damping: 18, mass: 1 },
   },
 };
 
@@ -347,12 +376,13 @@ export const getTheme = (isDark, platform, accentId = 'galley') => ({
   colors: isDark ? colors.dark : colors.light,
   brand,
   primary: isDark ? colors.primary : colors.primaryLight,
-  secondary: colors.secondary,
+  secondary: isDark ? colors.primary : colors.primaryLight,
   accent: colors.accent,
   gray: colors.gray,
   typography,
   spacing,
   borderRadius,
+  minTapTarget,
   shadows,
   animations,
   motion,

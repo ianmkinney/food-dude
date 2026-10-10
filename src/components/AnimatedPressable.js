@@ -10,16 +10,17 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const AnimatedPressableBase = Animated.createAnimatedComponent(Pressable);
 
-const AnimatedPressable = ({
-    children,
-    style,
-    onPressIn,
-    onPressOut,
-    scaleTo = motion.scale.press,
-    tilt = false,
-    disabled,
-    ...rest
-}) => {
+const AnimatedPressable = (props) => {
+    const {
+        children,
+        style,
+        onPressIn,
+        onPressOut,
+        scaleTo = motion.scale.press,
+        tilt = false,
+        disabled,
+        ...rest
+    } = props;
     const reduceMotion = useReducedMotion();
     const scale = useSharedValue(1);
     const rotateZ = useSharedValue(0);
