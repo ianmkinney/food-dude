@@ -375,7 +375,7 @@ export const MIGRATIONS = [
                 'CREATE INDEX IF NOT EXISTS idx_parties_party_uuid ON parties(party_uuid);'
             );
             const rows = await db.getAllAsync(
-                'SELECT id FROM parties WHERE party_uuid IS NULL OR party_uuid = ""'
+                "SELECT id FROM parties WHERE party_uuid IS NULL OR party_uuid = ''"
             );
             for (const row of rows) {
                 const uuid = `00000000-0000-4000-8000-${String(row.id).padStart(12, '0')}`;
