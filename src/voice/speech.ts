@@ -54,6 +54,27 @@ export const deviceSpeechEngine: SpeechEngine = {
     },
 };
 
+let webSpeechPrimed = false;
+
+/**
+ * iOS Safari only lets speechSynthesis talk after it has been used inside a
+ * user gesture, and replies arrive after an async AI call. Call this
+ * synchronously from a tap (send, mic, voice toggle) so later replies can speak.
+ */
+export function primeSpeechOnWeb(): void {
+    if (Platform.OS !== 'web' || webSpeechPrimed || typeof window === 'undefined') return;
+    const synth = window.speechSynthesis;
+    if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return;
+    try {
+        const utterance = new SpeechSynthesisUtterance(' ');
+        utterance.volume = 0;
+        synth.speak(utterance);
+        webSpeechPrimed = true;
+    } catch {
+        // Speech stays text-only.
+    }
+}
+
 export async function getSpeechEngine(): Promise<SpeechEngine> {
     return deviceSpeechEngine;
 }

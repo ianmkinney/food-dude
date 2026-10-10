@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { ASSISTANT_NAME } from '../config/assistant';
 
 type Theme = ReturnType<typeof import('../theme').getTheme>;
-import { getSpeechEngine, shouldSpeak } from '../voice/speech';
+import { getSpeechEngine, primeSpeechOnWeb, shouldSpeak } from '../voice/speech';
 import { getVoiceSettings, setAutoSpeak, setVoiceMuted } from '../voice/voiceSettings';
 
 /** On-device voice: read replies aloud and mute. */
@@ -24,6 +24,7 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
     }, [load]);
 
     const preview = async () => {
+        primeSpeechOnWeb();
         if (!(await shouldSpeak())) {
             return;
         }
@@ -44,6 +45,7 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
                 <Switch
                     value={autoSpeak}
                     onValueChange={async (v) => {
+                        if (v) primeSpeechOnWeb();
                         setAutoSpeakState(v);
                         await setAutoSpeak(v);
                     }}

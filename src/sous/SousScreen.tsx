@@ -23,9 +23,10 @@ import { MISSING_KEY_MESSAGE } from '../services/aiSettings';
 import { useOnboardingTour } from '../onboarding/useOnboardingTour';
 import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION, ASSISTANT_TAGLINE } from '../config/assistant';
 import { useTourTarget } from '../onboarding/tourTargets';
-import { getSpeechEngine, shouldSpeak, type SpeechEngine } from '../voice/speech';
+import { getSpeechEngine, primeSpeechOnWeb, shouldSpeak, type SpeechEngine } from '../voice/speech';
 import { getVoiceSettings, setAutoSpeak, setVoiceMuted } from '../voice/voiceSettings';
 import { useSpeechInput } from '../voice/useSpeechInput';
+import { WEB_SPEECH_NOTICE } from '../voice/webSpeechRecognition';
 import { askSous, type SousTurn } from './agent';
 import type { SousCard } from './tools';
 
@@ -91,6 +92,7 @@ export default function SousScreen() {
         async (raw: string) => {
             const text = raw.trim();
             if (!text || thinking) return;
+            if (autoSpeak) primeSpeechOnWeb();
             setInput('');
             const history: SousTurn[] = messages.map((m) => ({ role: m.role, text: m.text }));
             const userMessage: Message = { id: newId(), role: 'user', text };
@@ -131,6 +133,7 @@ export default function SousScreen() {
 
     const toggleAutoSpeak = async () => {
         const next = !autoSpeak;
+        if (next) primeSpeechOnWeb();
         setAutoSpeakState(next);
         await setAutoSpeak(next);
         if (next) await setVoiceMuted(false);
@@ -246,7 +249,14 @@ export default function SousScreen() {
                         <AiBadge />
                         <ReportButton target={{ kind: 'chat', content: item.text }} />
                         <Pressable
-                            onPress={() => (speakingId === item.id ? engineRef.current?.stop() : speak(item))}
+                            onPress={() => {
+                                if (speakingId === item.id) {
+                                    engineRef.current?.stop();
+                                    return;
+                                }
+                                primeSpeechOnWeb();
+                                speak(item);
+                            }}
                             accessibilityRole="button"
                             accessibilityLabel={speakingId === item.id ? 'Stop reading aloud' : 'Read this reply aloud'}
                             hitSlop={8}
@@ -275,6 +285,9 @@ export default function SousScreen() {
                     </Pressable>
                 ))}
             </View>
+            {mic.isWeb && mic.isSupported && (
+                <Text style={[styles.webVoiceNote, { color: c.text.tertiary }]}>Tap the mic to talk. {WEB_SPEECH_NOTICE}</Text>
+            )}
         </View>
     );
 
@@ -309,19 +322,33 @@ export default function SousScreen() {
             )}
             {(mic.error || listening) && (
                 <Text style={[styles.micStatus, { color: mic.error ? c.error : theme.primary[600] }]}>
-                    {mic.error || 'Listening while you hold the mic. Speech is turned into text on this device.'}
+                    {mic.error ||
+                        (mic.isWeb
+                            ? `Listening… tap the mic again when you're done. ${WEB_SPEECH_NOTICE}`
+                            : 'Listening while you hold the mic. Speech is turned into text on this device.')}
                 </Text>
             )}
             <View style={[styles.composer, { borderTopColor: c.borderSoft, backgroundColor: c.surfaceGlass }]}>
                 {mic.isSupported ? (
                     <Pressable
                         ref={micTarget}
-                        onPressIn={() => mic.start()}
-                        onPressOut={() => mic.stop()}
+                        {...mic.pressProps}
+                        onPress={
+                            mic.pressProps.onPress
+                                ? () => {
+                                      if (autoSpeak) primeSpeechOnWeb();
+                                      mic.pressProps.onPress?.();
+                                  }
+                                : undefined
+                        }
                         style={[styles.roundButton, { backgroundColor: listening ? theme.colors.error : c.surfaceMuted }]}
                         accessibilityRole="button"
-                        accessibilityLabel={`Hold to talk to ${ASSISTANT_NAME}`}
-                        accessibilityHint="Listens only while held. Asks for microphone access the first time"
+                        accessibilityLabel={mic.isWeb ? `Tap to talk to ${ASSISTANT_NAME}` : `Hold to talk to ${ASSISTANT_NAME}`}
+                        accessibilityHint={
+                            mic.isWeb
+                                ? 'Tap again to stop. Your browser turns speech into text and may send the audio to Apple or Google'
+                                : 'Listens only while held. Asks for microphone access the first time'
+                        }
                     >
                         <Ionicons name={listening ? 'stop' : 'mic'} size={20} color={listening ? '#FFFFFF' : c.text.primary} />
                     </Pressable>
@@ -385,6 +412,7 @@ const styles = StyleSheet.create({
     inlineButton: { marginTop: 10, alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
     inlineButtonText: { color: '#FFFFFF', fontWeight: '800' },
     thinking: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 4 },
+    webVoiceNote: { fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 14, maxWidth: 420 },
     micStatus: { textAlign: 'center', fontSize: 13, paddingHorizontal: 16, paddingBottom: 6 },
     composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 10, borderTopWidth: 1 },
     input: { flex: 1, minHeight: 42, maxHeight: 120, borderWidth: 1, borderRadius: 21, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, fontSize: 16 },

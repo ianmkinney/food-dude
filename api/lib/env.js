@@ -36,18 +36,25 @@ export function getGoogleClientIds() {
     return splitCsv('GOOGLE_CLIENT_IDS');
 }
 
+// Tried in order when the configured model is rejected (OpenRouter retires IDs,
+// e.g. google/gemini-2.0-flash-001). Override with OPENROUTER_FALLBACK_MODELS.
+const BUILTIN_FALLBACK_MODELS = ['google/gemini-2.5-flash', 'google/gemini-2.5-flash-lite'];
+
 export function getOpenRouterConfig() {
     const allowed = splitCsv('OPENROUTER_ALLOWED_MODELS');
+    const configuredFallbacks = splitCsv('OPENROUTER_FALLBACK_MODELS');
+    const fallbackModels = configuredFallbacks.length ? configuredFallbacks : BUILTIN_FALLBACK_MODELS;
     const defaultModel =
         process.env.OPENROUTER_DEFAULT_MODEL ||
         allowed[0] ||
-        'google/gemini-2.0-flash-001';
+        fallbackModels[0];
     if (!allowed.length) {
-        return { defaultModel, allowedModels: [defaultModel] };
+        return { defaultModel, allowedModels: [defaultModel], fallbackModels };
     }
     return {
         defaultModel: allowed.includes(defaultModel) ? defaultModel : allowed[0],
         allowedModels: allowed,
+        fallbackModels,
     };
 }
 
