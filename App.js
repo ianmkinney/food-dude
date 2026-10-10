@@ -12,9 +12,9 @@ import {
   Inter_700Bold,
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
-import { initDatabase, getDatabaseMode } from './src/database/operations';
-import { isOpfsBusyError } from './src/database/openDatabase';
-import { listenForTakeover, takeOverFromOtherTab } from './src/database/tabGuard';
+import { initDatabase, getDatabaseMode, shutdownDatabase } from './src/database/operations';
+import { isInvalidVfsStateError, isOpfsBusyError } from './src/database/openDatabase';
+import { listenForTakeover, listenForCloseDatabase, takeOverFromOtherTab } from './src/database/tabGuard';
 import AppNavigator from './src/navigation/AppNavigator';
 import { getTheme } from './src/theme';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -85,13 +85,16 @@ const documentTitle = {
 };
 
 // OPFS hands the SQLite file to one tab at a time.
-const isLockedInAnotherTab = (error) =>
-  Platform.OS === 'web' && (error?.name === 'TabLockedError' || isOpfsBusyError(error));
+const isTabLockError = (error) => error?.name === 'TabLockedError';
+
+const isWebDbContention = (error) =>
+  Platform.OS === 'web' && (isTabLockError(error) || isOpfsBusyError(error) || isInvalidVfsStateError(error));
 
 const reload = () => window.location.reload();
 
 function StartupError({ error, theme, onUseHere }) {
-  const locked = isLockedInAnotherTab(error);
+  const tabLock = isTabLockError(error);
+  const locked = isWebDbContention(error);
   const [showDetails, setShowDetails] = useState(false);
   const [takingOver, setTakingOver] = useState(false);
   const details = [error?.name, error?.message].filter(Boolean).join(': ') + (error?.stack ? `\n\n${error.stack}` : '');
@@ -109,21 +112,23 @@ function StartupError({ error, theme, onUseHere }) {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <BrandMark variant="ink" size={88} />
       <Text style={[styles.errorTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fonts.display }]}>
-        {locked ? 'AmpliFood is open in another tab' : 'AmpliFood could not start'}
+        {tabLock ? 'AmpliFood is open in another tab' : locked ? 'Close other AmpliFood tabs' : 'AmpliFood could not start'}
       </Text>
       <Text style={[styles.errorText, { color: theme.colors.text.secondary }]}>
         {locked
-          ? 'Your kitchen is saved in this browser, and only one tab can use it at a time. Use that tab or close it, or move AmpliFood here.'
+          ? 'Safari could not open your saved kitchen because another AmpliFood tab may still be using it. Close other AmpliFood tabs, then tap Try again — or move AmpliFood to this tab.'
           : error?.message || String(error)}
       </Text>
       {Platform.OS === 'web' && (
         <Pressable
-          onPress={locked ? moveHere : reload}
+          onPress={tabLock ? moveHere : reload}
           disabled={takingOver}
           style={[styles.retryButton, { backgroundColor: theme.primary[500], opacity: takingOver ? 0.7 : 1 }]}
           accessibilityRole="button"
         >
-          <Text style={styles.retryText}>{locked ? (takingOver ? 'Moving here…' : 'Use here') : 'Try again'}</Text>
+          <Text style={styles.retryText}>
+            {tabLock ? (takingOver ? 'Moving here…' : 'Use here') : 'Try again'}
+          </Text>
         </Pressable>
       )}
       {!locked && (
@@ -161,7 +166,7 @@ function TemporaryDatabaseBanner({ theme }) {
       style={[styles.banner, { backgroundColor: theme.colors.surface, borderColor: theme.primary[500] }]}
     >
       <Text style={[styles.bannerText, { color: theme.colors.text.primary }]}>
-        Couldn&apos;t open your saved kitchen, so this session is temporary and changes won&apos;t be saved.
+        Couldn&apos;t open your saved kitchen from disk, so this session is temporary. Close other AmpliFood tabs and tap Retry to restore your data.
       </Text>
       <View style={styles.bannerActions}>
         <Pressable onPress={reload} accessibilityRole="button" style={styles.bannerButton}>
@@ -206,7 +211,12 @@ function AppContent() {
   // and frees the database for it.
   useEffect(() => {
     if (Platform.OS !== 'web' || !isReady) return undefined;
-    return listenForTakeover(reload);
+    const stopClose = listenForCloseDatabase(() => shutdownDatabase());
+    const stopTakeover = listenForTakeover(reload);
+    return () => {
+      stopClose();
+      stopTakeover();
+    };
   }, [isReady]);
 
   const moveHere = useCallback(async () => {

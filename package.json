@@ -11,7 +11,8 @@
     "preview:web": "npx --yes serve@14 dist --single --listen 8080",
     "brand:assets": "python3 scripts/generate-brand-assets.py",
     "typecheck": "tsc --noEmit",
-    "verify:api": "node scripts/verify-api-handlers.mjs"
+    "verify:api": "node scripts/verify-api-handlers.mjs",
+    "test:web-db-tabs": "node scripts/test-web-db-two-tabs.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/fredoka": "^0.4.1",
@@ -62,6 +63,7 @@
   },
   "private": true,
   "devDependencies": {
-    "babel-preset-expo": "~54.0.8"
+    "babel-preset-expo": "~54.0.8",
+    "playwright": "^1.49.1"
   }
 }

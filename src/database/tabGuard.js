@@ -11,6 +11,12 @@ export async function acquireTabLock() {}
 
 export async function takeOverFromOtherTab() {}
 
+export async function requestPeersCloseDatabase() {}
+
+export function listenForCloseDatabase() {
+    return () => {};
+}
+
 export function listenForTakeover() {
     return () => {};
 }
