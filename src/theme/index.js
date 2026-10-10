@@ -97,6 +97,8 @@ export const colors = {
     surfaceGlass: 'rgba(251, 246, 238, 0.92)',
     border: 'rgba(42, 20, 36, 0.12)',
     borderSoft: 'rgba(42, 20, 36, 0.07)',
+    // Outlines that must read as UI boundaries (3:1 or better on every surface).
+    borderStrong: '#857379',
     overlay: 'rgba(20, 16, 18, 0.45)',
     glow: 'rgba(235, 106, 28, 0.3)',
     text: {
@@ -118,6 +120,7 @@ export const colors = {
     surfaceGlass: 'rgba(20, 16, 18, 0.92)',
     border: 'rgba(255, 244, 227, 0.12)',
     borderSoft: 'rgba(255, 244, 227, 0.07)',
+    borderStrong: '#7A6B71',
     overlay: 'rgba(0, 0, 0, 0.6)',
     glow: 'rgba(235, 106, 28, 0.35)',
     text: {

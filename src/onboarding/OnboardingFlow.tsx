@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import ThemedSwitch from '../components/ThemedSwitch';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
@@ -210,15 +211,19 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
             accessibilityRole="button"
             accessibilityLabel={a11y || label}
             accessibilityState={{ disabled: !!disabled }}
-            style={[styles.button, primary ? { backgroundColor: theme.primary[500] } : { backgroundColor: c.surfaceMuted }, disabled && { opacity: 0.45 }]}
+            style={[
+                styles.button,
+                primary ? { backgroundColor: theme.primary[500] } : { backgroundColor: c.surfaceMuted },
+                disabled && { backgroundColor: c.surfaceMuted, borderColor: c.borderStrong },
+            ]}
         >
-            <Text style={[styles.buttonText, { color: primary ? '#FFFFFF' : c.text.primary }]}>{label}</Text>
+            <Text style={[styles.buttonText, { color: disabled ? c.text.secondary : primary ? '#FFFFFF' : c.text.primary }]}>{label}</Text>
         </Pressable>
     );
 
     const Check = ({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: React.ReactNode; }) => (
         <View style={styles.checkRow}>
-            <Switch value={value} onValueChange={onChange} accessibilityLabel={typeof label === 'string' ? label : undefined} />
+            <ThemedSwitch value={value} onValueChange={onChange} accessibilityLabel={typeof label === 'string' ? label : undefined} />
             <Text style={[styles.body, { color: c.text.primary, flex: 1 }]}>{label}</Text>
         </View>
     );
@@ -493,7 +498,7 @@ const styles = StyleSheet.create({
     link: { fontSize: 15, fontWeight: '800', textDecorationLine: 'underline' },
     bullets: { gap: 6 },
     row: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 4 },
-    button: { borderRadius: 999, paddingVertical: 13, paddingHorizontal: 22, alignItems: 'center' },
+    button: { borderRadius: 999, borderWidth: 1.5, borderColor: 'transparent', paddingVertical: 12, paddingHorizontal: 22, alignItems: 'center' },
     buttonText: { fontSize: 16, fontWeight: '800' },
     checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     warn: { flexDirection: 'row', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12 },

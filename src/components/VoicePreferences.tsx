@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import ThemedSwitch from './ThemedSwitch';
 import { ASSISTANT_NAME } from '../config/assistant';
 
 type Theme = ReturnType<typeof import('../theme').getTheme>;
@@ -42,7 +43,7 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
             </Text>
             <View style={styles.row}>
                 <Text style={[styles.rowText, { color: c.text.primary }]}>Read replies aloud</Text>
-                <Switch
+                <ThemedSwitch
                     value={autoSpeak}
                     onValueChange={async (v) => {
                         if (v) primeSpeechOnWeb();
@@ -54,7 +55,7 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
             </View>
             <View style={styles.row}>
                 <Text style={[styles.rowText, { color: c.text.primary }]}>Mute voice</Text>
-                <Switch
+                <ThemedSwitch
                     value={muted}
                     onValueChange={async (v) => {
                         setMuted(v);

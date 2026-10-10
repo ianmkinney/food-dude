@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import ThemedSwitch from '../components/ThemedSwitch';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import GuitarMark from '../brand/GuitarMark';
@@ -98,7 +99,7 @@ export function LegalGate({ children }: { children: React.ReactNode }) {
                 Your recipes, pantry and keys stay on this device. AI features use the AI provider you choose, and we'll ask before anything is sent to one. AI can be wrong, so always check recipes, labels and allergens yourself.
             </Text>
             <View style={styles.agreeRow}>
-                <Switch value={agreed} onValueChange={setAgreed} accessibilityLabel="I agree to the Terms of Use and Privacy Policy" />
+                <ThemedSwitch value={agreed} onValueChange={setAgreed} accessibilityLabel="I agree to the Terms of Use and Privacy Policy" />
                 <Text style={[styles.body, { color: c.text.primary, flex: 1 }]}>
                     I agree to the{' '}
                     <Text style={[styles.inlineLink, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(TERMS_URL)}>
@@ -117,11 +118,16 @@ export function LegalGate({ children }: { children: React.ReactNode }) {
                     await acceptLegal();
                     setState('accepted');
                 }}
-                style={[styles.continue, { backgroundColor: theme.primary[500], opacity: agreed ? 1 : 0.45 }]}
+                style={[
+                    styles.continue,
+                    agreed
+                        ? { backgroundColor: theme.primary[500] }
+                        : { backgroundColor: c.surfaceMuted, borderColor: c.borderStrong },
+                ]}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !agreed }}
             >
-                <Text style={styles.continueText}>Continue</Text>
+                <Text style={[styles.continueText, !agreed && { color: c.text.secondary }]}>Continue</Text>
             </Pressable>
             <Text style={[styles.small, { color: c.text.tertiary, textAlign: 'center' }]}>
                 You must be at least {MINIMUM_AGE} years old to use AmpliFood.
@@ -144,6 +150,6 @@ const styles = StyleSheet.create({
     gateTitle: { fontSize: 30, textAlign: 'center' },
     agreeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 },
     inlineLink: { fontWeight: '800', textDecorationLine: 'underline' },
-    continue: { alignSelf: 'stretch', borderRadius: 999, paddingVertical: 14, alignItems: 'center' },
+    continue: { alignSelf: 'stretch', borderRadius: 999, borderWidth: 1.5, borderColor: 'transparent', paddingVertical: 13, alignItems: 'center' },
     continueText: { color: '#FFFFFF', fontSize: 17, fontWeight: '800' },
 });

@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import ThemedSwitch from './ThemedSwitch';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -59,7 +60,7 @@ export default function DataSharingSettings({ theme }: { theme: Theme }) {
             )}
             <View style={[styles.row, { borderColor: c.border }]}>
                 <Text style={[styles.rowText, { color: c.text.primary }]}>Also include my allergies & diet needs in AI requests</Text>
-                <Switch
+                <ThemedSwitch
                     value={includeHealth}
                     onValueChange={async (value) => {
                         setIncludeHealth(value);
