@@ -717,6 +717,7 @@ const styles = StyleSheet.create({
     cardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
     cardRowText: { flex: 1, fontSize: 15 },
     cardFooter: { gap: 8 },
+    fine: { fontSize: 12, lineHeight: 16 },
     cost: { fontSize: 28 },
     costLine: { fontSize: 13, marginTop: 4 },
     costNote: { fontSize: 12, marginTop: 8, fontStyle: 'italic' },
