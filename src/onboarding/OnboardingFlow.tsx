@@ -444,16 +444,15 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
         <ScrollView style={{ backgroundColor: c.background }} contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
             <View style={styles.topBar}>
                 <GuitarMark size={44} waves="idle" />
-                <View style={{ flex: 1 }}>
+                <View style={styles.nameCol}>
+                    <Text style={[styles.sous, display, { color: c.text.primary }]} numberOfLines={1}>AmpliFood · {ASSISTANT_NAME}</Text>
                     <View style={styles.nameRow}>
-                        <Text style={[styles.sous, display, { color: c.text.primary }]}>AmpliFood · {ASSISTANT_NAME}</Text>
-                        <Text style={[styles.small, { color: c.text.tertiary }]}>({ASSISTANT_PRONUNCIATION})</Text>
+                        <Text style={[styles.small, { color: c.text.tertiary }]}>{ASSISTANT_PRONUNCIATION}</Text>
                         <AiBadge />
                     </View>
                 </View>
                 <Pressable onPress={toggleMute} style={[styles.mute, { borderColor: c.border }]} accessibilityRole="switch" accessibilityState={{ checked: !muted }} accessibilityLabel="AI voice">
-                    <Ionicons name={muted ? 'volume-mute-outline' : 'volume-high-outline'} size={16} color={c.text.secondary} />
-                    <Text style={[styles.muteText, { color: c.text.secondary }]}>{muted ? 'AI voice muted' : 'AI voice'}</Text>
+                    <Ionicons name={muted ? 'volume-mute-outline' : 'volume-high-outline'} size={20} color={c.text.secondary} />
                 </Pressable>
             </View>
 
@@ -477,10 +476,10 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
 const styles = StyleSheet.create({
     screen: { flexGrow: 1, padding: 22, gap: 18, maxWidth: 560, width: '100%', alignSelf: 'center' },
     topBar: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    sous: { fontSize: 22 },
-    mute: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-    muteText: { fontSize: 12, fontWeight: '700' },
+    nameCol: { flex: 1, gap: 4 },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+    sous: { fontSize: 20 },
+    mute: { width: 44, height: 44, borderWidth: 1, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
     content: { gap: 14 },
     caption: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 4 },
     captionTag: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
