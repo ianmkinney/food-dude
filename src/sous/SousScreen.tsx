@@ -10,6 +10,7 @@ import {
     Text,
     TextInput,
     View,
+    useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -54,7 +55,8 @@ const FRESH_MS = 2000;
 type Nav = { navigate: (name: string, params?: object) => void };
 
 export default function SousScreen() {
-    const { isDark } = useTheme();
+    const { isDark, textScale } = useTheme();
+    const { height: windowHeight } = useWindowDimensions();
     const theme = getTheme(isDark, undefined, undefined);
     const navigation = useNavigation() as unknown as Nav;
     useOnboardingTour();
@@ -311,7 +313,7 @@ export default function SousScreen() {
 
     const hero = (
         <View style={styles.hero}>
-            <GuitarMark size={112} waves={thinking ? 'thinking' : 'idle'} />
+            <GuitarMark size={textScale > 1.1 || windowHeight < 760 ? 72 : 112} waves={thinking ? 'thinking' : 'idle'} />
             <Text style={[styles.hello, display, { color: c.text.primary }]} accessibilityRole="header">
                 Hi, I&apos;m {ASSISTANT_NAME}
             </Text>

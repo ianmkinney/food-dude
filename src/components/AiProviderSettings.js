@@ -452,7 +452,6 @@ const AiProviderSettings = ({ theme }) => {
                                     styles.modelId,
                                     { color: theme.colors.text.primary },
                                 ]}
-                                numberOfLines={1}
                             >
                                 {item.id}
                             </Text>
@@ -499,7 +498,6 @@ const AiProviderSettings = ({ theme }) => {
                                             styles.modelId,
                                             { color: theme.colors.text.primary },
                                         ]}
-                                        numberOfLines={1}
                                     >
                                         {item.id}
                                     </Text>

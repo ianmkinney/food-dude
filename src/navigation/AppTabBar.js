@@ -16,8 +16,6 @@ import { useReducedMotion } from '../motion';
 
 const PILL_WIDTH = 56;
 const PILL_HEIGHT = 32;
-// Labels grow with the text size control, but are capped so five tabs still fit.
-const LABEL_MAX_SCALE = 1.15;
 
 function TabItem({ route, label, icon, focused, onPress, onLongPress, theme, reduceMotion }) {
     const tourRef = useTourTarget(`tab-${route.name}`);
@@ -49,7 +47,6 @@ function TabItem({ route, label, icon, focused, onPress, onLongPress, theme, red
                 </Animated.View>
                 <Text
                     numberOfLines={1}
-                    maxFontSizeMultiplier={LABEL_MAX_SCALE}
                     style={[styles.label, { color, fontWeight: focused ? '700' : '500' }]}
                 >
                     {label}
