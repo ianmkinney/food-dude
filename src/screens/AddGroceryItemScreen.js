@@ -545,10 +545,12 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     saveButton: {
-        height: 50,
+        minHeight: 50,
         borderRadius: 25,
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        paddingHorizontal: 20,
         marginTop: 24,
         marginBottom: 24,
     },
