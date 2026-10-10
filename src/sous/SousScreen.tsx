@@ -97,6 +97,7 @@ export default function SousScreen() {
         getVoiceSettings().then((s) => setAutoSpeakState(s.autoSpeak));
         chatOperations.getRecent(CHAT_THREAD_AMPI, 40).then((rows) => {
             if (!rows.length) return;
+            rows.forEach((row: { id: number }) => freshUntil.current.set(String(row.id), 0));
             setMessages(
                 rows.map((row: { id: number; role: string; text: string }) => ({
                     id: String(row.id),
