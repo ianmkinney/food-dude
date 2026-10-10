@@ -11,6 +11,7 @@ import { estimateGroceryCost } from '../services/groceryService';
 import { toPersistentImageUri } from '../services/mediaPrep';
 import { Platform } from 'react-native';
 import { ATTACHMENT_SOURCE_LABEL } from './attachmentLimits';
+import type { ChatRecipeAction } from '../chat/chatRecipes';
 
 // What Sous can actually do in the app. The model asks for these by name in its
 // JSON reply (see agent.ts); each one runs against the local database and
@@ -35,6 +36,19 @@ export type ToolCall =
               instructions: string[];
           };
       }
+    | {
+          tool: 'update_recipe';
+          args: {
+              recipe_id: number;
+              title?: string;
+              description?: string;
+              servings?: number;
+              prep_time?: number;
+              cook_time?: number;
+              ingredients?: { ingredient: string; quantity?: string | number | null; unit?: string | null }[];
+              instructions?: string[];
+          };
+      }
     | { tool: 'add_to_meal_plan'; args: { recipe_id?: number; recipe_title?: string; date: string; meal_type: MealType } }
     | { tool: 'add_to_pantry'; args: { items: ItemArg[] } }
     | { tool: 'add_to_grocery'; args: { items: ItemArg[] } }
@@ -53,6 +67,7 @@ export type SousCard =
           ingredients?: string[];
           sourceLabel?: string;
           fromUserFile?: boolean;
+          savedAs?: ChatRecipeAction;
       }
     | { type: 'meal_plan'; recipeTitle: string; date: string; mealType: MealType }
     | { type: 'pantry'; items: string[] }
@@ -71,7 +86,8 @@ export type SousCard =
 export const TOOL_SPEC = `
 - find_recipes {"query": string}: search the user's saved recipes.
 - import_recipe {"url"?: string, "text"?: string}: import a recipe from a link, pasted text, or an attached file into the recipe book.
-- create_recipe {"title", "description"?, "servings"?, "prep_time"?, "cook_time"?, "ingredients": [{"ingredient", "quantity"?, "unit"?}], "instructions": [string]}: save a NEW recipe (from an attachment or your draft).
+- create_recipe {"title", "description"?, "servings"?, "prep_time"?, "cook_time"?, "ingredients": [{"ingredient", "quantity"?, "unit"?}], "instructions": [string]}: save a NEW recipe (from an attachment or your draft). Only when the user wants a new dish saved.
+- update_recipe {"recipe_id": number, "title"?, "description"?, "servings"?, "prep_time"?, "cook_time"?, "ingredients"?: [{"ingredient", "quantity"?, "unit"?}], "instructions"?: [string]}: rename or edit a recipe that is already saved. Send only the fields that change; ingredients and instructions replace the whole list.
 If the user attached a photo, the app uses it as the recipe image automatically; never put image URLs in tool arguments.
 - add_to_meal_plan {"recipe_id"?: number, "recipe_title"?: string, "date": "YYYY-MM-DD", "meal_type": "breakfast"|"lunch"|"dinner"}: schedule a saved recipe.
 - add_to_pantry {"items": [{"name", "quantity"?, "unit"?, "category"?}]}: record items the user has at home.
@@ -95,6 +111,12 @@ async function findRecipe(args: { recipe_id?: number; recipe_title?: string }): 
     }
     return null;
 }
+
+type SavedRecipe = RecipeSummary & {
+    prep_time?: number | null;
+    cook_time?: number | null;
+    ingredients?: { ingredient: string; quantity?: string | null; unit?: string | null }[];
+};
 
 type RunOptions = {
     /** First image the user attached in this chat turn; the only image Sous may store as a cover. */
@@ -159,6 +181,7 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
                 fromUserFile: fromFile,
                 sourceLabel: fromFile ? ATTACHMENT_SOURCE_LABEL : undefined,
                 ingredients: (result.recipe.ingredients || []).map((ing: { ingredient?: string }) => ing.ingredient || ''),
+                savedAs: 'imported',
             };
         }
         case 'create_recipe': {
@@ -192,6 +215,56 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
                 fromUserFile: fromFile,
                 sourceLabel: fromFile ? ATTACHMENT_SOURCE_LABEL : undefined,
                 ingredients: (a.ingredients || []).map((ing) => [ing.quantity, ing.unit, ing.ingredient].filter(Boolean).join(' ')),
+                savedAs: 'created',
+            };
+        }
+        case 'update_recipe': {
+            const a = call.args;
+            const id = Number(a.recipe_id);
+            const existing = Number.isFinite(id) && id > 0 ? ((await recipeOperations.getById(id)) as SavedRecipe | null) : null;
+            if (!existing) throw new Error(`I couldn't find recipe #${a.recipe_id ?? '?'} to update.`);
+            const updates: Record<string, unknown> = {};
+            const title = typeof a.title === 'string' ? a.title.trim() : '';
+            if (title && title !== existing.title) updates.title = title;
+            if (typeof a.description === 'string') updates.description = a.description.trim() || null;
+            if (a.servings != null) updates.servings = Number(a.servings) || null;
+            if (a.prep_time != null) updates.prepTime = Number(a.prep_time) || null;
+            if (a.cook_time != null) updates.cookTime = Number(a.cook_time) || null;
+            if (a.prep_time != null || a.cook_time != null) {
+                const prep = Number(a.prep_time ?? existing.prep_time) || 0;
+                const cook = Number(a.cook_time ?? existing.cook_time) || 0;
+                updates.totalTime = prep && cook ? prep + cook : null;
+            }
+            if (Array.isArray(a.ingredients) && a.ingredients.length) {
+                updates.ingredients = a.ingredients.map((ing) => ({
+                    ingredient: ing.ingredient,
+                    quantity: asText(ing.quantity),
+                    unit: ing.unit || null,
+                }));
+            }
+            if (Array.isArray(a.instructions) && a.instructions.length) updates.instructions = a.instructions;
+            const keys = Object.keys(updates);
+            if (!keys.length) throw new Error(`“${existing.title}” already looks like that, so nothing changed.`);
+            await recipeOperations.update(existing.id, updates);
+            if (updates.ingredients || updates.instructions) {
+                await recipeOperations.setProvenance(existing.id, { isAiGenerated: true });
+            }
+            const saved = ((await recipeOperations.getById(existing.id)) as SavedRecipe | null) ?? existing;
+            const renameOnly = keys.length === 1 && keys[0] === 'title';
+            return {
+                type: 'recipe',
+                title: renameOnly ? `Renamed from “${existing.title}”` : 'Updated in your recipe book',
+                recipe: {
+                    id: saved.id,
+                    title: saved.title,
+                    is_ai_generated: saved.is_ai_generated ?? null,
+                    image_uri: saved.image_uri ?? null,
+                },
+                aiGenerated: Boolean(saved.is_ai_generated),
+                ingredients: (saved.ingredients || []).map((ing) =>
+                    [ing.quantity, ing.unit, ing.ingredient].filter(Boolean).join(' ')
+                ),
+                savedAs: 'updated',
             };
         }
         case 'add_to_meal_plan': {

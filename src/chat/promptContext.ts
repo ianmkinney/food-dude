@@ -15,9 +15,9 @@ export async function loadThreadTurns(threadId: string, limit = 24): Promise<{ h
     return { history, summary };
 }
 
-export async function persistAmpiExchange(userText: string, sousText: string) {
+export async function persistAmpiExchange(userText: string, sousText: string, sousMeta: object | null = null) {
     await chatOperations.addMessage(CHAT_THREAD_AMPI, { role: 'user', text: userText });
-    await chatOperations.addMessage(CHAT_THREAD_AMPI, { role: 'sous', text: sousText });
+    await chatOperations.addMessage(CHAT_THREAD_AMPI, { role: 'sous', text: sousText, meta: sousMeta });
     await refreshThreadSummary(CHAT_THREAD_AMPI);
 }
 

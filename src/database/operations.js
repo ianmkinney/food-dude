@@ -673,6 +673,7 @@ export const chatOperations = {
         );
     },
 
+    /** @param {string} threadId @param {{ role: string, text: string, meta?: object | null }} message */
     async addMessage(threadId, { role, text, meta = null }) {
         const db = getDatabase();
         const now = Date.now();

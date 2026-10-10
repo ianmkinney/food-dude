@@ -40,6 +40,7 @@ import ChatAttachmentPicker from '../components/ChatAttachmentPicker';
 import { ATTACHMENT_SOURCE_LABEL } from './attachmentLimits';
 import type { PendingAttachment } from './chatAttachments';
 import { persistAmpiExchange } from '../chat/promptContext';
+import { recipeEventsFromCards } from '../chat/chatRecipes';
 import { CHAT_THREAD_AMPI } from '../chat/chatThreads';
 import { chatOperations } from '../database/operations';
 import { askSous, confirmSousActions, type SousTurn } from './agent';
@@ -202,6 +203,7 @@ export default function SousScreen() {
                         recipe: { id, title: recipe.title, is_ai_generated: 1 },
                         aiGenerated: true,
                         ingredients: (recipe.ingredients || []).map((ing: { ingredient?: string }) => ing.ingredient || ''),
+                        savedAs: 'imported',
                     };
                     const reply: Message = {
                         id: newId(),
@@ -212,6 +214,9 @@ export default function SousScreen() {
                         cards: [card],
                     };
                     setMessages((prev) => [...prev, reply]);
+                    await persistAmpiExchange(userMessage.text, reply.text, {
+                        recipes: recipeEventsFromCards([card]),
+                    });
                     return;
                 }
                 const result = await askSous(history, text || 'Please use the attached files.', attachments);
