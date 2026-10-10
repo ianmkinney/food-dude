@@ -2,8 +2,6 @@ import { applyCors } from '../lib/cors.js';
 import { isOwnerGateConfigured, isEmailAllowed, requireSecrets } from '../lib/env.js';
 import { verifyGoogleIdToken } from '../lib/google.js';
 import { signSession } from '../lib/session.js';
-import { StoreMisconfiguredError } from '../lib/store.js';
-
 const MSG = {
     method_not_allowed: 'Method not allowed.',
     platform_disabled: 'Owner platform AI is not enabled.',
@@ -61,11 +59,6 @@ export default async function handler(req, res) {
             name: profile.name,
         });
     } catch (error) {
-        if (error instanceof StoreMisconfiguredError) {
-            console.error('[auth/google] store:', error.message);
-            jsonError(res, 503, 'misconfigured');
-            return;
-        }
         console.error('[auth/google] verify failed:', error?.message || error);
         jsonError(res, 401, 'auth_failed');
     }

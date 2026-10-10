@@ -23,12 +23,66 @@ export function isEmailAllowed(email) {
     return allowed.includes(String(email || '').toLowerCase());
 }
 
+/** Primary owner account: OWNER_EMAIL or first entry in ALLOWED_EMAILS. */
+export function getOwnerEmail() {
+    const explicit = process.env.OWNER_EMAIL;
+    if (explicit && String(explicit).trim()) {
+        return String(explicit).trim().toLowerCase();
+    }
+    const allowed = getAllowedEmails();
+    return allowed[0] || '';
+}
+
+let openRouterKeysCache = null;
+
+/** @returns {Record<string, string>} lowercase email → sk-or-… */
+export function getOpenRouterKeysByEmail() {
+    if (openRouterKeysCache) return openRouterKeysCache;
+    const raw = process.env.OPENROUTER_KEYS_JSON;
+    if (!raw || !String(raw).trim()) {
+        openRouterKeysCache = {};
+        return openRouterKeysCache;
+    }
+    try {
+        const parsed = JSON.parse(String(raw));
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new Error('OPENROUTER_KEYS_JSON must be a JSON object');
+        }
+        const out = {};
+        for (const [email, key] of Object.entries(parsed)) {
+            if (!email || typeof key !== 'string' || !key.trim()) continue;
+            out[String(email).trim().toLowerCase()] = key.trim();
+        }
+        openRouterKeysCache = out;
+        return out;
+    } catch (error) {
+        console.error('[env] OPENROUTER_KEYS_JSON parse failed:', error?.message || error);
+        openRouterKeysCache = {};
+        return openRouterKeysCache;
+    }
+}
+
+/**
+ * Resolve the OpenRouter API key for a signed-in allowlisted user.
+ * Per-tester keys come from OPENROUTER_KEYS_JSON; the owner may use OPENROUTER_API_KEY.
+ * @returns {string | null}
+ */
+export function resolveOpenRouterApiKey(email) {
+    const normalized = String(email || '').toLowerCase();
+    const fromMap = getOpenRouterKeysByEmail()[normalized];
+    if (fromMap) return fromMap;
+
+    const owner = getOwnerEmail();
+    if (normalized === owner) {
+        const fallback = process.env.OPENROUTER_API_KEY;
+        if (fallback && String(fallback).trim()) return String(fallback).trim();
+    }
+    return null;
+}
+
 export function requireSecrets() {
     if (!process.env.SESSION_SECRET) {
         throw new Error('SESSION_SECRET is not set');
-    }
-    if (!process.env.OPENROUTER_API_KEY) {
-        throw new Error('OPENROUTER_API_KEY is not set');
     }
 }
 
@@ -55,13 +109,6 @@ export function getOpenRouterConfig() {
         defaultModel: allowed.includes(defaultModel) ? defaultModel : allowed[0],
         allowedModels: allowed,
         fallbackModels,
-    };
-}
-
-export function getDailyLimits() {
-    return {
-        maxRequests: Math.max(1, Number(process.env.PLATFORM_AI_DAILY_REQUESTS || 500)),
-        maxTokens: Math.max(1000, Number(process.env.PLATFORM_AI_DAILY_TOKEN_BUDGET || 500000)),
     };
 }
 

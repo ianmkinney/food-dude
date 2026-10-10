@@ -1,23 +1,15 @@
 import { applyCors } from '../lib/cors.js';
 import {
-    estimateTokens,
-    getDailyLimits,
     getOpenRouterConfig,
     isEmailAllowed,
     isOwnerGateConfigured,
     requireSecrets,
+    resolveOpenRouterApiKey,
 } from '../lib/env.js';
 import { bearerToken, verifySession } from '../lib/session.js';
-import {
-    acquireConcurrency,
-    checkMinuteRateLimit,
-    reconcileDailyUsage,
-    reserveDailyUsage,
-    StoreMisconfiguredError,
-} from '../lib/store.js';
+import { checkMinuteRateLimit } from '../lib/store.js';
 
-const FRIENDLY_LIMIT =
-    "You've hit today's owner AI safety limit. Try again tomorrow, or use your own API key in Account.";
+const DAILY_CREDIT_MSG = 'Daily AI limit reached. Try again tomorrow or ask Ian to raise your OpenRouter credit limit.';
 
 const MSG = {
     method_not_allowed: 'Method not allowed.',
@@ -25,10 +17,11 @@ const MSG = {
     misconfigured: 'Server configuration error.',
     unauthorized: 'Sign in again in Account.',
     not_allowed: 'This Google account is not authorized.',
-    rate_limited: FRIENDLY_LIMIT,
+    no_platform_key: 'No platform AI key is configured for this account.',
+    rate_limited: 'Too many requests. Wait a moment and try again.',
+    credit_limit: DAILY_CREDIT_MSG,
     bad_request: 'Invalid request.',
     upstream_failed: 'AI request failed. Try again later.',
-    concurrency_limited: 'Too many AI requests in progress. Wait a moment and try again.',
 };
 
 const IMAGE_MIME = /^image\/(png|jpeg|webp|gif)$/;
@@ -110,8 +103,7 @@ const isModelRejected = (error) =>
     (error.status === 400 || error.status === 404) &&
     /model/i.test(error.message);
 
-async function openRouterStream({ model, messages, maxTokens }) {
-    const apiKey = process.env.OPENROUTER_API_KEY;
+async function openRouterStream({ apiKey, model, messages, maxTokens }) {
     let response;
     try {
         response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -139,11 +131,11 @@ async function openRouterStream({ model, messages, maxTokens }) {
     return response;
 }
 
-async function openRouterWithFallback({ models, messages, maxTokens }) {
+async function openRouterWithFallback({ apiKey, models, messages, maxTokens }) {
     let lastError;
     for (const model of models) {
         try {
-            return { upstream: await openRouterStream({ model, messages, maxTokens }), model };
+            return { upstream: await openRouterStream({ apiKey, model, messages, maxTokens }), model };
         } catch (error) {
             lastError = error;
             if (!isModelRejected(error)) throw error;
@@ -197,7 +189,12 @@ export default async function handler(req, res) {
         return;
     }
 
-    const limits = getDailyLimits();
+    const apiKey = resolveOpenRouterApiKey(session.email);
+    if (!apiKey) {
+        reject(res, 403, 'no_platform_key');
+        return;
+    }
+
     const { defaultModel, allowedModels, fallbackModels } = getOpenRouterConfig();
     const requested = req.body?.model;
     const primary =
@@ -209,51 +206,24 @@ export default async function handler(req, res) {
         : Math.min(8192, Math.max(256, Number(process.env.OPENROUTER_MAX_OUTPUT_TOKENS || 4096)));
 
     let messages;
-    let validatedImageCount = 0;
     try {
         messages = buildMessages(isTest ? { prompt: 'Reply with the single word: OK' } : req.body);
-        validatedImageCount = isTest ? 0 : validateImages(req.body?.images).length;
     } catch (error) {
         console.warn('[ai/chat] bad request:', error?.message || error);
         reject(res, 400, 'bad_request');
         return;
     }
 
-    const promptEstimate = estimateTokens(isTest ? 'OK' : req.body?.prompt || '');
-    const reservedTokens = promptEstimate + maxTokens + 1000 * validatedImageCount;
+    if (!checkMinuteRateLimit(session.sub)) {
+        reject(res, 429, 'rate_limited');
+        return;
+    }
 
-    let releaseConcurrency = null;
-    let reserved = false;
-    let reservedTokenAmount = 0;
-    let actualTokens = promptEstimate;
+    const streamRequested = !isTest && req.body?.stream !== false;
+    const startedAt = Date.now();
 
     try {
-        if (!(await checkMinuteRateLimit(session.sub))) {
-            reject(res, 429, 'rate_limited');
-            return;
-        }
-
-        releaseConcurrency = await acquireConcurrency(session.sub);
-        if (!releaseConcurrency) {
-            reject(res, 429, 'concurrency_limited');
-            return;
-        }
-
-        const reservation = await reserveDailyUsage(session.sub, {
-            tokenReserve: reservedTokens,
-            limits,
-        });
-        if (!reservation.ok) {
-            reject(res, 429, 'rate_limited');
-            return;
-        }
-        reserved = true;
-        reservedTokenAmount = reservation.reservedTokens;
-
-        const streamRequested = !isTest && req.body?.stream !== false;
-        const startedAt = Date.now();
-
-        const { upstream, model } = await openRouterWithFallback({ models, messages, maxTokens });
+        const { upstream, model } = await openRouterWithFallback({ apiKey, models, messages, maxTokens });
 
         if (!streamRequested) {
             const reader = upstream.body.getReader();
@@ -280,7 +250,6 @@ export default async function handler(req, res) {
                     }
                 }
             }
-            actualTokens = promptEstimate + estimateTokens(full);
             res.status(200).json({
                 text: full,
                 model,
@@ -297,7 +266,6 @@ export default async function handler(req, res) {
         const reader = upstream.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        let outText = '';
 
         while (true) {
             const { done, value } = await reader.read();
@@ -308,53 +276,26 @@ export default async function handler(req, res) {
             buffer = lines.pop() || '';
             for (const line of lines) {
                 res.write(`${line}\n`);
-                const trimmed = line.trim();
-                if (!trimmed.startsWith('data:')) continue;
-                const data = trimmed.slice(5).trim();
-                if (data === '[DONE]') continue;
-                try {
-                    const json = JSON.parse(data);
-                    const piece = json.choices?.[0]?.delta?.content;
-                    if (piece) outText += piece;
-                } catch {
-                    // ignore
-                }
             }
         }
         res.end();
-        actualTokens = promptEstimate + estimateTokens(outText);
     } catch (error) {
-        if (error instanceof StoreMisconfiguredError) {
-            console.error('[ai/chat] store:', error.message);
-            if (!res.headersSent) {
-                reject(res, 503, 'misconfigured');
-            }
-            return;
-        }
         const upstreamStatus = error instanceof UpstreamError ? error.status : null;
         const reason = error?.message || 'Unknown error';
         console.error(
             `[ai/chat] upstream failed: status=${upstreamStatus} model=${error?.model || primary} ${reason}`,
         );
         if (!res.headersSent) {
+            if (upstreamStatus === 402) {
+                reject(res, 429, 'credit_limit');
+                return;
+            }
             res.status(502).json({
                 error: 'upstream_failed',
                 message: MSG.upstream_failed,
             });
         } else {
             res.end();
-        }
-    } finally {
-        if (releaseConcurrency) {
-            await releaseConcurrency();
-        }
-        if (reserved) {
-            const tokenDelta = actualTokens - reservedTokenAmount;
-            try {
-                await reconcileDailyUsage(session.sub, { tokenDelta });
-            } catch (error) {
-                console.error('[ai/chat] reconcile failed:', error?.message || error);
-            }
         }
     }
 }

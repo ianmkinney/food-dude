@@ -132,5 +132,6 @@ export async function fetchOwnerUsage(): Promise<OwnerUsage | null> {
     }
     if (!response.ok) return null;
     const body = await response.json();
-    return body.usage as OwnerUsage;
+    const usage = body.usage as OwnerUsage | undefined;
+    return usage?.requestLimit != null ? usage : null;
 }
