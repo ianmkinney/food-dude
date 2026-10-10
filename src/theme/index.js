@@ -381,6 +381,8 @@ export const getTheme = (isDark, platform, accentId = 'galley') => ({
   brand,
   primary: isDark ? colors.primary : colors.primaryLight,
   secondary: isDark ? colors.primary : colors.primaryLight,
+  // Text links: 4.5:1 or better on the background in both schemes.
+  link: isDark ? colors.primary[400] : colors.primaryLight[700],
   // Legacy "AI purple" call sites resolve to the single orange accent.
   accent: { ...colors.accent, purple: (isDark ? colors.primary : colors.primaryLight)[500] },
   gray: colors.gray,

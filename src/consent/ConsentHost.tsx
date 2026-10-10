@@ -56,7 +56,7 @@ export function ConsentHost() {
                             ? `To answer, AmpliFood sends ${info.sends} through AmpliFood's server to OpenRouter, which routes the request to an underlying model provider (for example Google, Anthropic, or OpenAI, depending on the model). Prompts are not stored on the server; only usage counters are kept.`
                             : `To answer, AmpliFood sends ${info.sends} to ${info.name}, using your own API key. ${info.name} handles it under its own privacy policy. Nothing is sent to AmpliFood.`}
                     </Text>
-                    <Text style={[styles.link, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(info.policy)}>
+                    <Text style={[styles.link, { color: theme.link }]} accessibilityRole="link" onPress={() => Linking.openURL(info.policy)}>
                         {isPlatform ? 'OpenRouter privacy policy' : `${info.name} privacy policy`}
                     </Text>
                     <Text style={[styles.small, { color: c.text.tertiary }]}>You can turn this off any time in Account → AI & privacy.</Text>
@@ -102,11 +102,11 @@ export function LegalGate({ children }: { children: React.ReactNode }) {
                 <ThemedSwitch value={agreed} onValueChange={setAgreed} accessibilityLabel="I agree to the Terms of Use and Privacy Policy" />
                 <Text style={[styles.body, { color: c.text.primary, flex: 1 }]}>
                     I agree to the{' '}
-                    <Text style={[styles.inlineLink, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(TERMS_URL)}>
+                    <Text style={[styles.inlineLink, { color: theme.link }]} accessibilityRole="link" onPress={() => Linking.openURL(TERMS_URL)}>
                         Terms of Use
                     </Text>{' '}
                     and{' '}
-                    <Text style={[styles.inlineLink, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(PRIVACY_URL)}>
+                    <Text style={[styles.inlineLink, { color: theme.link }]} accessibilityRole="link" onPress={() => Linking.openURL(PRIVACY_URL)}>
                         Privacy Policy
                     </Text>
                     .

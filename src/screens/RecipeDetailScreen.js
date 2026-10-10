@@ -563,7 +563,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                                 <View style={styles.sourceRow}>
                                     <SourceLabel source={{ kind: 'site', site: recipe.source_platform || recipe.source_url }} />
                                     <Text
-                                        style={[styles.sourceLink, { color: theme.primary[700] }]}
+                                        style={[styles.sourceLink, { color: theme.link }]}
                                         accessibilityRole="link"
                                         onPress={() => Linking.openURL(recipe.source_url)}
                                     >

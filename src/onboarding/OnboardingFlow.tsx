@@ -230,7 +230,7 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
     );
 
     const link = (label: string, url: string) => (
-        <Text style={[styles.link, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(url)}>
+        <Text style={[styles.link, { color: theme.link }]} accessibilityRole="link" onPress={() => Linking.openURL(url)}>
             {label}
         </Text>
     );

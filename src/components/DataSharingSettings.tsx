@@ -81,10 +81,10 @@ export default function DataSharingSettings({ theme }: { theme: Theme }) {
                 <Text style={[styles.revokeText, { color: c.text.primary }]}>Replay tour</Text>
             </Pressable>
             <View style={styles.links}>
-                <Text style={[styles.link, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(TERMS_URL)}>
+                <Text style={[styles.link, { color: theme.link }]} accessibilityRole="link" onPress={() => Linking.openURL(TERMS_URL)}>
                     Terms of Use
                 </Text>
-                <Text style={[styles.link, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(PRIVACY_URL)}>
+                <Text style={[styles.link, { color: theme.link }]} accessibilityRole="link" onPress={() => Linking.openURL(PRIVACY_URL)}>
                     Privacy Policy
                 </Text>
             </View>
