@@ -17,23 +17,17 @@ const modules = [
     'auth/google.js',
     'auth/session.js',
     'ai/chat.js',
-<<<<<<< HEAD
     'lib/ssrf.js',
     'lib/recipeExtract.js',
+    'lib/instagramImport.js',
     'recipes/import.js',
-=======
     'party/email.js',
->>>>>>> 8c14e86 (Add email-based party sync via Resend and signed link payloads)
 ];
 
 for (const rel of modules) {
     const url = pathToFileURL(join(apiRoot, rel)).href;
     const mod = await import(url);
-<<<<<<< HEAD
-    if (rel.startsWith('auth/') || rel.startsWith('ai/') || rel.startsWith('recipes/')) {
-=======
-    if (rel.startsWith('auth/') || rel.startsWith('ai/') || rel.startsWith('party/')) {
->>>>>>> 8c14e86 (Add email-based party sync via Resend and signed link payloads)
+    if (rel.startsWith('auth/') || rel.startsWith('ai/') || rel.startsWith('recipes/') || rel.startsWith('party/')) {
         if (typeof mod.default !== 'function') {
             throw new Error(`${rel}: missing default export handler`);
         }

@@ -4,6 +4,7 @@ import { bearerToken, verifySession } from '../lib/session.js';
 import { checkMinuteRateLimit } from '../lib/store.js';
 import { assertHttpOrHttpsUrl, safeFetchHtml } from '../lib/ssrf.js';
 import { extractRecipeFromHtml, hasRecipeShape } from '../lib/recipeExtract.js';
+import { importInstagramPost, isInstagramPostUrl } from '../lib/instagramImport.js';
 
 const MSG = {
     method_not_allowed: 'Method not allowed.',
@@ -15,6 +16,10 @@ const MSG = {
     bad_request: 'Invalid request.',
     site_blocked: "That site couldn't be reached from AmpliFood's server (blocked or unavailable). Paste the recipe text or upload a screenshot instead.",
     no_recipe_found: "No recipe was found on that page. Paste the recipe text or upload a screenshot instead.",
+    instagram_login_wall:
+        "Instagram didn't share the caption (login required). Paste the caption text below or upload a screenshot of the post.",
+    instagram_no_caption:
+        "Couldn't read an Instagram caption from that link. Paste the caption or upload a screenshot of the post.",
 };
 
 function reject(res, status, error, extra = {}) {
@@ -87,6 +92,32 @@ export default async function handler(req, res) {
     if (!checkMinuteRateLimit(`import:${session.sub}`)) {
         reject(res, 429, 'rate_limited');
         return;
+    }
+
+    if (isInstagramPostUrl(url)) {
+        try {
+            const ig = await importInstagramPost(url);
+            res.status(200).json({
+                text: ig.text,
+                image: ig.image,
+                sourceUrl: ig.sourceUrl,
+                sourcePlatform: 'instagram',
+                author: ig.author,
+            });
+            return;
+        } catch (error) {
+            const code = error?.message || 'instagram_no_caption';
+            if (code === 'instagram_login_wall') {
+                reject(res, 422, 'instagram_login_wall');
+                return;
+            }
+            if (code === 'invalid_instagram_url') {
+                reject(res, 400, 'bad_request');
+                return;
+            }
+            reject(res, 404, 'instagram_no_caption');
+            return;
+        }
     }
 
     let fetched;

@@ -135,7 +135,7 @@ function extractJsonLdRecipe(html) {
     return null;
 }
 
-function metaContent(html, property) {
+export function metaContent(html, property) {
     const re = new RegExp(
         `<meta[^>]+(?:property|name)=["']${property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]+content=["']([^"']+)["']`,
         'i',

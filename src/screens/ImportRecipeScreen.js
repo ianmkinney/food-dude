@@ -20,6 +20,7 @@ import { parseRecipe, parseRecipeFromUrl, parseRecipeFromImages } from '../servi
 import { friendlyMediaErrorMessage } from '../services/mediaTypes';
 import { recipeOperations } from '../database/operations';
 import FunLoader from '../components/FunLoader';
+import { instagramImportFallbackHint, isInstagramPostUrl } from '../services/recipeUrlImport';
 
 const ImportRecipeScreen = () => {
     const navigation = useNavigation();
@@ -38,6 +39,10 @@ const ImportRecipeScreen = () => {
         if (route.params?.sharedContent) {
             const content = route.params.sharedContent;
             setInput(content);
+        } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const shared = (params.get('url') || params.get('text') || params.get('title') || '').trim();
+            if (shared) setInput(shared);
         }
         if (route.params?.sharedFiles) {
             const files = route.params.sharedFiles;
@@ -77,10 +82,10 @@ const ImportRecipeScreen = () => {
                 const isUrl = /^(http|https):\/\/[^ "]+$/.test(input.trim());
 
                 if (isUrl) {
-                    if (input.includes('instagram.com') || input.includes('tiktok.com')) {
+                    if (input.includes('tiktok.com')) {
                         Alert.alert(
-                            'Social Media Link Detected',
-                            'Instagram/TikTok links are hard to read. For best results, take a SCREENSHOT and share it to AmpliFood, or paste the caption text.',
+                            'TikTok link detected',
+                            'TikTok links are hard to read. For best results, take a screenshot and share it to AmpliFood, or paste the caption text.',
                             [
                                 {
                                     text: 'Try URL Anyway', onPress: async () => {
@@ -99,7 +104,9 @@ const ImportRecipeScreen = () => {
                         );
                         return;
                     }
-                    setImportStatus('Extracting recipe from URL...');
+                    setImportStatus(
+                        isInstagramPostUrl(input.trim()) ? 'Reading Instagram caption…' : 'Extracting recipe from URL...'
+                    );
                     result = await parseRecipeFromUrl(input.trim());
                 } else {
                     setImportStatus('Parsing recipe text with AI...');
@@ -114,9 +121,12 @@ const ImportRecipeScreen = () => {
                 console.error('[Import Recipe] Import failed:', result.error);
                 const friendly = friendlyMediaErrorMessage(result.error) || result.error || 'Failed to parse recipe';
                 const isUrlImport = !images.length && /^(http|https):\/\//i.test(input.trim());
+                const isIg = isUrlImport && isInstagramPostUrl(input.trim());
                 const hint =
-                    Platform.OS === 'web' && isUrlImport
-                        ? ' Try pasting the recipe text below, or use Import with a screenshot or PDF.'
+                    isUrlImport && (Platform.OS === 'web' || isIg)
+                        ? isIg
+                            ? instagramImportFallbackHint()
+                            : ' Try pasting the recipe text below, or use Import with a screenshot or PDF.'
                         : '';
                 setError(`${friendly}${hint}`);
             }
