@@ -30,7 +30,8 @@ for (const rel of modules) {
     console.log('ok', rel);
 }
 
-// Exercise in-memory usage store (no KV env).
+// Exercise in-memory usage store (no KV env; dev-only fallback).
+process.env.NODE_ENV = 'development';
 process.env.ALLOWED_EMAILS = 'test@example.com';
 const { getUsage, recordUsage } = await import(pathToFileURL(join(apiRoot, 'lib/store.js')).href);
 const usage = await recordUsage('verify-user', { requestDelta: 1, tokenDelta: 10 });

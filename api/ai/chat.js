@@ -8,23 +8,77 @@ import {
     requireSecrets,
 } from '../lib/env.js';
 import { bearerToken, verifySession } from '../lib/session.js';
-import { getUsage, recordUsage } from '../lib/store.js';
+import {
+    acquireConcurrency,
+    checkMinuteRateLimit,
+    reconcileDailyUsage,
+    reserveDailyUsage,
+    StoreMisconfiguredError,
+} from '../lib/store.js';
 
 const FRIENDLY_LIMIT =
     "You've hit today's owner AI safety limit. Try again tomorrow, or use your own API key in Account.";
+
+const MSG = {
+    method_not_allowed: 'Method not allowed.',
+    platform_disabled: 'Owner platform AI is not enabled.',
+    misconfigured: 'Server configuration error.',
+    unauthorized: 'Sign in again in Account.',
+    not_allowed: 'This Google account is not authorized.',
+    rate_limited: FRIENDLY_LIMIT,
+    bad_request: 'Invalid request.',
+    upstream_failed: 'AI request failed. Try again later.',
+    concurrency_limited: 'Too many AI requests in progress. Wait a moment and try again.',
+};
+
+const IMAGE_MIME = /^image\/(png|jpeg|webp|gif)$/;
+const MAX_IMAGES = 4;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+
+function base64ByteLength(b64) {
+    const padding = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+    return Math.floor((b64.length * 3) / 4) - padding;
+}
+
+function validateImages(images) {
+    if (!Array.isArray(images)) return [];
+    if (images.length > MAX_IMAGES) {
+        throw new Error('Too many images');
+    }
+    const out = [];
+    for (const img of images) {
+        if (!img || typeof img !== 'object') continue;
+        const mimeType = img.mimeType;
+        const data = img.data;
+        if (!mimeType || !data) continue;
+        if (!IMAGE_MIME.test(String(mimeType))) {
+            throw new Error('Unsupported image type');
+        }
+        const b64 = String(data).replace(/\s/g, '');
+        if (!BASE64_RE.test(b64) || b64.length % 4 !== 0) {
+            throw new Error('Invalid image data');
+        }
+        const bytes = base64ByteLength(b64);
+        if (bytes > MAX_IMAGE_BYTES) {
+            throw new Error('Image too large');
+        }
+        out.push({ mimeType: String(mimeType), data: b64 });
+    }
+    return out;
+}
 
 function buildMessages(body) {
     const prompt = body?.prompt;
     if (!prompt || typeof prompt !== 'string') {
         throw new Error('Missing prompt');
     }
-    const images = Array.isArray(body.images) ? body.images : [];
+    const images = validateImages(body?.images);
     if (!images.length) {
         return [{ role: 'user', content: prompt }];
     }
     const parts = [{ type: 'text', text: prompt }];
     for (const img of images) {
-        if (!img?.data || !img?.mimeType) continue;
         const url = `data:${img.mimeType};base64,${img.data}`;
         parts.push({ type: 'image_url', image_url: { url } });
     }
@@ -51,7 +105,6 @@ function upstreamMessage(status, text) {
     return (text || '').replace(/\s+/g, ' ').trim().slice(0, 300) || `HTTP ${status}`;
 }
 
-// OpenRouter retires model IDs; a stale one fails every request with a 400/404.
 const isModelRejected = (error) =>
     error instanceof UpstreamError &&
     (error.status === 400 || error.status === 404) &&
@@ -100,36 +153,34 @@ async function openRouterWithFallback({ models, messages, maxTokens }) {
     throw lastError;
 }
 
-function reject(res, status, body) {
-    console.warn(`[ai/chat] ${status} ${body.error}${body.message ? `: ${body.message}` : ''}`);
-    res.status(status).json(body);
+function reject(res, status, error, extra = {}) {
+    console.warn(`[ai/chat] ${status} ${error}`);
+    res.status(status).json({ error, message: MSG[error] || 'Request failed.', ...extra });
 }
 
 export default async function handler(req, res) {
     if (applyCors(req, res)) return;
     if (req.method !== 'POST') {
-        reject(res, 405, { error: 'method_not_allowed' });
+        reject(res, 405, 'method_not_allowed');
         return;
     }
 
     if (!isOwnerGateConfigured()) {
-        reject(res, 503, {
-            error: 'platform_disabled',
-            message: 'Owner platform AI is not enabled (ALLOWED_EMAILS is required).',
-        });
+        reject(res, 503, 'platform_disabled');
         return;
     }
 
     try {
         requireSecrets();
     } catch (error) {
-        reject(res, 503, { error: 'misconfigured', message: error.message });
+        console.error('[ai/chat] secrets:', error?.message || error);
+        reject(res, 503, 'misconfigured');
         return;
     }
 
     const token = bearerToken(req);
     if (!token) {
-        reject(res, 401, { error: 'unauthorized', message: 'No owner session was sent. Sign in again in Account.' });
+        reject(res, 401, 'unauthorized');
         return;
     }
 
@@ -137,22 +188,16 @@ export default async function handler(req, res) {
     try {
         session = await verifySession(token);
     } catch {
-        reject(res, 401, { error: 'unauthorized', message: 'Owner session expired or invalid. Sign in again in Account.' });
+        reject(res, 401, 'unauthorized');
         return;
     }
 
     if (!isEmailAllowed(session.email)) {
-        reject(res, 403, { error: 'not_allowed', message: 'This Google account is not on the owner allowlist.' });
+        reject(res, 403, 'not_allowed');
         return;
     }
 
     const limits = getDailyLimits();
-    const usage = await getUsage(session.sub);
-    if (usage.requests >= limits.maxRequests || usage.tokens >= limits.maxTokens) {
-        reject(res, 429, { error: 'rate_limited', message: FRIENDLY_LIMIT });
-        return;
-    }
-
     const { defaultModel, allowedModels, fallbackModels } = getOpenRouterConfig();
     const requested = req.body?.model;
     const primary =
@@ -164,23 +209,50 @@ export default async function handler(req, res) {
         : Math.min(8192, Math.max(256, Number(process.env.OPENROUTER_MAX_OUTPUT_TOKENS || 4096)));
 
     let messages;
+    let validatedImageCount = 0;
     try {
         messages = buildMessages(isTest ? { prompt: 'Reply with the single word: OK' } : req.body);
+        validatedImageCount = isTest ? 0 : validateImages(req.body?.images).length;
     } catch (error) {
-        reject(res, 400, { error: 'bad_request', message: error.message });
+        console.warn('[ai/chat] bad request:', error?.message || error);
+        reject(res, 400, 'bad_request');
         return;
     }
 
     const promptEstimate = estimateTokens(isTest ? 'OK' : req.body?.prompt || '');
-    if (usage.tokens + promptEstimate > limits.maxTokens) {
-        reject(res, 429, { error: 'rate_limited', message: FRIENDLY_LIMIT });
-        return;
-    }
+    const reservedTokens = promptEstimate + maxTokens + 1000 * validatedImageCount;
 
-    const streamRequested = !isTest && req.body?.stream !== false;
-    const startedAt = Date.now();
+    let releaseConcurrency = null;
+    let reserved = false;
+    let reservedTokenAmount = 0;
+    let actualTokens = promptEstimate;
 
     try {
+        if (!(await checkMinuteRateLimit(session.sub))) {
+            reject(res, 429, 'rate_limited');
+            return;
+        }
+
+        releaseConcurrency = await acquireConcurrency(session.sub);
+        if (!releaseConcurrency) {
+            reject(res, 429, 'concurrency_limited');
+            return;
+        }
+
+        const reservation = await reserveDailyUsage(session.sub, {
+            tokenReserve: reservedTokens,
+            limits,
+        });
+        if (!reservation.ok) {
+            reject(res, 429, 'rate_limited');
+            return;
+        }
+        reserved = true;
+        reservedTokenAmount = reservation.reservedTokens;
+
+        const streamRequested = !isTest && req.body?.stream !== false;
+        const startedAt = Date.now();
+
         const { upstream, model } = await openRouterWithFallback({ models, messages, maxTokens });
 
         if (!streamRequested) {
@@ -208,8 +280,7 @@ export default async function handler(req, res) {
                     }
                 }
             }
-            const outEstimate = estimateTokens(full);
-            await recordUsage(session.sub, { requestDelta: 1, tokenDelta: promptEstimate + outEstimate });
+            actualTokens = promptEstimate + estimateTokens(full);
             res.status(200).json({
                 text: full,
                 model,
@@ -251,23 +322,39 @@ export default async function handler(req, res) {
             }
         }
         res.end();
-        const outEstimate = estimateTokens(outText);
-        await recordUsage(session.sub, { requestDelta: 1, tokenDelta: promptEstimate + outEstimate });
+        actualTokens = promptEstimate + estimateTokens(outText);
     } catch (error) {
+        if (error instanceof StoreMisconfiguredError) {
+            console.error('[ai/chat] store:', error.message);
+            if (!res.headersSent) {
+                reject(res, 503, 'misconfigured');
+            }
+            return;
+        }
         const upstreamStatus = error instanceof UpstreamError ? error.status : null;
         const reason = error?.message || 'Unknown error';
-        console.error(`[ai/chat] upstream failed: status=${upstreamStatus} model=${error?.model || primary} ${reason}`);
+        console.error(
+            `[ai/chat] upstream failed: status=${upstreamStatus} model=${error?.model || primary} ${reason}`,
+        );
         if (!res.headersSent) {
             res.status(502).json({
                 error: 'upstream_failed',
-                upstreamStatus,
-                model: error?.model || primary,
-                message: upstreamStatus
-                    ? `OpenRouter ${upstreamStatus}: ${reason}`
-                    : reason,
+                message: MSG.upstream_failed,
             });
         } else {
             res.end();
         }
+    } finally {
+        if (releaseConcurrency) {
+            await releaseConcurrency();
+        }
+        if (reserved) {
+            const tokenDelta = actualTokens - reservedTokenAmount;
+            try {
+                await reconcileDailyUsage(session.sub, { tokenDelta });
+            } catch (error) {
+                console.error('[ai/chat] reconcile failed:', error?.message || error);
+            }
+        }
     }
-};
+}

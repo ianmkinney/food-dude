@@ -2,7 +2,7 @@ import { SignJWT, jwtVerify } from 'jose';
 
 // Owner-only and re-checked against ALLOWED_EMAILS on every request; the app has
 // no silent refresh, so a short TTL meant re-signing in every couple of hours.
-const SESSION_TTL = '7d';
+const SESSION_TTL = '24h';
 
 function getSecretKey() {
     const secret = process.env.SESSION_SECRET;

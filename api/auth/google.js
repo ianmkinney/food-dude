@@ -2,42 +2,56 @@ import { applyCors } from '../lib/cors.js';
 import { isOwnerGateConfigured, isEmailAllowed, requireSecrets } from '../lib/env.js';
 import { verifyGoogleIdToken } from '../lib/google.js';
 import { signSession } from '../lib/session.js';
+import { StoreMisconfiguredError } from '../lib/store.js';
+
+const MSG = {
+    method_not_allowed: 'Method not allowed.',
+    platform_disabled: 'Owner platform AI is not enabled.',
+    misconfigured: 'Server configuration error.',
+    bad_request: 'Invalid sign-in request.',
+    not_allowed: 'This Google account is not authorized.',
+    auth_failed: 'Google sign-in failed.',
+};
+
+function jsonError(res, status, error) {
+    res.status(status).json({ error, message: MSG[error] || 'Request failed.' });
+}
 
 export default async function handler(req, res) {
     if (applyCors(req, res)) return;
     if (req.method !== 'POST') {
-        res.status(405).json({ error: 'method_not_allowed' });
+        jsonError(res, 405, 'method_not_allowed');
         return;
     }
 
     if (!isOwnerGateConfigured()) {
-        res.status(503).json({
-            error: 'platform_disabled',
-            message: 'Owner platform AI is not enabled (set ALLOWED_EMAILS on the server).',
-        });
+        jsonError(res, 503, 'platform_disabled');
         return;
     }
 
     try {
         requireSecrets();
     } catch (error) {
-        res.status(503).json({ error: 'misconfigured', message: error.message });
+        console.error('[auth/google] secrets:', error?.message || error);
+        jsonError(res, 503, 'misconfigured');
         return;
     }
 
     const idToken = req.body?.idToken;
+    const nonce = req.body?.nonce;
     if (!idToken || typeof idToken !== 'string') {
-        res.status(400).json({ error: 'bad_request', message: 'Missing idToken' });
+        jsonError(res, 400, 'bad_request');
+        return;
+    }
+    if (!nonce || typeof nonce !== 'string') {
+        jsonError(res, 400, 'bad_request');
         return;
     }
 
     try {
-        const profile = await verifyGoogleIdToken(idToken);
+        const profile = await verifyGoogleIdToken(idToken, nonce);
         if (!isEmailAllowed(profile.email)) {
-            res.status(403).json({
-                error: 'not_allowed',
-                message: 'This Google account is not on the owner allowlist.',
-            });
+            jsonError(res, 403, 'not_allowed');
             return;
         }
         const token = await signSession(profile);
@@ -47,9 +61,12 @@ export default async function handler(req, res) {
             name: profile.name,
         });
     } catch (error) {
-        res.status(401).json({
-            error: 'auth_failed',
-            message: error?.message || 'Google sign-in failed',
-        });
+        if (error instanceof StoreMisconfiguredError) {
+            console.error('[auth/google] store:', error.message);
+            jsonError(res, 503, 'misconfigured');
+            return;
+        }
+        console.error('[auth/google] verify failed:', error?.message || error);
+        jsonError(res, 401, 'auth_failed');
     }
 }
