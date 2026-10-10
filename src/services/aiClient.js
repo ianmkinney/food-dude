@@ -310,7 +310,10 @@ async function currentHealthContext() {
 async function prepareRequest(prompt) {
     const creds = await requireAiConfigured();
     if (creds.route === 'platform') {
-        return { creds, prompt };
+        await ensureConsent('platform');
+        const { allergies, diet } = await currentHealthContext();
+        const dietLine = diet ? `\nThe user's diet needs: ${diet}. Follow them.` : '';
+        return { creds, prompt: `${safetyPreamble(allergies)}${dietLine}\n\n${prompt}` };
     }
     await ensureConsent(creds.provider);
     const { allergies, diet } = await currentHealthContext();

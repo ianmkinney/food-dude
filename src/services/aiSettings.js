@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { hasPlatformAiAccess } from '../monetization/entitlements';
+import { hasOwnerSession } from '../platform/ownerSession';
 
 let SecureStore = null;
 try {
@@ -265,20 +265,20 @@ export async function getActiveCredentials() {
 
 export async function isAiConfigured() {
     const { apiKey } = await getActiveCredentials();
-    return Boolean(apiKey) || (await hasPlatformAiAccess());
+    return Boolean(apiKey) || (await hasOwnerSession());
 }
 
 /**
- * Resolves who serves an AI request. Your own key always wins and never touches
- * credits; without one, Plus or credit-pack holders go to AmpliFood's platform
- * AI (`route: 'platform'`), and everyone else is asked to add a key.
+ * Resolves who serves an AI request. Your own API key always wins. Only the
+ * signed-in owner (Account → Owner sign-in) uses the AmpliFood OpenRouter proxy;
+ * everyone else must add a key. Regular users are never prompted to sign in.
  */
 export async function requireAiConfigured() {
     const creds = await getActiveCredentials();
     if (creds.apiKey) {
         return { ...creds, route: 'byok' };
     }
-    if (await hasPlatformAiAccess()) {
+    if (await hasOwnerSession()) {
         return { ...creds, route: 'platform' };
     }
     throw new Error(MISSING_KEY_MESSAGE);

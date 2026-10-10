@@ -15,6 +15,7 @@ import { userOperations, partyStatsOperations, recipeCookingHistoryOperations } 
 import AiProviderSettings from '../components/AiProviderSettings';
 import VoicePreferences from '../components/VoicePreferences';
 import DataSharingSettings from '../components/DataSharingSettings';
+import OwnerSignInSettings from '../components/OwnerSignInSettings';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { BrandMark } from '../components/Brand';
@@ -316,10 +317,14 @@ const AccountScreen = ({ navigation }) => {
                     {USER_SAFETY_SUMMARY}
                 </Text>
                 <Text style={[styles.safetyBody, { color: theme.colors.text.secondary }]}>
-                    Keys never go to AmpliFood servers (there are none for keys). Profile and flavor
-                    preferences stay in the on-device SQLite database. AI calls go only to the
-                    provider you pick in Account.
+                    Your API keys never go to AmpliFood. Profile and flavor preferences stay in the
+                    on-device database. AI calls go to the provider you pick in Account, unless you
+                    use owner sign-in below (owner only).
                 </Text>
+            </ElevatedCard>
+
+            <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
+                <OwnerSignInSettings theme={theme} />
             </ElevatedCard>
 
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
