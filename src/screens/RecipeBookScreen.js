@@ -16,7 +16,11 @@ import { recipeOperations } from '../database/operations';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
-import { BrandMark, CheckerStrip } from '../components/Brand';
+import EmptyState from '../components/EmptyState';
+import { navigateShared } from '../motion/sharedElement';
+import { AddRecipeScreen, RecipeDetailScreen } from '../navigation/lazyRoutes';
+import { ScreenSkeleton } from '../navigation/lazyScreen';
+import { ASSISTANT_NAME } from '../config/assistant';
 
 const RecipeBookScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -24,6 +28,7 @@ const RecipeBookScreen = ({ navigation }) => {
     const [recipes, setRecipes] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
+    const [firstLoad, setFirstLoad] = useState(true);
     const [filter, setFilter] = useState('all'); // 'all', 'cooked', 'uncooked'
 
     // Header customization removed as per user request
@@ -49,6 +54,7 @@ const RecipeBookScreen = ({ navigation }) => {
             Alert.alert('Error', 'Failed to load recipes');
         } finally {
             setLoading(false);
+            setFirstLoad(false);
         }
     };
 
@@ -73,7 +79,7 @@ const RecipeBookScreen = ({ navigation }) => {
         }
     };
 
-    const isEmptyLibrary = !loading && recipes.length === 0 && searchQuery.trim() === '' && filter === 'all';
+    const isEmptyLibrary = !firstLoad && recipes.length === 0 && searchQuery.trim() === '' && filter === 'all';
 
     const addSampleRecipes = async () => {
         try {
@@ -116,15 +122,20 @@ const RecipeBookScreen = ({ navigation }) => {
                 styles.recipeCard,
                 (item.is_cooked === 1 || item.is_cooked === true) && { opacity: 0.72 },
             ]}
-            onPress={() => {
-                navigation.navigate('RecipeDetail', { recipeId: item.id });
-            }}
+            onPressIn={RecipeDetailScreen.preload}
+            onPress={() =>
+                navigateShared(
+                    () => navigation.navigate('RecipeDetail', { recipeId: item.id }),
+                    `recipe-thumb-${item.id}`,
+                    `recipe-hero-${item.id}`
+                )
+            }
         >
             <View style={styles.recipeCardContent}>
                 {item.image_uri ? (
-                    <Image source={{ uri: item.image_uri }} style={styles.recipeImage} />
+                    <Image nativeID={`recipe-thumb-${item.id}`} source={{ uri: item.image_uri }} style={styles.recipeImage} />
                 ) : (
-                    <View style={[styles.placeholderImage, { backgroundColor: theme.primary[100] }]}>
+                    <View nativeID={`recipe-thumb-${item.id}`} style={[styles.placeholderImage, { backgroundColor: theme.primary[100] }]}>
                         <Ionicons name="restaurant" size={32} color={theme.primary[500]} />
                     </View>
                 )}
@@ -166,30 +177,12 @@ const RecipeBookScreen = ({ navigation }) => {
     ), [navigation, theme]);
 
     const renderEmptyState = () => (
-        <View style={styles.emptyState}>
-            <BrandMark size={128} />
-            <CheckerStrip squares={8} size={6} style={styles.emptyChecker} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fonts.display }]}>
-                No Recipes Yet
-            </Text>
-            <Text style={[styles.emptyDescription, { color: theme.colors.text.secondary }]}>
-                Start with a sample recipe or ask AI Chef for ideas.
-            </Text>
-            <AnimatedPressable
-                style={[styles.quickStart, { backgroundColor: theme.primary[500] }]}
-                onPress={() => navigation.navigate('AI Chef')}
-                accessibilityRole="button"
-            >
-                <Text style={styles.quickStartText}>Ask AI Chef for a recipe</Text>
-            </AnimatedPressable>
-            <AnimatedPressable
-                style={[styles.quickStart, styles.quickStartOutline, { borderColor: theme.colors.border }]}
-                onPress={addSampleRecipes}
-                accessibilityRole="button"
-            >
-                <Text style={[styles.quickStartText, { color: theme.colors.text.primary }]}>Add sample recipes</Text>
-            </AnimatedPressable>
-        </View>
+        <EmptyState
+            title="No recipes yet"
+            description={`Ask ${ASSISTANT_NAME} for an idea, import one from a link, or start with a few samples.`}
+            primary={{ label: `Ask ${ASSISTANT_NAME} for a recipe`, onPress: () => navigation.navigate(ASSISTANT_NAME) }}
+            secondary={{ label: 'Add sample recipes', onPress: addSampleRecipes }}
+        />
     );
 
     return (
@@ -214,7 +207,7 @@ const RecipeBookScreen = ({ navigation }) => {
                 <AnimatedPressable
                     style={[
                         styles.filterButton,
-                        filter === 'cooked' && { backgroundColor: theme.colors.success + '20' },
+                        filter === 'cooked' && { backgroundColor: theme.primary[100] },
                         { borderColor: theme.colors.border }
                     ]}
                     onPress={() => setFilter('cooked')}
@@ -222,11 +215,11 @@ const RecipeBookScreen = ({ navigation }) => {
                     <Ionicons 
                         name="checkmark-circle" 
                         size={16} 
-                        color={filter === 'cooked' ? theme.colors.success : theme.colors.text.tertiary} 
+                        color={filter === 'cooked' ? theme.primary[700] : theme.colors.text.tertiary} 
                     />
                     <Text style={[
                         styles.filterButtonText,
-                        { color: filter === 'cooked' ? theme.colors.success : theme.colors.text.secondary }
+                        { color: filter === 'cooked' ? theme.primary[700] : theme.colors.text.secondary }
                     ]}>
                         Cooked
                     </Text>
@@ -234,7 +227,7 @@ const RecipeBookScreen = ({ navigation }) => {
                 <AnimatedPressable
                     style={[
                         styles.filterButton,
-                        filter === 'uncooked' && { backgroundColor: theme.accent.green + '20' },
+                        filter === 'uncooked' && { backgroundColor: theme.primary[100] },
                         { borderColor: theme.colors.border }
                     ]}
                     onPress={() => setFilter('uncooked')}
@@ -242,11 +235,11 @@ const RecipeBookScreen = ({ navigation }) => {
                     <Ionicons 
                         name="ellipse-outline" 
                         size={16} 
-                        color={filter === 'uncooked' ? theme.accent.green : theme.colors.text.tertiary} 
+                        color={filter === 'uncooked' ? theme.primary[700] : theme.colors.text.tertiary} 
                     />
                     <Text style={[
                         styles.filterButtonText,
-                        { color: filter === 'uncooked' ? theme.accent.green : theme.colors.text.secondary }
+                        { color: filter === 'uncooked' ? theme.primary[700] : theme.colors.text.secondary }
                     ]}>
                         Uncooked
                     </Text>
@@ -276,16 +269,16 @@ const RecipeBookScreen = ({ navigation }) => {
                 maxToRenderPerBatch={6}
                 windowSize={7}
                 contentContainerStyle={styles.listContent}
-                ListEmptyComponent={!loading && renderEmptyState()}
-                refreshing={loading}
-                onRefresh={loadRecipes}
+                ListEmptyComponent={firstLoad ? <ScreenSkeleton rows={3} padded={false} /> : renderEmptyState()}
             />
 
             <FloatingActionButton
                 theme={theme}
                 style={styles.fab}
+                nativeID="fab-recipes"
                 accessibilityLabel="Add recipe"
-                onPress={() => navigation.navigate('AddRecipe')}
+                onPressIn={AddRecipeScreen.preload}
+                onPress={() => navigateShared(() => navigation.navigate('AddRecipe'), 'fab-recipes', 'add-sheet')}
             >
                 <Ionicons name="add" size={28} color="#FFFFFF" />
             </FloatingActionButton>
@@ -308,10 +301,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
+        minHeight: 44,
+        borderRadius: 12,
         borderWidth: 1,
-        gap: 6,
+        gap: 8,
     },
     filterButtonText: {
         fontSize: 14,
@@ -322,8 +315,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         margin: 16,
         paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderRadius: 18,
+        minHeight: 48,
+        borderRadius: 12,
         borderWidth: 1,
     },
     searchInput: {
@@ -421,13 +414,12 @@ const styles = StyleSheet.create({
     recipeImage: {
         width: 80,
         height: 80,
-        borderRadius: 14,
-        backgroundColor: '#f0f0f0',
+        borderRadius: 12,
     },
     placeholderImage: {
         width: 80,
         height: 80,
-        borderRadius: 14,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
     },

@@ -2,14 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet, View, Text, ActivityIndicator, Platform, Pressable } from 'react-native';
+import { StyleSheet, View, Text, Platform, Pressable } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts, Fredoka_600SemiBold, Fredoka_700Bold } from '@expo-google-fonts/fredoka';
 import { initDatabase } from './src/database/operations';
 import AppNavigator from './src/navigation/AppNavigator';
 import { getTheme } from './src/theme';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
-import { BrandMark, CheckerStrip } from './src/components/Brand';
+import { BrandMark } from './src/components/Brand';
+import StartupSplash from './src/components/StartupSplash';
 import { AlertHost, installAlertPolyfill } from './src/platform/alert';
 import { ConsentHost } from './src/consent/ConsentHost';
 import OnboardingGate from './src/onboarding/OnboardingGate';
@@ -42,9 +43,9 @@ const linking =
                Planner: 'planner',
                Pantry: 'pantry',
                Grocery: 'grocery',
-               'AI Chef': 'chef',
              },
            },
+           AiChef: 'chef',
            RecipeDetail: { path: 'recipe/:recipeId', parse: { recipeId: Number } },
            AddRecipe: 'add-recipe',
            ImportRecipe: 'import',
@@ -121,49 +122,47 @@ function AppContent() {
     prepare();
   }, []);
 
-  if (error) {
-    return <StartupError message={error} theme={theme} />;
-  }
+  const appReady = isReady && !!(fontsLoaded || fontError);
 
-  if (!isReady || !(fontsLoaded || fontError)) {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <BrandMark size={150} />
-        <CheckerStrip squares={10} size={7} style={styles.loadingChecker} />
-        <ActivityIndicator size="small" color={theme.primary[500]} />
-        <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>
-          Tuning up AmpliFood…
-        </Text>
-        <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-      </View>
+  let content;
+  if (error) {
+    content = <StartupError message={error} theme={theme} />;
+  } else if (!appReady) {
+    content = <View style={[styles.fill, { backgroundColor: theme.colors.background }]} />;
+  } else {
+    content = (
+      <GestureHandlerRootView style={styles.fill}>
+        <ShareIntentProvider>
+          <OnboardingGate navigate={navigateToTab}>
+            <WebShell>
+              <NavigationContainer ref={navigationRef} linking={linking} documentTitle={documentTitle}>
+                <ScreenErrorBoundary
+                  isDark={theme.isDark}
+                  onGoBack={() => {
+                    if (navigationRef.isReady()) {
+                      if (navigationRef.canGoBack()) navigationRef.goBack();
+                      else navigationRef.navigate('Main', { screen: 'Recipes' });
+                    }
+                  }}
+                >
+                  <AppNavigator />
+                </ScreenErrorBoundary>
+                <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+              </NavigationContainer>
+            </WebShell>
+          </OnboardingGate>
+          <ConsentHost />
+          <AlertHost />
+        </ShareIntentProvider>
+      </GestureHandlerRootView>
     );
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ShareIntentProvider>
-        <OnboardingGate navigate={navigateToTab}>
-          <WebShell>
-            <NavigationContainer ref={navigationRef} linking={linking} documentTitle={documentTitle}>
-              <ScreenErrorBoundary
-                isDark={theme.isDark}
-                onGoBack={() => {
-                  if (navigationRef.isReady()) {
-                    if (navigationRef.canGoBack()) navigationRef.goBack();
-                    else navigationRef.navigate('Main', { screen: 'Recipes' });
-                  }
-                }}
-              >
-                <AppNavigator />
-              </ScreenErrorBoundary>
-              <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-            </NavigationContainer>
-          </WebShell>
-        </OnboardingGate>
-        <ConsentHost />
-        <AlertHost />
-      </ShareIntentProvider>
-    </GestureHandlerRootView>
+    <View style={styles.fill}>
+      {content}
+      <StartupSplash ready={appReady || !!error} fontsLoaded={!!fontsLoaded} />
+    </View>
   );
 }
 
@@ -180,20 +179,14 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-  },
-  loadingChecker: {
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: '500',
   },
   errorTitle: {
     marginTop: 20,

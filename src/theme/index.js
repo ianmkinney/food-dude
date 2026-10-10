@@ -82,9 +82,9 @@ export const colors = {
     surface: '#FFFBF4',
     surfaceElevated: '#FFFDF9',
     surfaceMuted: '#F3EADB',
-    surfaceGlass: 'rgba(255, 251, 244, 0.86)',
-    border: '#E9DCC8',
-    borderSoft: 'rgba(42, 20, 36, 0.08)',
+    surfaceGlass: 'rgba(255, 251, 244, 0.88)',
+    border: 'rgba(42, 20, 36, 0.12)',
+    borderSoft: 'rgba(42, 20, 36, 0.07)',
     overlay: 'rgba(42, 20, 36, 0.45)',
     glow: 'rgba(235, 106, 28, 0.35)',
     text: {
@@ -99,13 +99,13 @@ export const colors = {
   },
 
   dark: {
-    background: '#1A1216',
-    surface: '#241A1F',
-    surfaceElevated: '#2E2228',
-    surfaceMuted: '#150E12',
-    surfaceGlass: 'rgba(36, 26, 31, 0.86)',
-    border: '#3F2F37',
-    borderSoft: 'rgba(255, 248, 236, 0.08)',
+    background: '#141012',
+    surface: '#1A1618',
+    surfaceElevated: '#1E1A1C',
+    surfaceMuted: '#0F0C0D',
+    surfaceGlass: 'rgba(30, 26, 28, 0.88)',
+    border: 'rgba(255, 248, 236, 0.12)',
+    borderSoft: 'rgba(255, 248, 236, 0.07)',
     overlay: 'rgba(0, 0, 0, 0.6)',
     glow: 'rgba(235, 106, 28, 0.4)',
     text: {
@@ -122,12 +122,13 @@ export const colors = {
 
 export const typography = {
   fonts: {
+    // UI text. On web 'System' resolves to Inter first (self-hosted in
+    // public/fonts, wired in public/index.html); native uses the platform face.
     regular: 'System',
     medium: 'System',
     semibold: 'System',
     bold: 'System',
-    // Heavy, rounded display face for headers and brand moments; body copy
-    // stays on the system font. Loaded in App.js.
+    // Headings and brand moments only. Loaded in App.js.
     display: 'Fredoka_700Bold',
     displayMedium: 'Fredoka_600SemiBold',
   },
@@ -151,6 +152,7 @@ export const typography = {
   },
 };
 
+// 8pt grid; `xs` is the half step for icon-to-label gaps.
 export const spacing = {
   xs: 4,
   sm: 8,
@@ -159,20 +161,24 @@ export const spacing = {
   xl: 32,
   '2xl': 48,
   '3xl': 64,
-  gutter: 20,
+  gutter: 16,
 };
 
+// Three radii: 12 for controls, 16 for cards, 24 for sheets and hero surfaces.
 export const borderRadius = {
-  sm: 8,
+  sm: 12,
   md: 12,
   lg: 16,
-  xl: 20,
-  '2xl': 28,
-  card: 18,
-  sheet: 28,
+  xl: 24,
+  '2xl': 24,
+  card: 16,
+  sheet: 24,
   pill: 9999,
   full: 9999,
 };
+
+export const hairline = 1;
+export const minTapTarget = 44;
 
 const shadowBase = (color, offsetY, opacity, radius, elevation) => ({
   shadowColor: color,
@@ -212,28 +218,35 @@ export const shadows = {
   },
 };
 
-// Shared motion language — consume with Reanimated, not `motion`
+// Shared motion language. Animate transform and opacity only; everything
+// collapses to an instant change under Reduce Motion (see src/motion).
 export const motion = {
   duration: {
     instant: 80,
     fast: 150,
+    base: 250,
     normal: 250,
     slow: 400,
-    enter: 320,
+    enter: 250,
   },
+  // cubic-bezier(.2,.8,.2,1)
+  easeOut: [0.2, 0.8, 0.2, 1],
+  easeOutCss: 'cubic-bezier(.2,.8,.2,1)',
   scale: {
-    press: 0.97,
+    press: 0.96,
     pressHard: 0.93,
     hover: 1.02,
   },
   tilt: {
     press: 1.2,
   },
-  stagger: 42,
+  rise: 8,
+  stagger: 40,
   spring: {
-    press: { damping: 18, stiffness: 320, mass: 0.35 },
-    enter: { damping: 20, stiffness: 180, mass: 0.6 },
-    soft: { damping: 22, stiffness: 140, mass: 0.7 },
+    default: { stiffness: 400, damping: 30, mass: 1 },
+    press: { stiffness: 400, damping: 30, mass: 0.5 },
+    enter: { stiffness: 400, damping: 30, mass: 1 },
+    soft: { stiffness: 260, damping: 30, mass: 1 },
   },
 };
 
@@ -262,7 +275,6 @@ export const getSurfaceStyle = (theme, variant = 'card') => {
     borderWidth: 1,
     borderColor: theme.colors.borderSoft,
     borderRadius: theme.borderRadius.card,
-    ...theme.shadows.card,
     ...(theme.platform === 'web' ? webGlass : null),
   };
 
@@ -275,7 +287,7 @@ export const getSurfaceStyle = (theme, variant = 'card') => {
       borderWidth: 1,
       borderColor: theme.colors.border,
       borderRadius: theme.borderRadius.card,
-      ...theme.shadows.layered,
+      ...theme.shadows.md,
     };
   }
   if (variant === 'muted') {
@@ -291,7 +303,7 @@ export const getSurfaceStyle = (theme, variant = 'card') => {
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.borderRadius.card,
-    ...theme.shadows.md,
+    ...theme.shadows.sm,
   };
 };
 
@@ -356,6 +368,8 @@ export const getTheme = (isDark, platform, accentId = 'galley') => ({
   shadows,
   animations,
   motion,
+  hairline,
+  minTapTarget,
   isDark,
   platform,
   planetAccents,
@@ -372,6 +386,8 @@ export default {
   shadows,
   animations,
   motion,
+  hairline,
+  minTapTarget,
   planetAccents,
   getAccent,
   glowFor,

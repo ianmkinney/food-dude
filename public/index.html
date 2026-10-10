@@ -11,12 +11,14 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#FBF4E8" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#1A1216" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#141012" media="(prefers-color-scheme: dark)" />
     <meta property="og:title" content="AmpliFood" />
     <meta property="og:description" content="Your AI sous chef for real-life cooking." />
     <meta property="og:image" content="/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preload" href="/fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin />
+    <!--ampli:splash-font-->
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
       /* These styles make the body full-height */
@@ -31,7 +33,7 @@
       }
       @media (prefers-color-scheme: dark) {
         body {
-          background-color: #1A1216;
+          background-color: #141012;
         }
       }
       /* These styles make the root element full-height */
@@ -41,12 +43,216 @@
         flex: 1;
       }
     </style>
+    <style id="ampli-fonts">
+      @font-face {
+        font-family: "Inter";
+        src: url(/fonts/inter-latin-wght.woff2) format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      /* react-native-web expands fontFamily 'System' to a stack that starts
+         with -apple-system. Giving that name an @font-face makes Inter the UI
+         face everywhere 'System' is used, while explicit families (Fredoka
+         headings, monospace) are untouched. Safari keeps its native SF. */
+      @font-face {
+        font-family: "-apple-system";
+        src: url(/fonts/inter-latin-wght.woff2) format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      ::view-transition-group(*),
+      ::view-transition-old(*),
+      ::view-transition-new(*) {
+        animation-duration: 300ms;
+        animation-timing-function: cubic-bezier(.2,.8,.2,1);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        ::view-transition-group(*),
+        ::view-transition-old(*),
+        ::view-transition-new(*) {
+          animation: none !important;
+        }
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+    <style id="ampli-splash-css">
+      #ampli-splash {
+        --ease: cubic-bezier(.2,.8,.2,1);
+        --bg: #FBF4E8;
+        --ink: #2A1424;
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg);
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+      }
+      @media (prefers-color-scheme: dark) {
+        #ampli-splash { --bg: #141012; --ink: #FFF4E3; }
+      }
+      #ampli-splash .as-stage { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+      #ampli-splash svg { width: 136px; height: 150px; overflow: visible; }
+      #ampli-splash .as-word {
+        font: 700 52px/1.1 AmpliSplash, "Fredoka", "Arial Rounded MT Bold", ui-rounded, system-ui, sans-serif;
+        letter-spacing: -0.5px;
+        color: var(--ink);
+        white-space: nowrap;
+      }
+      #ampli-splash .as-word span { display: inline-block; }
+      #ampli-splash .as-f { color: #F48A38; }
+      #ampli-splash .as-o { color: #E2261F; }
+      #ampli-splash .as-d { color: #4F802F; }
+      #ampli-splash .as-hint {
+        position: absolute;
+        bottom: max(24px, env(safe-area-inset-bottom));
+        font: 500 13px/1 system-ui, sans-serif;
+        color: var(--ink);
+        opacity: 0;
+      }
+      #ampli-splash .as-waves { transform-box: fill-box; transform-origin: center; }
+
+      /* First visit this session: draw, pluck, pulse, rise. */
+      #ampli-splash.as-intro .as-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: as-draw 450ms var(--ease) forwards; }
+      #ampli-splash.as-intro .as-fills { opacity: 0; animation: as-fade 220ms 300ms var(--ease) forwards; }
+      #ampli-splash.as-intro .as-strings { transform-box: fill-box; transform-origin: center; animation: as-pluck 320ms 430ms ease-out; }
+      #ampli-splash.as-intro .as-waves { opacity: 0; animation: as-wave 300ms 450ms var(--ease) 2 forwards; }
+      #ampli-splash.as-intro .as-word span { opacity: 0; transform: translateY(14px); animation: as-rise 280ms calc(500ms + var(--i) * 30ms) var(--ease) forwards; }
+      #ampli-splash.as-intro .as-hint { animation: as-hint 300ms 400ms forwards; }
+
+      #ampli-splash.as-out { opacity: 0; transition: opacity var(--out, 300ms) var(--ease); pointer-events: none; }
+      #ampli-splash.as-flying { background: transparent; transition: background-color 200ms var(--ease); }
+      #ampli-splash.as-flying svg { opacity: 0; transform: scale(.6); transition: opacity 200ms var(--ease), transform 200ms var(--ease); }
+
+      @keyframes as-draw { to { stroke-dashoffset: 0; } }
+      @keyframes as-fade { to { opacity: 1; } }
+      @keyframes as-rise { to { opacity: 1; transform: none; } }
+      @keyframes as-hint { to { opacity: .5; } }
+      @keyframes as-pluck {
+        0% { transform: translateX(0); }
+        20% { transform: translateX(-1.6px); }
+        40% { transform: translateX(1.3px); }
+        60% { transform: translateX(-.8px); }
+        80% { transform: translateX(.4px); }
+        100% { transform: translateX(0); }
+      }
+      @keyframes as-wave {
+        0% { opacity: .2; transform: scale(.9); }
+        55% { opacity: 1; transform: scale(1.07); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+    </style>
   </head>
 
   <body>
     <noscript>
       AmpliFood needs JavaScript to run.
     </noscript>
+    <div id="ampli-splash" class="as-intro" aria-hidden="true">
+      <div class="as-stage">
+        <svg viewBox="-8 0 136 150" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <g class="as-waves" stroke="#EB6A1C" stroke-width="5">
+            <path d="M20 70C11 82 11 104 20 116" /><path d="M9 60C-4 80 -4 106 9 126" />
+          </g>
+          <g class="as-waves" stroke="#EB6A1C" stroke-width="5">
+            <path d="M100 70C109 82 109 104 100 116" /><path d="M111 60C124 80 124 106 111 126" />
+          </g>
+          <g transform="rotate(14 60 80)">
+            <g class="as-fills">
+              <path d="M45 67C34 60 34 50 47 54C51 58 50 63 45 67ZM75 67C86 60 86 50 73 54C69 58 70 63 75 67ZM49 134C41 126 48 120 58 128ZM71 134C79 126 72 120 62 128ZM60 12C54 2 60 0 63 6Z" fill="#4F802F" />
+              <path d="M60 64C48 60 34 62 33 76C32 86 39 90 37 98C34 110 40 132 60 134C80 132 86 110 83 98C81 90 88 86 87 76C86 62 72 60 60 64Z" fill="#E2261F" />
+              <path d="M55 70L55 18Q60 9 65 18L65 70Z" fill="#F48A38" />
+              <path d="M57 60L63 56M57 48L63 44M57 36L63 32M57 25L63 22" stroke="#FDC897" stroke-width="2" />
+              <g fill="#E2261F" stroke="#2A1424" stroke-width="1.5">
+                <circle cx="51" cy="22" r="2.8" /><circle cx="51" cy="31" r="2.8" /><circle cx="69" cy="22" r="2.8" /><circle cx="69" cy="31" r="2.8" />
+              </g>
+              <g fill="#FFF8EC" stroke="#2A1424" stroke-width="1.5">
+                <rect x="50" y="84" width="20" height="5" rx="2" /><rect x="50" y="94" width="20" height="5" rx="2" />
+              </g>
+              <rect x="51" y="110" width="18" height="5" rx="1.5" fill="#2A1424" />
+              <circle cx="75" cy="116" r="4" fill="#E2261F" stroke="#2A1424" stroke-width="2" />
+            </g>
+            <g stroke="#2A1424">
+              <path class="as-draw" pathLength="1" stroke-width="2.5" d="M45 67C34 60 34 50 47 54C51 58 50 63 45 67ZM75 67C86 60 86 50 73 54C69 58 70 63 75 67ZM49 134C41 126 48 120 58 128ZM71 134C79 126 72 120 62 128ZM60 12C54 2 60 0 63 6Z" />
+              <path class="as-draw" pathLength="1" stroke-width="3" d="M60 64C48 60 34 62 33 76C32 86 39 90 37 98C34 110 40 132 60 134C80 132 86 110 83 98C81 90 88 86 87 76C86 62 72 60 60 64Z" />
+              <path class="as-draw" pathLength="1" stroke-width="3" d="M55 70L55 18Q60 9 65 18L65 70Z" />
+            </g>
+            <g class="as-strings" stroke="#FFF8EC" stroke-width="1.2">
+              <path d="M57 114L57 18" /><path d="M60 114L60 16" /><path d="M63 114L63 18" />
+            </g>
+          </g>
+        </svg>
+        <div class="as-word"><span style="--i:0">A</span><span style="--i:1">m</span><span style="--i:2">p</span><span style="--i:3">l</span><span style="--i:4">i</span><span class="as-f" style="--i:5">F</span><span class="as-o" style="--i:6">o</span><span class="as-o" style="--i:7">o</span><span class="as-d" style="--i:8">d</span></div>
+      </div>
+      <div class="as-hint">Tap to skip</div>
+    </div>
+    <script>
+      (function () {
+        var el = document.getElementById('ampli-splash');
+        if (!el) return;
+        var KEY = 'amplifood.intro.v1';
+        var INTRO_MS = 1060;
+        var seen = false;
+        try { seen = sessionStorage.getItem(KEY) === '1'; sessionStorage.setItem(KEY, '1'); } catch (e) {}
+        var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var quick = seen || reduce;
+        // Without .as-intro every part sits in its finished pose.
+        if (quick) el.classList.remove('as-intro');
+        var start = Date.now();
+        var appReady = false, done = false;
+
+        function remove() { if (el.parentNode) el.parentNode.removeChild(el); }
+        function fadeOut(ms) {
+          el.style.setProperty('--out', ms + 'ms');
+          el.classList.add('as-out');
+          setTimeout(remove, ms + 50);
+        }
+        function fly() {
+          var word = el.querySelector('.as-word');
+          var target = document.querySelector('#root [role="heading"][aria-label="AmpliFood"]');
+          var from = word.getBoundingClientRect();
+          var to = target ? target.getBoundingClientRect() : null;
+          if (!to || !to.width) {
+            var col = Math.min(window.innerWidth, 480);
+            to = { left: (window.innerWidth - col) / 2 + col / 2 - 63, top: 19, width: 126, height: 26 };
+          }
+          var scale = to.width / from.width;
+          var dx = to.left + to.width / 2 - (from.left + from.width / 2);
+          var dy = to.top + to.height / 2 - (from.top + from.height / 2);
+          el.classList.add('as-flying');
+          word.style.transition = 'transform 240ms cubic-bezier(.2,.8,.2,1), opacity 120ms 160ms linear';
+          word.style.transformOrigin = 'center';
+          word.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(' + scale + ')';
+          word.style.opacity = target ? '0' : '1';
+          setTimeout(function () { fadeOut(target ? 0 : 150); }, 260);
+        }
+        function finish() {
+          if (done || !appReady) return;
+          done = true;
+          if (quick) return fadeOut(reduce ? 150 : 300);
+          var wait = Math.max(0, INTRO_MS - (Date.now() - start));
+          setTimeout(fly, wait);
+        }
+        function skip() {
+          if (quick) return;
+          INTRO_MS = 0;
+          el.classList.remove('as-intro');
+          if (appReady) finish();
+        }
+        el.addEventListener('pointerdown', skip);
+        window.__ampliSplash = {
+          ready: function () { appReady = true; requestAnimationFrame(function () { requestAnimationFrame(finish); }); },
+        };
+        setTimeout(function () { if (!done) { done = true; fadeOut(300); } }, 20000);
+      })();
+    </script>
     <div id="root"></div>
   </body>
 </html>

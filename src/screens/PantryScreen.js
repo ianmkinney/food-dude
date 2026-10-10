@@ -14,6 +14,10 @@ import { pantryOperations } from '../database/operations';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
+import EmptyState from '../components/EmptyState';
+import { ScreenSkeleton } from '../navigation/lazyScreen';
+import { AddPantryItemScreen } from '../navigation/lazyRoutes';
+import { navigateShared } from '../motion/sharedElement';
 
 const PantryScreen = () => {
     const navigation = useNavigation();
@@ -105,7 +109,7 @@ const PantryScreen = () => {
                         <Ionicons name="pencil" size={18} color={theme.primary[500]} />
                     </AnimatedPressable>
                     <AnimatedPressable accessibilityRole="button" accessibilityLabel="Delete item"
-                        style={[styles.actionButton, { backgroundColor: theme.colors.error + '20' }]}
+                        style={[styles.actionButton, { backgroundColor: theme.colors.surfaceMuted }]}
                         onPress={() => handleDelete(item)}
                     >
                         <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
@@ -116,15 +120,11 @@ const PantryScreen = () => {
     );
 
     const renderEmptyState = () => (
-        <View style={styles.emptyState}>
-            <Ionicons name="cube-outline" size={80} color={theme.colors.text.tertiary} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
-                Pantry is Empty
-            </Text>
-            <Text style={[styles.emptyDescription, { color: theme.colors.text.secondary }]}>
-                Add items by scanning barcodes or manually entering them
-            </Text>
-        </View>
+        <EmptyState
+            title="Your pantry is empty"
+            description="Scan a barcode or type what you have, and recipes can start from your shelves."
+            primary={{ label: 'Add a pantry item', onPress: () => navigation.navigate('AddPantryItem') }}
+        />
     );
 
     return (
@@ -134,16 +134,16 @@ const PantryScreen = () => {
                 renderItem={renderPantryItem}
                 keyExtractor={(item) => item.id.toString()}
                 contentContainerStyle={styles.listContent}
-                ListEmptyComponent={!loading && renderEmptyState()}
-                refreshing={loading}
-                onRefresh={loadPantryItems}
+                ListEmptyComponent={loading && !pantryItems.length ? <ScreenSkeleton rows={4} padded={false} /> : renderEmptyState()}
             />
 
             <FloatingActionButton
                 theme={theme}
                 style={styles.fab}
+                nativeID="fab-pantry"
                 accessibilityLabel="Add pantry item"
-                onPress={() => navigation.navigate('AddPantryItem')}
+                onPressIn={AddPantryItemScreen.preload}
+                onPress={() => navigateShared(() => navigation.navigate('AddPantryItem'), 'fab-pantry', 'add-sheet')}
             >
                 <Ionicons name="add" size={28} color="#FFFFFF" />
             </FloatingActionButton>
@@ -208,9 +208,9 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     actionButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 44,
+        height: 44,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
     },

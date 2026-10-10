@@ -2,158 +2,105 @@ import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Easing, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { getSurfaceStyle, getTheme } from '../theme';
+import { getTheme, motion } from '../theme';
 import { useTheme } from '../context/ThemeContext';
-import AnimatedPressable from '../components/AnimatedPressable';
-import { useTourTarget } from '../onboarding/tourTargets';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import AmpliTabBar from './AmpliTabBar';
 
 import RecipeBookScreen from '../screens/RecipeBookScreen';
 import SousScreen from '../sous/SousScreen';
 import { ASSISTANT_NAME } from '../config/assistant';
-import { lazyScreen } from './lazyScreen';
 
-const MealPlannerScreen = lazyScreen(() => import('../screens/MealPlannerScreen'));
-const PantryScreen = lazyScreen(() => import('../screens/PantryScreen'));
-const GroceryListScreen = lazyScreen(() => import('../screens/GroceryListScreen'));
-const AiChefScreen = lazyScreen(() => import('../screens/AiChefScreen'));
-const ImportRecipeScreen = lazyScreen(() => import('../screens/ImportRecipeScreen'));
-const RecipeDetailScreen = lazyScreen(() => import('../screens/RecipeDetailScreen'));
-const AddRecipeScreen = lazyScreen(() => import('../screens/AddRecipeScreen'));
-const AddPantryItemScreen = lazyScreen(() => import('../screens/AddPantryItemScreen'));
-const EditPantryItemScreen = lazyScreen(() => import('../screens/EditPantryItemScreen'));
-const AddGroceryItemScreen = lazyScreen(() => import('../screens/AddGroceryItemScreen'));
-const EstimateCostScreen = lazyScreen(() => import('../screens/EstimateCostScreen'));
-const PartyScreen = lazyScreen(() => import('../screens/PartyScreen'));
-const AccountScreen = lazyScreen(() => import('../screens/AccountScreen'));
-const PaywallScreen = lazyScreen(() => import('../screens/PaywallScreen'));
+import {
+    MealPlannerScreen,
+    PantryScreen,
+    GroceryListScreen,
+    AiChefScreen,
+    ImportRecipeScreen,
+    RecipeDetailScreen,
+    AddRecipeScreen,
+    AddPantryItemScreen,
+    EditPantryItemScreen,
+    AddGroceryItemScreen,
+    EstimateCostScreen,
+    PartyScreen,
+    AccountScreen,
+    PaywallScreen,
+} from './lazyRoutes';
 import HeaderTitle, { HeaderAccountActions, HeaderPartyButton } from '../components/HeaderTitle';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-const hasModifierKey = (e) => !!(e?.metaKey || e?.altKey || e?.ctrlKey || e?.shiftKey);
-
-const TabBarButton = (props) => {
-    const { children, style, onPress, onLongPress, accessibilityState, href, routeName, ...rest } = props;
-    const tourRef = useTourTarget(`tab-${routeName}`);
-    // On web the tab renders as an <a href>; without preventDefault the browser
-    // does a full page load instead of a tab switch. Modified clicks keep the
-    // browser's own open-in-new-tab behaviour.
-    const handlePress = (e) => {
-        if (Platform.OS === 'web' && href) {
-            if (hasModifierKey(e) || (e?.button != null && e.button !== 0)) return;
-            e?.preventDefault?.();
-        }
-        onPress?.(e);
-    };
-    return (
-        <View ref={tourRef} collapsable={false} style={styles.tabButton}>
-        <AnimatedPressable
-            {...rest}
-            href={href}
-            accessibilityState={accessibilityState}
-            onPress={handlePress}
-            onLongPress={onLongPress}
-            tilt
-            style={[style, styles.tabButton]}
-        >
-            {children}
-        </AnimatedPressable>
-        </View>
-    );
+const TAB_ICONS = {
+    [ASSISTANT_NAME]: 'sparkles',
+    Recipes: 'book',
+    Planner: 'calendar',
+    Pantry: 'cube',
+    Grocery: 'cart',
 };
+
+const TAB_PRELOADS = {
+    Planner: MealPlannerScreen.preload,
+    Pantry: PantryScreen.preload,
+    Grocery: GroceryListScreen.preload,
+};
+
+const tabTransition = {
+    animation: 'timing',
+    config: { duration: motion.duration.base, easing: Easing.bezier(...motion.easeOut) },
+};
+
+// Cross-fade with a 12px slide in the direction of travel.
+const tabSceneInterpolator = ({ current }) => ({
+    sceneStyle: {
+        opacity: current.progress.interpolate({ inputRange: [-1, 0, 1], outputRange: [0, 1, 0] }),
+        transform: [
+            {
+                translateX: current.progress.interpolate({ inputRange: [-1, 0, 1], outputRange: [-12, 0, 12] }),
+            },
+        ],
+    },
+});
 
 const TabNavigator = () => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
-    const glass = getSurfaceStyle({ ...theme, platform: Platform.OS }, 'glass');
+    const reduceMotion = useReducedMotion();
 
     return (
         <Tab.Navigator
-            screenOptions={({ route }) => {
-                return {
-                    headerTitle: () => <HeaderTitle />,
-                    headerTitleAlign: 'center',
-                    headerLeft:
-                        route.name !== 'AI Chef'
-                            ? (props) => <HeaderPartyButton {...props} />
-                            : undefined,
-                    headerRight:
-                        route.name === ASSISTANT_NAME
-                            ? (props) => <HeaderAccountActions {...props} />
-                            : undefined,
-                    tabBarButton: (props) => <TabBarButton {...props} routeName={route.name} />,
-                tabBarIcon: ({ focused, color, size }) => {
-                    let iconName;
-
-                    switch (route.name) {
-                        case ASSISTANT_NAME:
-                            iconName = focused ? 'sparkles' : 'sparkles-outline';
-                            break;
-                        case 'Recipes':
-                            iconName = focused ? 'book' : 'book-outline';
-                            break;
-                        case 'Planner':
-                            iconName = focused ? 'calendar' : 'calendar-outline';
-                            break;
-                        case 'Pantry':
-                            iconName = focused ? 'cube' : 'cube-outline';
-                            break;
-                        case 'Grocery':
-                            iconName = focused ? 'cart' : 'cart-outline';
-                            break;
-                        case 'AI Chef':
-                            iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
-                            break;
-                        default:
-                            iconName = 'help-outline';
-                    }
-
-                    return (
-                        <Ionicons
-                            name={iconName}
-                            size={focused ? size + 1 : size}
-                            color={color}
-                        />
-                    );
-                },
-                tabBarActiveTintColor: theme.primary[500],
-                tabBarInactiveTintColor: theme.colors.text.tertiary,
-                tabBarStyle: {
-                    backgroundColor: glass.backgroundColor,
-                    borderTopColor: theme.colors.borderSoft,
-                    borderTopWidth: 1,
-                    // Native keeps room for the home indicator; browsers draw their own chrome.
-                    paddingBottom: Platform.OS === 'web' ? 10 : 30,
-                    paddingTop: 8,
-                    height: Platform.OS === 'web' ? 74 : 94,
-                    ...theme.shadows.tabBar,
-                },
-                tabBarLabelStyle: {
-                    fontSize: 11,
-                    lineHeight: 14,
-                    fontFamily: theme.typography.fonts.displayMedium,
-                },
-                tabBarItemStyle: Platform.OS === 'web' ? { paddingHorizontal: 2 } : undefined,
+            tabBar={(props) => <AmpliTabBar {...props} icons={TAB_ICONS} preloads={TAB_PRELOADS} />}
+            screenOptions={{
+                headerTitle: () => <HeaderTitle />,
+                headerTitleAlign: 'center',
+                headerLeft: (props) => <HeaderPartyButton {...props} />,
                 headerStyle: {
                     backgroundColor: theme.colors.background,
                     borderBottomColor: theme.colors.borderSoft,
-                    ...theme.shadows.sm,
+                    borderBottomWidth: 1,
                 },
-                    headerTintColor: theme.colors.text.primary,
-                    headerTitleStyle: {
-                        fontFamily: theme.typography.fonts.display,
-                        fontSize: 20,
-                    },
-                };
+                headerShadowVisible: false,
+                headerTintColor: theme.colors.text.primary,
+                headerTitleStyle: {
+                    fontFamily: theme.typography.fonts.display,
+                    fontSize: 20,
+                },
+                animation: reduceMotion ? 'none' : 'shift',
+                transitionSpec: tabTransition,
+                sceneStyleInterpolator: tabSceneInterpolator,
             }}
         >
             <Tab.Screen
                 name={ASSISTANT_NAME}
                 component={SousScreen}
-                options={{ title: ASSISTANT_NAME, tabBarLabel: ASSISTANT_NAME }}
+                options={{
+                    title: ASSISTANT_NAME,
+                    tabBarLabel: ASSISTANT_NAME,
+                    headerRight: (props) => <HeaderAccountActions {...props} />,
+                }}
             />
             <Tab.Screen
                 name="Recipes"
@@ -174,11 +121,6 @@ const TabNavigator = () => {
                 name="Grocery"
                 component={GroceryListScreen}
                 options={{ title: 'Grocery List', tabBarLabel: 'Grocery' }}
-            />
-            <Tab.Screen
-                name="AI Chef"
-                component={AiChefScreen}
-                options={{ title: 'AI Chef' }}
             />
         </Tab.Navigator>
     );
@@ -230,6 +172,24 @@ const AppNavigator = () => {
                 name="Main"
                 component={TabNavigator}
                 options={{ headerShown: false }}
+            />
+            <Stack.Screen
+                name="AiChef"
+                component={AiChefScreen}
+                options={({ navigation }) => ({
+                    title: `${ASSISTANT_NAME} · Photos & pantry`,
+                    headerStyle: { backgroundColor: theme.colors.background },
+                    headerTintColor: theme.colors.text.primary,
+                    headerTitleStyle: { fontFamily: theme.typography.fonts.display, fontSize: 20 },
+                    headerLeft: () => (
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
+                            onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main', { screen: ASSISTANT_NAME }))}
+                            style={{ marginLeft: 16, padding: 10 }}
+                        >
+                            <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
+                        </TouchableOpacity>
+                    ),
+                })}
             />
             <Stack.Screen
                 name="ImportRecipe"
@@ -487,13 +447,5 @@ const AppNavigator = () => {
         </Stack.Navigator>
     );
 };
-
-const styles = StyleSheet.create({
-    tabButton: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-});
 
 export default AppNavigator;

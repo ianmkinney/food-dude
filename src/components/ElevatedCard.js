@@ -1,9 +1,12 @@
 import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
-import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
+import Animated, { LinearTransition } from 'react-native-reanimated';
 import { getSurfaceStyle, motion } from '../theme';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { EASE_OUT, riseIn } from '../motion';
 import AnimatedPressable from './AnimatedPressable';
+
+const layoutTransition = LinearTransition.duration(motion.duration.base).easing(EASE_OUT);
 
 const ElevatedCard = ({
     theme,
@@ -13,18 +16,14 @@ const ElevatedCard = ({
     children,
     index,
     disabled,
-    tilt = true,
+    tilt = false,
     entering = true,
+    ...rest
 }) => {
     const reduceMotion = useReducedMotion();
     const surface = getSurfaceStyle({ ...theme, platform: Platform.OS }, variant);
-    const enter =
-        entering && !reduceMotion && typeof index === 'number'
-            ? FadeInDown.duration(motion.duration.enter)
-                  .delay(Math.min(index, 8) * motion.stagger)
-                  .springify()
-            : undefined;
-    const layout = reduceMotion ? undefined : LinearTransition.springify();
+    const enter = entering && typeof index === 'number' ? riseIn(index, reduceMotion) : undefined;
+    const layout = reduceMotion ? undefined : layoutTransition;
 
     if (onPress) {
         return (
@@ -35,6 +34,7 @@ const ElevatedCard = ({
                 disabled={disabled}
                 tilt={tilt}
                 style={[styles.card, surface, style]}
+                {...rest}
             >
                 {children}
             </AnimatedPressable>
@@ -42,7 +42,7 @@ const ElevatedCard = ({
     }
 
     return (
-        <Animated.View entering={enter} layout={layout} style={[styles.card, surface, style]}>
+        <Animated.View entering={enter} layout={layout} style={[styles.card, surface, style]} {...rest}>
             {children}
         </Animated.View>
     );

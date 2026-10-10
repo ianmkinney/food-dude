@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+    AccessibilityInfo,
     View,
     Text,
     StyleSheet,
@@ -12,12 +13,65 @@ import {
     InteractionManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getTheme } from '../theme';
+import { getTheme, motion } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { formatDisplayDate, getStartOfWeek, getWeekDates, addDays, subtractDays } from '../utils/dateHelpers';
 import { mealPlanOperations, recipeOperations, partyMealOperations, partyOperations } from '../database/operations';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import { EASE_OUT, SPRING, useReducedMotion } from '../motion';
+
+/** A planner cell. Settles with a soft scale and an orange flash when something lands in it. */
+function MealSlot({ theme, filled, targetable, dropped, label, onPress }) {
+    const reduce = useReducedMotion();
+    const scale = useSharedValue(1);
+    const flash = useSharedValue(0);
+
+    useEffect(() => {
+        if (!dropped) return;
+        if (reduce) {
+            flash.value = withSequence(withTiming(1, { duration: 0 }), withTiming(0, { duration: motion.duration.slow }));
+            return;
+        }
+        scale.value = withSequence(withTiming(1.12, { duration: motion.duration.fast, easing: EASE_OUT }), withSpring(1, SPRING));
+        flash.value = withSequence(
+            withTiming(1, { duration: motion.duration.fast }),
+            withTiming(0, { duration: 600, easing: EASE_OUT })
+        );
+    }, [dropped, reduce, scale, flash]);
+
+    const scaleStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+    const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
+
+    return (
+        <Animated.View style={scaleStyle}>
+            <AnimatedPressable
+                accessibilityRole="button"
+                accessibilityLabel={label}
+                style={[
+                    styles.mealSlot,
+                    {
+                        backgroundColor: targetable ? theme.primary[50] : theme.colors.surfaceElevated,
+                        borderColor: targetable ? theme.primary[400] : theme.colors.border,
+                        borderStyle: targetable ? 'dashed' : 'solid',
+                    },
+                ]}
+                onPress={onPress}
+            >
+                <Animated.View
+                    pointerEvents="none"
+                    style={[StyleSheet.absoluteFill, styles.slotFlash, { backgroundColor: theme.primary[200] }, flashStyle]}
+                />
+                <Ionicons
+                    name={filled ? 'checkmark-circle' : 'add-circle-outline'}
+                    size={24}
+                    color={filled || targetable ? theme.primary[500] : theme.colors.text.tertiary}
+                />
+            </AnimatedPressable>
+        </Animated.View>
+    );
+}
 
 const MealPlannerScreen = ({ route, navigation }) => {
     const { isDark } = useTheme();
@@ -33,6 +87,13 @@ const MealPlannerScreen = ({ route, navigation }) => {
     const [selectedParty, setSelectedParty] = useState(null);
     const [parties, setParties] = useState([]);
     const [draggableItems, setDraggableItems] = useState([]);
+    const [droppedSlot, setDroppedSlot] = useState(null);
+
+    const markDropped = (date, mealType, title) => {
+        setDroppedSlot(`${date.toISOString().split('T')[0]}-${mealType}`);
+        setTimeout(() => setDroppedSlot(null), 900);
+        AccessibilityInfo.announceForAccessibility(`${title} scheduled for ${mealType}`);
+    };
     const [selectedItem, setSelectedItem] = useState(null);
 
     useEffect(() => {
@@ -157,7 +218,8 @@ const MealPlannerScreen = ({ route, navigation }) => {
             setShowMealModal(false);
             const dates = getWeekDates(currentWeekStart);
             await loadMealPlans(dates[0], dates[6]);
-            Alert.alert('Success', 'Meal added to planner!');
+            const recipe = recipes.find((r) => r.id === recipeId);
+            markDropped(selectedDate, selectedMealType, recipe?.title || 'Meal');
         } catch (error) {
             console.error('Error adding meal:', error);
             Alert.alert('Error', 'Failed to add meal');
@@ -176,7 +238,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
                 });
                 const dates = getWeekDates(currentWeekStart);
                 await loadMealPlans(dates[0], dates[6]);
-                Alert.alert('Success', `${item.title} scheduled!`);
+                markDropped(date, mealType, item.title);
             } else if (item.type === 'party') {
                 // Schedule party - add all recipes from party meals and update party scheduled date
                 const partyMeals = await partyMealOperations.getByPartyId(item.data.id);
@@ -205,7 +267,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
                 
                 const dates = getWeekDates(currentWeekStart);
                 await loadMealPlans(dates[0], dates[6]);
-                Alert.alert('Success', `Party "${item.title}" scheduled with ${scheduledCount} recipe(s)!`);
+                markDropped(date, mealType, `Party "${item.title}" (${scheduledCount} recipes)`);
             }
             setSelectedItem(null);
         } catch (error) {
@@ -267,39 +329,25 @@ const MealPlannerScreen = ({ route, navigation }) => {
     const renderMealSlot = (date, mealType) => {
         const dateStr = date.toISOString().split('T')[0];
         const meal = mealPlans.find(m => m.date === dateStr && m.meal_type === mealType);
-        const isSelected = selectedItem && selectedItem.date === dateStr && selectedItem.mealType === mealType;
 
         return (
-            <AnimatedPressable accessibilityRole="button" accessibilityLabel={`${mealType} on ${dateStr}`}
-                style={[
-                    styles.mealSlot,
-                    theme.shadows.sm,
-                    {
-                        backgroundColor: isSelected ? theme.primary[100] : theme.colors.surfaceElevated,
-                        borderColor: isSelected ? theme.primary[500] : theme.colors.border,
-                        borderWidth: isSelected ? 2 : 1,
-                    }
-                ]}
+            <MealSlot
+                theme={theme}
+                filled={!!meal}
+                targetable={!!selectedItem?.item && !meal}
+                dropped={droppedSlot === `${dateStr}-${mealType}`}
+                label={meal ? `${mealType} on ${dateStr}: ${meal.title}` : `${mealType} on ${dateStr}`}
                 onPress={() => {
                     if (selectedItem && selectedItem.item) {
-                        // Drop selected item here
                         handleDropOnMealSlot(selectedItem.item, date, mealType);
                         setSelectedItem(null);
                     } else if (meal) {
-                        // Meal exists - show options
                         handleMealSlotWithMeal(meal, date, mealType);
                     } else {
-                        // Open meal selection modal
                         handleMealSlotPress(date, mealType);
                     }
                 }}
-            >
-                {meal ? (
-                    <Ionicons name="checkmark-circle" size={24} color={theme.primary[500]} />
-                ) : (
-                    <Ionicons name="add-circle-outline" size={24} color={theme.colors.text.tertiary} />
-                )}
-            </AnimatedPressable>
+            />
         );
     };
 
@@ -323,11 +371,6 @@ const MealPlannerScreen = ({ route, navigation }) => {
                         setSelectedItem(null);
                     } else {
                         setSelectedItem({ item });
-                        Alert.alert(
-                            'Item Selected',
-                            `Tap a meal slot to schedule "${item.title}"`,
-                            [{ text: 'OK' }]
-                        );
                     }
                 }}
             >
@@ -402,7 +445,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
                     {/* Breakfast Row */}
                     <View style={styles.mealRow}>
                         <View style={[styles.mealTypeCell, { backgroundColor: theme.colors.surfaceElevated }, theme.shadows.sm]}>
-                            <Ionicons name="sunny-outline" size={20} color={theme.accent.yellow} />
+                            <Ionicons name="sunny-outline" size={20} color={theme.colors.text.secondary} />
                             <Text style={[styles.mealTypeText, { color: theme.colors.text.primary }]}>Breakfast</Text>
                         </View>
                         {weekDates.map((date, index) => (
@@ -415,7 +458,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
                     {/* Lunch Row */}
                     <View style={styles.mealRow}>
                         <View style={[styles.mealTypeCell, { backgroundColor: theme.colors.surfaceElevated }, theme.shadows.sm]}>
-                            <Ionicons name="partly-sunny-outline" size={20} color={theme.primary[500]} />
+                            <Ionicons name="partly-sunny-outline" size={20} color={theme.colors.text.secondary} />
                             <Text style={[styles.mealTypeText, { color: theme.colors.text.primary }]}>Lunch</Text>
                         </View>
                         {weekDates.map((date, index) => (
@@ -428,7 +471,7 @@ const MealPlannerScreen = ({ route, navigation }) => {
                     {/* Dinner Row */}
                     <View style={styles.mealRow}>
                         <View style={[styles.mealTypeCell, { backgroundColor: theme.colors.surfaceElevated }, theme.shadows.sm]}>
-                            <Ionicons name="moon-outline" size={20} color={theme.secondary[500]} />
+                            <Ionicons name="moon-outline" size={20} color={theme.colors.text.secondary} />
                             <Text style={[styles.mealTypeText, { color: theme.colors.text.primary }]}>Dinner</Text>
                         </View>
                         {weekDates.map((date, index) => (
@@ -542,7 +585,10 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
     },
     navButton: {
-        padding: 8,
+        width: 44,
+        height: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     weekTitle: {
         fontSize: 16,
@@ -590,11 +636,15 @@ const styles = StyleSheet.create({
     },
     mealSlot: {
         minHeight: 60,
-        borderRadius: 14,
+        borderRadius: 12,
         borderWidth: 1,
         padding: 8,
         justifyContent: 'center',
         alignItems: 'center',
+        overflow: 'hidden',
+    },
+    slotFlash: {
+        borderRadius: 12,
     },
     mealText: {
         fontSize: 11,

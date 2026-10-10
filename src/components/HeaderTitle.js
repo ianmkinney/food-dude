@@ -9,19 +9,20 @@ import { Wordmark } from './Brand';
 
 const HeaderTitle = () => <Wordmark />;
 
-const HeaderIconButton = ({ icon, onPress, label, color }) => (
+export const HeaderIconButton = ({ icon, onPress, label, color, role = 'button', checked }) => (
     <AnimatedPressable
         style={styles.headerButton}
         onPress={onPress}
         accessibilityLabel={label}
-        accessibilityRole="button"
+        accessibilityRole={role}
+        accessibilityState={checked === undefined ? undefined : { checked }}
         scaleTo={motion.scale.pressHard}
-        hitSlop={8}
     >
-        <Ionicons name={icon} size={24} color={color} />
+        <Ionicons name={icon} size={22} color={color} />
     </AnimatedPressable>
 );
 
+/** @param {{ tintColor?: string }} props */
 export const HeaderPartyButton = ({ tintColor }) => {
     const navigation = useNavigation();
     const { isDark } = useTheme();
@@ -38,13 +39,15 @@ export const HeaderPartyButton = ({ tintColor }) => {
     );
 };
 
-export const HeaderAccountActions = ({ tintColor }) => {
+/** @param {{ tintColor?: string, leading?: any }} props */
+export const HeaderAccountActions = ({ tintColor, leading }) => {
     const navigation = useNavigation();
     const { isDark, toggleTheme } = useTheme();
     const theme = getTheme(isDark);
     const color = tintColor || theme.colors.text.primary;
     return (
         <View style={[styles.side, styles.rightSide]}>
+            {leading}
             <HeaderIconButton
                 icon={isDark ? 'sunny' : 'moon'}
                 label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -65,16 +68,19 @@ const styles = StyleSheet.create({
     side: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
     },
     leftSide: {
-        marginLeft: 12,
+        marginLeft: 4,
     },
     rightSide: {
-        marginRight: 12,
+        marginRight: 4,
     },
     headerButton: {
-        padding: 6,
+        width: 44,
+        height: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 12,
     },
 });
 

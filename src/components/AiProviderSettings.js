@@ -299,7 +299,7 @@ const AiProviderSettings = ({ theme }) => {
                 </Text>
             ) : (
                 <Text style={[styles.keyStatus, { color: theme.colors.text.secondary }]}>
-                    No key saved. AI Chef, import, and cost estimates stay off until you add one.
+                    No key saved. Ampi, recipe import, and cost estimates stay off until you add one.
                 </Text>
             )}
 

@@ -4,12 +4,17 @@ import Animated, {
     useAnimatedStyle,
     useSharedValue,
     withSpring,
+    withTiming,
 } from 'react-native-reanimated';
 import { motion } from '../theme';
+import { EASE_OUT } from '../motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const AnimatedPressableBase = Animated.createAnimatedComponent(Pressable);
 
+/**
+ * @param {{ children?: any, style?: any, onPressIn?: (e: any) => void, onPressOut?: (e: any) => void, scaleTo?: number, tilt?: boolean, disabled?: boolean, [key: string]: any }} props
+ */
 const AnimatedPressable = ({
     children,
     style,
@@ -17,7 +22,7 @@ const AnimatedPressable = ({
     onPressOut,
     scaleTo = motion.scale.press,
     tilt = false,
-    disabled,
+    disabled = false,
     ...rest
 }) => {
     const reduceMotion = useReducedMotion();
@@ -36,7 +41,7 @@ const AnimatedPressable = ({
 
     const handlePressIn = (event) => {
         if (!disabled && !reduceMotion) {
-            scale.value = withSpring(scaleTo, motion.spring.press);
+            scale.value = withTiming(scaleTo, { duration: motion.duration.fast, easing: EASE_OUT });
             if (tilt) {
                 rotateZ.value = withSpring(-motion.tilt.press, motion.spring.press);
                 rotateX.value = withSpring(4, motion.spring.press);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     View,
     Text,
@@ -18,9 +18,18 @@ import { useTheme } from '../context/ThemeContext';
 import { groceryOperations } from '../database/operations';
 import { simplifyGroceryList } from '../services/intelligentGroceryService';
 import SimplifiedListModal from '../components/SimplifiedListModal';
-import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
+import GroceryRow from '../components/GroceryRow';
+import EmptyState from '../components/EmptyState';
+import { ScreenSkeleton } from '../navigation/lazyScreen';
+import { AddGroceryItemScreen } from '../navigation/lazyRoutes';
+import { navigateShared } from '../motion/sharedElement';
+import { ASSISTANT_NAME } from '../config/assistant';
+
+// Long enough for the check to pop and the strikethrough to draw before the
+// row slides into Done.
+const SETTLE_MS = 420;
 
 const GroceryListScreen = () => {
     const navigation = useNavigation();
@@ -36,6 +45,11 @@ const GroceryListScreen = () => {
     const [storeName, setStoreName] = useState('');
     const [storeLocation, setStoreLocation] = useState('');
     const [simplifyingStatus, setSimplifyingStatus] = useState('');
+    // id -> the checked state the row is still displayed under while it settles
+    const [settling, setSettling] = useState({});
+    const timers = useRef({});
+
+    useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), []);
 
     useEffect(() => {
         loadGroceryItems();
@@ -58,14 +72,38 @@ const GroceryListScreen = () => {
         }
     };
 
-    const toggleItemChecked = async (id) => {
+    const toggleItemChecked = async (item) => {
+        const { id } = item;
+        setSettling((prev) => (id in prev ? prev : { ...prev, [id]: !!item.is_checked }));
+        clearTimeout(timers.current[id]);
+        timers.current[id] = setTimeout(() => {
+            setSettling(({ [id]: _done, ...rest }) => rest);
+        }, SETTLE_MS);
+        setGroceryItems((prev) => prev.map((g) => (g.id === id ? { ...g, is_checked: g.is_checked ? 0 : 1 } : g)));
         try {
             await groceryOperations.toggleChecked(id);
-            loadGroceryItems();
         } catch (error) {
             console.error('Error toggling item:', error);
+            loadGroceryItems();
         }
     };
+
+    const deleteItem = async (item) => {
+        setGroceryItems((prev) => prev.filter((g) => g.id !== item.id));
+        try {
+            await groceryOperations.delete(item.id);
+        } catch (error) {
+            console.error('Error deleting item:', error);
+            loadGroceryItems();
+        }
+    };
+
+    const rows = useMemo(() => {
+        const shownChecked = (g) => (g.id in settling ? settling[g.id] : !!g.is_checked);
+        const toGet = groceryItems.filter((g) => !shownChecked(g));
+        const done = groceryItems.filter(shownChecked);
+        return done.length ? [...toGet, { id: 'done-header', header: true, count: done.length }, ...done] : toGet;
+    }, [groceryItems, settling]);
 
     const clearList = () => {
         Alert.alert(
@@ -155,54 +193,22 @@ const GroceryListScreen = () => {
         }
     };
 
-    const renderGroceryItem = ({ item, index }) => (
-        <ElevatedCard
-            theme={theme}
-            index={index}
-            style={[styles.itemCard, item.is_checked && { opacity: 0.7 }]}
-            onPress={() => toggleItemChecked(item.id)}
-        >
-            <View style={styles.itemContent}>
-                <Ionicons
-                    name={item.is_checked ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={28}
-                    color={item.is_checked ? theme.accent.green : theme.colors.text.tertiary}
-                />
-                <View style={styles.itemInfo}>
-                    <Text
-                        style={[
-                            styles.itemName,
-                            { color: theme.colors.text.primary },
-                            item.is_checked && styles.checkedText,
-                        ]}
-                    >
-                        {item.name}
-                    </Text>
-                    {item.quantity && (
-                        <Text style={[styles.itemQuantity, { color: theme.colors.text.secondary }]}>
-                            {item.quantity} {item.unit || ''}
-                        </Text>
-                    )}
-                    {item.recipe_name && (
-                        <Text style={[styles.recipeTag, { color: theme.primary[500] }]}>
-                            For: {item.recipe_name}
-                        </Text>
-                    )}
-                </View>
-            </View>
-        </ElevatedCard>
-    );
+    const renderGroceryItem = ({ item, index }) =>
+        item.header ? (
+            <Text style={[styles.groupHeader, { color: theme.colors.text.tertiary }]} accessibilityRole="header">
+                Done · {item.count}
+            </Text>
+        ) : (
+            <GroceryRow item={item} index={index} theme={theme} onToggle={toggleItemChecked} onDelete={deleteItem} />
+        );
 
     const renderEmptyState = () => (
-        <View style={styles.emptyState}>
-            <Ionicons name="cart-outline" size={80} color={theme.colors.text.tertiary} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
-                Grocery List is Empty
-            </Text>
-            <Text style={[styles.emptyDescription, { color: theme.colors.text.secondary }]}>
-                Add items from recipes or create a list from your meal plan
-            </Text>
-        </View>
+        <EmptyState
+            title="Your list is empty"
+            description={`Add what you need, or ask ${ASSISTANT_NAME} to build a list from your meal plan.`}
+            primary={{ label: 'Add an item', onPress: () => navigation.navigate('AddGroceryItem') }}
+            secondary={{ label: `Ask ${ASSISTANT_NAME}`, onPress: () => navigation.navigate(ASSISTANT_NAME) }}
+        />
     );
 
     const handleSimplifyWithAI = () => {
@@ -289,11 +295,11 @@ const GroceryListScreen = () => {
                     </View>
                     <View style={styles.headerActions}>
                         <AnimatedPressable
-                            style={[styles.exportButton, { backgroundColor: theme.accent.green + '20' }]}
+                            style={[styles.exportButton, { borderColor: theme.colors.border }]}
                             onPress={exportListToClipboard}
                         >
-                            <Ionicons name="copy-outline" size={18} color={theme.accent.green} />
-                            <Text style={[styles.exportText, { color: theme.accent.green }]}>
+                            <Ionicons name="copy-outline" size={18} color={theme.colors.text.secondary} />
+                            <Text style={[styles.exportText, { color: theme.colors.text.primary }]}>
                                 Export
                             </Text>
                         </AnimatedPressable>
@@ -301,9 +307,9 @@ const GroceryListScreen = () => {
                             style={[styles.estimateButton, { backgroundColor: theme.primary[100] }]}
                             onPress={() => navigation.navigate('EstimateCost')}
                         >
-                            <Ionicons name="calculator-outline" size={20} color={theme.primary[500]} />
-                            <Text style={[styles.estimateText, { color: theme.primary[500] }]}>
-                                Estimate Cost
+                            <Ionicons name="calculator-outline" size={18} color={theme.primary[700]} />
+                            <Text style={[styles.estimateText, { color: theme.primary[700] }]}>
+                                Estimate
                             </Text>
                         </AnimatedPressable>
                         <AnimatedPressable
@@ -320,35 +326,35 @@ const GroceryListScreen = () => {
             )}
 
             <FlatList
-                data={groceryItems}
+                data={rows}
                 renderItem={renderGroceryItem}
                 keyExtractor={(item) => item.id.toString()}
                 contentContainerStyle={styles.listContent}
-                ListEmptyComponent={!loading && renderEmptyState()}
-                refreshing={loading}
-                onRefresh={loadGroceryItems}
+                ListEmptyComponent={loading ? <ScreenSkeleton rows={4} padded={false} /> : renderEmptyState()}
             />
 
             {/* Floating Action Buttons */}
             <View style={styles.fabContainer}>
                 <FloatingActionButton
                     theme={theme}
-                    color={theme.accent.purple}
+                    variant="secondary"
                     style={styles.fabLeft}
                     accessibilityLabel="Simplify grocery list with AI"
                     onPress={handleSimplifyWithAI}
                     disabled={simplifying || groceryItems.filter(item => !item.is_checked).length === 0}
                 >
                     {simplifying ? (
-                        <ActivityIndicator color="#FFFFFF" size="small" />
+                        <ActivityIndicator color={theme.primary[500]} size="small" />
                     ) : (
-                        <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+                        <Ionicons name="sparkles" size={22} color={theme.primary[500]} />
                     )}
                 </FloatingActionButton>
                 <FloatingActionButton
                     theme={theme}
+                    nativeID="fab-grocery"
                     accessibilityLabel="Add grocery item"
-                    onPress={() => navigation.navigate('AddGroceryItem')}
+                    onPressIn={AddGroceryItemScreen.preload}
+                    onPress={() => navigateShared(() => navigation.navigate('AddGroceryItem'), 'fab-grocery', 'add-sheet')}
                 >
                     <Ionicons name="add" size={28} color="#FFFFFF" />
                 </FloatingActionButton>
@@ -485,9 +491,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 8,
-        gap: 6,
+        minHeight: 44,
+        borderRadius: 12,
+        borderWidth: 1,
+        gap: 8,
     },
     exportText: {
         fontSize: 13,
@@ -497,9 +504,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 8,
-        gap: 6,
+        minHeight: 44,
+        borderRadius: 12,
+        gap: 8,
     },
     estimateText: {
         fontSize: 13,
@@ -509,10 +516,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 8,
+        minHeight: 44,
+        borderRadius: 12,
         borderWidth: 1,
-        gap: 6,
+        gap: 8,
     },
     clearText: {
         fontSize: 13,
@@ -520,6 +527,16 @@ const styles = StyleSheet.create({
     },
     listContent: {
         padding: 16,
+        paddingBottom: 96,
+    },
+    groupHeader: {
+        fontSize: 13,
+        fontWeight: '700',
+        letterSpacing: 0.4,
+        textTransform: 'uppercase',
+        marginTop: 16,
+        marginBottom: 8,
+        marginLeft: 4,
     },
     itemCard: {
         padding: 16,

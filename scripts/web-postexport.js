@@ -64,4 +64,28 @@ if (leftovers.length) {
     process.exit(1);
 }
 
+// The startup splash in index.html paints before the bundle loads. Point it at
+// the exported Fredoka file so the wordmark letters match the app (and the
+// app's own font load becomes a cache hit).
+const indexPath = path.join(dist, 'index.html');
+let indexHtml = fs.readFileSync(indexPath, 'utf8');
+const fredoka = listFiles(assetsDir, ['.ttf']).find((file) => /Fredoka_700Bold\.[^/]*\.ttf$/.test(file));
+if (fredoka && indexHtml.includes('<!--ampli:splash-font-->')) {
+    const url = '/' + path.relative(dist, fredoka).split(path.sep).join('/');
+    indexHtml = indexHtml.replace(
+        '<!--ampli:splash-font-->',
+        `<link rel="preload" href="${url}" as="font" type="font/ttf" crossorigin />` +
+            `<style>@font-face{font-family:AmpliSplash;src:url(${url}) format("truetype");font-weight:700;font-display:swap}</style>`
+    );
+    fs.writeFileSync(indexPath, indexHtml);
+}
+
+const guitar = require('../src/brand/guitarPaths');
+const splashPaths = [guitar.body, guitar.neck, guitar.neckScores, guitar.leaves, ...guitar.strings, ...guitar.wavesLeft, ...guitar.wavesRight];
+const drifted = splashPaths.filter((d) => !indexHtml.includes(`d="${d}"`));
+if (drifted.length) {
+    console.error('[web-postexport] splash SVG in public/index.html no longer matches src/brand/guitarPaths.js:', drifted);
+    process.exit(1);
+}
+
 console.log(`[web-postexport] renamed ${renamedDirs} node_modules folder(s), rewrote ${rewrittenFiles} file(s) in ${dist}`);

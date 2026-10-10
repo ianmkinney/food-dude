@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { ScreenSkeleton } from '../navigation/lazyScreen';
 import { recipeOperations, mealPlanOperations, groceryOperations, recipeCookingHistoryOperations, userOperations } from '../database/operations';
 import aiChefService from '../services/aiChefService';
 import { toPersistentImageUri } from '../services/mediaPrep';
@@ -451,11 +452,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
     };
 
     if (loading || !recipe) {
-        return (
-            <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-                <ActivityIndicator size="large" color={theme.primary[500]} />
-            </View>
-        );
+        return <ScreenSkeleton hero rows={3} />;
     }
 
     return (
@@ -469,7 +466,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
             >
                 <ScrollView contentContainerStyle={styles.content}>
                 {/* Header Image */}
-                <View style={[styles.imageContainer, { backgroundColor: theme.primary[100] }]}>
+                <View nativeID={`recipe-hero-${recipe.id}`} style={[styles.imageContainer, { backgroundColor: theme.primary[100] }]}>
                     {(isEditing ? editedRecipe.image_uri : recipe.image_uri) ? (
                         <Image
                             source={{ uri: isEditing ? editedRecipe.image_uri : recipe.image_uri }}

@@ -158,7 +158,7 @@ const AiChefScreen = () => {
             const welcomeMsg = {
                 role: 'assistant',
                 isWelcome: true,
-                message: "👋 Hi! I'm your AI Chef assistant. I can help you:\n\n• Create recipes from your pantry items\n• Answer cooking questions\n• Provide detailed cooking instructions\n• Analyze food images\n\nHow can I help you today?",
+                message: "Hi, I'm Ampi. Here I can:\n\n• Make a recipe from what's in your pantry\n• Look at a photo of a dish or ingredients\n• Walk you through a recipe step by step\n\nWhat are we cooking?",
                 created_at: Date.now(),
             };
             setMessages([welcomeMsg]);
@@ -273,10 +273,10 @@ const AiChefScreen = () => {
                         recipeData: recipeData,
                     };
                     setMessages(prev => [...prev, assistantMessage]);
-                AccessibilityInfo.announceForAccessibility(`AI Chef says: ${String(assistantMessage.message).slice(0, 300)}`);
+                AccessibilityInfo.announceForAccessibility(`Ampi says: ${String(assistantMessage.message).slice(0, 300)}`);
                     await aiConversationOperations.add(assistantMessage);
                 } else {
-                    Alert.alert('Error', response.error || 'Failed to get response from AI Chef');
+                    Alert.alert('Error', response.error || 'Failed to get a response from Ampi');
                 }
             }
         } catch (error) {
@@ -493,7 +493,7 @@ const AiChefScreen = () => {
                 console.log('[AI Chef] Assistant message saved');
             } else {
                 console.error('[AI Chef] Response failed:', response.error);
-                Alert.alert('Error', response.error || 'Failed to get response from AI Chef');
+                Alert.alert('Error', response.error || 'Failed to get a response from Ampi');
             }
         } catch (error) {
             if (cancelledRef.current) {
@@ -587,7 +587,7 @@ const AiChefScreen = () => {
 
                 console.log('[AI Chef] Adding assistant message to chat');
                 setMessages(prev => [...prev, assistantMessage]);
-                AccessibilityInfo.announceForAccessibility(`AI Chef says: ${String(assistantMessage.message).slice(0, 300)}`);
+                AccessibilityInfo.announceForAccessibility(`Ampi says: ${String(assistantMessage.message).slice(0, 300)}`);
                 await aiConversationOperations.add(assistantMessage);
                 console.log('[AI Chef] Recipe message added successfully');
             } else {
@@ -857,7 +857,7 @@ const AiChefScreen = () => {
 
             {/* Input */}
             <View style={[styles.inputContainer, { backgroundColor: theme.colors.surfaceGlass, borderTopColor: theme.colors.borderSoft }]}>
-                <TextInput accessibilityLabel="Message to AI Chef"
+                <TextInput accessibilityLabel="Message to Ampi"
                     style={[styles.input, { color: theme.colors.text.primary, backgroundColor: theme.colors.surfaceElevated }, theme.shadows.sm]}
                     placeholder="Ask me anything about cooking..."
                     placeholderTextColor={theme.colors.text.tertiary}
