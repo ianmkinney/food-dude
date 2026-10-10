@@ -1,22 +1,26 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Platform,
     Pressable,
+    ScrollView,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import ThemedSwitch from './ThemedSwitch';
 import { ASSISTANT_NAME } from '../config/assistant';
 
 type Theme = ReturnType<typeof import('../theme').getTheme>;
 import { getSpeechEngine, primeSpeechOnWeb, shouldSpeak } from '../voice/speech';
 import { getVoiceSettings, setAutoSpeak, setVoiceMuted } from '../voice/voiceSettings';
+import { playElevenLabsAudio, stopElevenLabsPlayback } from '../voice/elevenLabsPlayback';
 import {
     clearElevenLabsApiKey,
+    ElevenLabsVoicesError,
     getElevenLabsConfig,
     listElevenLabsVoices,
     maskElevenLabsKey,
@@ -24,6 +28,13 @@ import {
     setElevenLabsVoice,
     type ElevenLabsVoice,
 } from '../voice/elevenLabsSettings';
+
+function voiceSubtitle(v: ElevenLabsVoice): string | null {
+    if (!v.category) return null;
+    const cat = v.category.replace(/_/g, ' ');
+    if (cat === 'cloned' || cat === 'generated' || cat === 'professional') return cat;
+    return cat;
+}
 
 /** On-device voice plus optional ElevenLabs BYOK for Ampi replies. */
 export default function VoicePreferences({ theme }: { theme: Theme }) {
@@ -35,10 +46,13 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
     const [elKeyDraft, setElKeyDraft] = useState('');
     const [showElKey, setShowElKey] = useState(false);
     const [voices, setVoices] = useState<ElevenLabsVoice[]>([]);
+    const [voicesLoaded, setVoicesLoaded] = useState(false);
     const [voiceId, setVoiceId] = useState<string | null>(null);
     const [voiceName, setVoiceName] = useState<string | null>(null);
     const [loadingVoices, setLoadingVoices] = useState(false);
+    const [previewingId, setPreviewingId] = useState<string | null>(null);
     const [elStatus, setElStatus] = useState('');
+    const selectedVoiceIdRef = useRef<string | null>(null);
 
     const load = useCallback(() => {
         getVoiceSettings().then((s) => {
@@ -50,7 +64,42 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
             setElKeyLast4(maskElevenLabsKey(cfg.apiKey));
             setVoiceId(cfg.voiceId);
             setVoiceName(cfg.voiceName);
+            selectedVoiceIdRef.current = cfg.voiceId;
         });
+    }, []);
+
+    const refreshVoices = useCallback(async (apiKey?: string) => {
+        const key = apiKey ?? (await getElevenLabsConfig()).apiKey;
+        if (!key) return;
+        setLoadingVoices(true);
+        setElStatus('');
+        try {
+            const list = await listElevenLabsVoices(key);
+            setVoices(list);
+            setVoicesLoaded(true);
+            const current = selectedVoiceIdRef.current;
+            if (!list.length) {
+                setElStatus('No voices in this ElevenLabs account yet. Create or clone a voice on elevenlabs.io, then tap Refresh.');
+                return;
+            }
+            if (!current || !list.some((v) => v.voice_id === current)) {
+                const first = list[0];
+                await setElevenLabsVoice(first.voice_id, first.name);
+                selectedVoiceIdRef.current = first.voice_id;
+                setVoiceId(first.voice_id);
+                setVoiceName(first.name);
+            }
+        } catch (error) {
+            setVoices([]);
+            setVoicesLoaded(true);
+            if (error instanceof ElevenLabsVoicesError) {
+                setElStatus(error.message);
+            } else {
+                setElStatus((error as Error).message || 'Could not load voices.');
+            }
+        } finally {
+            setLoadingVoices(false);
+        }
     }, []);
 
     useEffect(() => {
@@ -61,33 +110,14 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
         if (elKeySaved) {
             refreshVoices();
         }
-    }, [elKeySaved]);
-
-    const refreshVoices = async (apiKey?: string) => {
-        const key = apiKey ?? (await getElevenLabsConfig()).apiKey;
-        if (!key) return;
-        setLoadingVoices(true);
-        setElStatus('');
-        try {
-            const list = await listElevenLabsVoices(key);
-            setVoices(list);
-            if (list.length && !list.some((v) => v.voice_id === voiceId)) {
-                await setElevenLabsVoice(list[0].voice_id, list[0].name);
-                setVoiceId(list[0].voice_id);
-                setVoiceName(list[0].name);
-            }
-        } catch (error) {
-            setElStatus((error as Error).message || 'Could not load voices.');
-        } finally {
-            setLoadingVoices(false);
-        }
-    };
+    }, [elKeySaved, refreshVoices]);
 
     const saveElevenKey = async () => {
         try {
             await saveElevenLabsApiKey(elKeyDraft);
             setElKeyDraft('');
             setElKeySaved(true);
+            setVoicesLoaded(false);
             const cfg = await getElevenLabsConfig();
             setElKeyLast4(maskElevenLabsKey(cfg.apiKey));
             setElStatus('Key saved on this device.');
@@ -98,15 +128,43 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
     };
 
     const removeElevenKey = async () => {
+        stopElevenLabsPlayback();
         await clearElevenLabsApiKey();
         setElKeySaved(false);
         setElKeyLast4('');
         setElKeyDraft('');
         setVoices([]);
+        setVoicesLoaded(false);
         setVoiceId(null);
         setVoiceName(null);
+        selectedVoiceIdRef.current = null;
         setElStatus('ElevenLabs key removed.');
         load();
+    };
+
+    const selectVoice = async (v: ElevenLabsVoice) => {
+        await setElevenLabsVoice(v.voice_id, v.name);
+        selectedVoiceIdRef.current = v.voice_id;
+        setVoiceId(v.voice_id);
+        setVoiceName(v.name);
+        setElStatus(`Using ${v.name} for ${ASSISTANT_NAME}.`);
+    };
+
+    const playPreview = async (v: ElevenLabsVoice) => {
+        if (!v.preview_url) {
+            setElStatus(`No preview clip for ${v.name}. Use Test voice after selecting it.`);
+            return;
+        }
+        primeSpeechOnWeb();
+        setPreviewingId(v.voice_id);
+        try {
+            stopElevenLabsPlayback();
+            await playElevenLabsAudio(v.preview_url, 20_000);
+        } catch {
+            setElStatus('Could not play preview. Try Refresh or Test voice.');
+        } finally {
+            setPreviewingId(null);
+        }
     };
 
     const preview = async () => {
@@ -222,40 +280,86 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
                     </Pressable>
                 ) : null}
             </View>
-            {loadingVoices ? <ActivityIndicator style={{ marginVertical: 8 }} /> : null}
-            {voices.length > 0 ? (
-                <View style={styles.voiceList}>
-                    <Text style={[styles.label, { color: c.text.secondary }]}>Voice</Text>
-                    {voices.slice(0, 12).map((v) => {
-                        const selected = v.voice_id === voiceId;
-                        return (
-                            <Pressable
-                                key={v.voice_id}
-                                onPress={async () => {
-                                    await setElevenLabsVoice(v.voice_id, v.name);
-                                    setVoiceId(v.voice_id);
-                                    setVoiceName(v.name);
-                                }}
-                                style={[
-                                    styles.voiceChip,
-                                    {
-                                        borderColor: selected ? theme.primary[500] : c.border,
-                                        backgroundColor: selected ? theme.primary[500] : c.surface,
-                                    },
-                                ]}
-                                accessibilityRole="button"
-                                accessibilityState={{ selected }}
-                            >
-                                <Text style={{ color: selected ? '#fff' : c.text.primary }}>{v.name}</Text>
-                            </Pressable>
-                        );
-                    })}
+
+            {elKeySaved ? (
+                <View style={styles.voiceSection}>
+                    <View style={styles.voiceSectionHeader}>
+                        <Text style={[styles.label, { color: c.text.secondary }]}>Voices in your account</Text>
+                        <Pressable
+                            onPress={() => refreshVoices()}
+                            disabled={loadingVoices}
+                            style={[styles.refreshBtn, { borderColor: c.border, opacity: loadingVoices ? 0.6 : 1 }]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Refresh voice list from ElevenLabs"
+                        >
+                            {loadingVoices ? (
+                                <ActivityIndicator size="small" />
+                            ) : (
+                                <>
+                                    <Ionicons name="refresh-outline" size={16} color={c.text.primary} />
+                                    <Text style={{ color: c.text.primary, marginLeft: 4 }}>Refresh</Text>
+                                </>
+                            )}
+                        </Pressable>
+                    </View>
+                    {voices.length > 0 ? (
+                        <ScrollView style={[styles.voiceScroll, { borderColor: c.border }]} nestedScrollEnabled>
+                            {voices.map((v) => {
+                                const selected = v.voice_id === voiceId;
+                                const subtitle = voiceSubtitle(v);
+                                return (
+                                    <View
+                                        key={v.voice_id}
+                                        style={[styles.voiceRow, { borderColor: c.border, backgroundColor: selected ? c.surfaceMuted : c.surface }]}
+                                    >
+                                        <Pressable
+                                            onPress={() => selectVoice(v)}
+                                            style={styles.voiceMain}
+                                            accessibilityRole="button"
+                                            accessibilityState={{ selected }}
+                                            accessibilityLabel={`Select voice ${v.name}`}
+                                        >
+                                            <Ionicons
+                                                name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                                                size={20}
+                                                color={selected ? theme.primary[500] : c.text.tertiary}
+                                            />
+                                            <View style={styles.voiceTextCol}>
+                                                <Text style={[styles.voiceName, { color: c.text.primary }]} numberOfLines={1}>
+                                                    {v.name}
+                                                </Text>
+                                                {subtitle ? (
+                                                    <Text style={[styles.voiceMeta, { color: c.text.tertiary }]} numberOfLines={1}>
+                                                        {subtitle}
+                                                    </Text>
+                                                ) : null}
+                                            </View>
+                                        </Pressable>
+                                        <Pressable
+                                            onPress={() => playPreview(v)}
+                                            disabled={!v.preview_url || previewingId === v.voice_id}
+                                            style={[styles.previewBtn, { borderColor: c.border, opacity: v.preview_url ? 1 : 0.4 }]}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={`Play preview for ${v.name}`}
+                                        >
+                                            {previewingId === v.voice_id ? (
+                                                <ActivityIndicator size="small" />
+                                            ) : (
+                                                <Ionicons name="play-outline" size={18} color={c.text.primary} />
+                                            )}
+                                        </Pressable>
+                                    </View>
+                                );
+                            })}
+                        </ScrollView>
+                    ) : voicesLoaded && !loadingVoices ? (
+                        <Text style={[styles.body, { color: c.text.secondary }]}>
+                            No voices to show. Check your key or tap Refresh.
+                        </Text>
+                    ) : null}
                 </View>
-            ) : elKeySaved ? (
-                <Pressable onPress={() => refreshVoices()} style={[styles.button, { borderColor: c.border }]} accessibilityRole="button">
-                    <Text style={{ color: c.text.primary }}>Load voices</Text>
-                </Pressable>
             ) : null}
+
             {voiceName ? (
                 <Text style={[styles.body, { color: c.text.secondary }]}>Selected: {voiceName}</Text>
             ) : null}
@@ -290,7 +394,36 @@ const styles = StyleSheet.create({
     },
     keyInput: { flex: 1, fontSize: 16, paddingVertical: 10 },
     btnRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    voiceList: { marginTop: 8, gap: 8 },
-    label: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
-    voiceChip: { paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10, marginBottom: 6 },
+    voiceSection: { marginTop: 8 },
+    voiceSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+    label: { fontSize: 13, fontWeight: '600' },
+    refreshBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderWidth: 1,
+        borderRadius: 8,
+    },
+    voiceScroll: { maxHeight: 280, borderWidth: 1, borderRadius: 12 },
+    voiceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+    },
+    voiceMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
+    voiceTextCol: { flex: 1, minWidth: 0 },
+    voiceName: { fontSize: 15, fontWeight: '600' },
+    voiceMeta: { fontSize: 12, marginTop: 2, textTransform: 'capitalize' },
+    previewBtn: {
+        marginLeft: 8,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 });

@@ -63,7 +63,12 @@ async function secureDelete(key: string): Promise<void> {
     }
 }
 
-export type ElevenLabsVoice = { voice_id: string; name: string };
+export type ElevenLabsVoice = {
+    voice_id: string;
+    name: string;
+    preview_url?: string | null;
+    category?: string | null;
+};
 
 export type ElevenLabsConfig = {
     apiKey: string | null;
@@ -101,13 +106,42 @@ export async function setElevenLabsVoice(voiceId: string, voiceName: string): Pr
     await secureSet(VOICE_NAME_SLOT, voiceName);
 }
 
-export async function listElevenLabsVoices(apiKey: string): Promise<ElevenLabsVoice[]> {
-    const res = await fetch('https://api.elevenlabs.io/v1/voices', {
-        headers: { 'xi-api-key': apiKey },
-    });
-    if (!res.ok) {
-        throw new Error('Could not load voices from ElevenLabs. Check your API key.');
+export class ElevenLabsVoicesError extends Error {
+    readonly kind: 'invalid_key' | 'http' | 'network';
+
+    constructor(kind: 'invalid_key' | 'http' | 'network', message: string) {
+        super(message);
+        this.kind = kind;
     }
-    const data = (await res.json()) as { voices?: { voice_id: string; name: string }[] };
-    return (data.voices || []).map((v) => ({ voice_id: v.voice_id, name: v.name }));
+}
+
+export async function listElevenLabsVoices(apiKey: string): Promise<ElevenLabsVoice[]> {
+    const trimmed = apiKey.trim();
+    let res: Response;
+    try {
+        res = await fetch('https://api.elevenlabs.io/v1/voices', {
+            headers: { 'xi-api-key': trimmed },
+        });
+    } catch {
+        throw new ElevenLabsVoicesError('network', 'Could not reach ElevenLabs. Check your connection and try Refresh.');
+    }
+    if (res.status === 401 || res.status === 403) {
+        throw new ElevenLabsVoicesError(
+            'invalid_key',
+            'Invalid ElevenLabs API key. Paste a key from your ElevenLabs profile and try again.'
+        );
+    }
+    if (!res.ok) {
+        throw new ElevenLabsVoicesError('http', `Could not load voices (HTTP ${res.status}). Try Refresh.`);
+    }
+    const data = (await res.json()) as {
+        voices?: { voice_id: string; name: string; preview_url?: string; category?: string }[];
+    };
+    const list = (data.voices || []).map((v) => ({
+        voice_id: v.voice_id,
+        name: v.name,
+        preview_url: v.preview_url || null,
+        category: v.category || null,
+    }));
+    return list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
