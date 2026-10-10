@@ -36,10 +36,22 @@ import * as ImagePicker from 'expo-image-picker';
 import { recipeOperations } from '../database/operations';
 import { importRecipeFromVideoAsset, extractSocialUrlFromText } from '../services/recipeVideoImport';
 import { isSocialPostUrl, isTikTokPostUrl, isInstagramPostUrl } from '../services/recipeUrlImport';
-import { askSous, type SousTurn } from './agent';
-import type { SousCard } from './tools';
+import ChatAttachmentPicker from '../components/ChatAttachmentPicker';
+import { ATTACHMENT_SOURCE_LABEL } from './attachmentLimits';
+import type { PendingAttachment } from './chatAttachments';
+import { askSous, confirmSousActions, type SousTurn } from './agent';
+import type { SousCard, ToolCall } from './tools';
 
-type Message = { id: string; role: 'user' | 'sous'; text: string; cards?: SousCard[]; needsKey?: boolean };
+type Message = {
+    id: string;
+    role: 'user' | 'sous';
+    text: string;
+    cards?: SousCard[];
+    needsKey?: boolean;
+    attachmentNames?: string[];
+    confirm?: { actions: ToolCall[]; summary: string; userRecipeImageUri?: string | null };
+    confirmDone?: boolean;
+};
 
 const SUGGESTIONS = [
     "What can I cook with what's in my pantry?",
@@ -67,6 +79,7 @@ export default function SousScreen() {
     const allergies = useAllergies();
 
     const [messages, setMessages] = useState<Message[]>([]);
+    const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
     const [input, setInput] = useState('');
     const [thinking, setThinking] = useState(false);
     const [attachedVideo, setAttachedVideo] = useState<{ uri: string; mimeType?: string; fileName?: string } | null>(null);
@@ -129,12 +142,18 @@ export default function SousScreen() {
     const send = useCallback(
         async (raw: string) => {
             const text = raw.trim();
-            if ((!text && !attachedVideo) || thinking) return;
+            const attachments = pendingAttachments;
+            if ((!text && !attachments.length && !attachedVideo) || thinking) return;
             if (autoSpeak) primeSpeechOnWeb();
             setInput('');
+            setPendingAttachments([]);
             const history: SousTurn[] = messages.map((m) => ({ role: m.role, text: m.text }));
-            const displayText = text || (attachedVideo ? '[Screen recording attached]' : '');
-            const userMessage: Message = { id: newId(), role: 'user', text: displayText };
+            const userMessage: Message = {
+                id: newId(),
+                role: 'user',
+                text: text || (attachedVideo ? '[Screen recording attached]' : '(attached files)'),
+                attachmentNames: attachments.map((a) => a.name),
+            };
             setMessages((prev) => [...prev, userMessage]);
             setThinking(true);
             const videoAsset = attachedVideo;
@@ -181,11 +200,23 @@ export default function SousScreen() {
                     setMessages((prev) => [...prev, reply]);
                     return;
                 }
-                const result = await askSous(history, text);
-                const reply: Message = { id: newId(), role: 'sous', text: result.reply, cards: result.cards };
+                const result = await askSous(history, text || 'Please use the attached files.', attachments);
+                const reply: Message = {
+                    id: newId(),
+                    role: 'sous',
+                    text: result.reply,
+                    cards: result.cards,
+                    confirm: result.pendingActions
+                        ? {
+                              actions: result.pendingActions,
+                              summary: result.confirmSummary || '',
+                              userRecipeImageUri: result.userRecipeImageUri,
+                          }
+                        : undefined,
+                };
                 setMessages((prev) => [...prev, reply]);
                 AccessibilityInfo.announceForAccessibility(`${ASSISTANT_NAME} says: ${result.reply}`);
-                if (autoSpeak && (await shouldSpeak())) speak(reply);
+                if (autoSpeak && (await shouldSpeak()) && !reply.confirm) speak(reply);
             } catch (error) {
                 const message = (error as Error)?.message || 'Something went wrong.';
                 setMessages((prev) => [
@@ -201,8 +232,29 @@ export default function SousScreen() {
                 setThinking(false);
             }
         },
-        [messages, thinking, autoSpeak, speak, attachedVideo]
+        [messages, thinking, autoSpeak, speak, attachedVideo, pendingAttachments]
     );
+
+    const confirmActions = useCallback(async (messageId: string) => {
+        const target = messages.find((m) => m.id === messageId);
+        if (!target?.confirm || target.confirmDone) return;
+        setThinking(true);
+        try {
+            const cards = await confirmSousActions(target.confirm.actions, target.confirm.userRecipeImageUri);
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.id === messageId ? { ...m, confirmDone: true, cards: [...(m.cards || []), ...cards] } : m
+                )
+            );
+        } catch (error) {
+            setMessages((prev) => [
+                ...prev,
+                { id: newId(), role: 'sous', text: (error as Error)?.message || 'Could not apply those changes.' },
+            ]);
+        } finally {
+            setThinking(false);
+        }
+    }, [messages]);
 
     const mic = useSpeechInput((finalText) => send(finalText));
     const micTarget = useTourTarget('sous-composer');
@@ -264,16 +316,25 @@ export default function SousScreen() {
                 return (
                     <Pressable key={index} style={cardStyle} onPress={open('RecipeDetail', { recipeId: card.recipe.id })} accessibilityRole="link">
                         <Text style={[styles.cardKicker, { color: c.text.tertiary }]}>{card.title}</Text>
+                        {card.sourceLabel ? (
+                            <Text style={[styles.cardKicker, { color: c.text.tertiary, textTransform: 'none' }]}>{card.sourceLabel}</Text>
+                        ) : null}
                         <View style={styles.cardRow}>
                             <Ionicons name="restaurant-outline" size={20} color={theme.primary[500]} />
                             <Text style={[styles.cardRowText, display, { color: c.text.primary, fontSize: 17 }]} numberOfLines={2}>{card.recipe.title}</Text>
                             <Ionicons name="chevron-forward" size={16} color={c.text.tertiary} />
                         </View>
                         <AllergenWarning matches={findAllergenMatches(card.ingredients || [], allergies.raw)} />
-                        {card.aiGenerated && (
+                        {(card.aiGenerated || card.fromUserFile) && (
                             <View style={styles.cardFooter}>
-                                <AiDisclaimer kind="recipe" report={{ kind: 'recipe', content: `${card.recipe.title}\n${(card.ingredients || []).join('\n')}` }} />
-                                <AllergyNotice allergies={allergies.list} />
+                                {card.aiGenerated ? (
+                                    <>
+                                        <AiDisclaimer kind="recipe" report={{ kind: 'recipe', content: `${card.recipe.title}\n${(card.ingredients || []).join('\n')}` }} />
+                                        <AllergyNotice allergies={allergies.list} />
+                                    </>
+                                ) : card.fromUserFile ? (
+                                    <Text style={[styles.fine, { color: c.text.tertiary }]}>{ATTACHMENT_SOURCE_LABEL}</Text>
+                                ) : null}
                             </View>
                         )}
                     </Pressable>
@@ -348,6 +409,9 @@ export default function SousScreen() {
             return (
                 <Enter enabled={fresh} springy distance={24} style={[styles.bubble, styles.userBubble, { backgroundColor: theme.primary[500] }]}>
                     <Text style={styles.userText}>{item.text}</Text>
+                    {item.attachmentNames?.map((name) => (
+                        <Text key={name} style={styles.userAttach}>📎 {name}</Text>
+                    ))}
                 </Enter>
             );
         }
@@ -362,6 +426,28 @@ export default function SousScreen() {
                     )}
                 </View>
                 {item.cards?.map(renderCard)}
+                {item.confirm && !item.confirmDone && (
+                    <View style={[styles.confirmCard, { backgroundColor: c.surface, borderColor: theme.primary[400] }]}>
+                        <Text style={[styles.confirmTitle, { color: c.text.primary }]}>Apply in AmpliFood?</Text>
+                        <Text style={[styles.confirmBody, { color: c.text.secondary }]}>{item.confirm.summary}</Text>
+                        <View style={styles.confirmRow}>
+                            <Pressable
+                                onPress={() => setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, confirmDone: true, confirm: undefined } : m)))}
+                                style={[styles.confirmBtn, { backgroundColor: c.surfaceMuted }]}
+                                accessibilityRole="button"
+                            >
+                                <Text style={{ color: c.text.primary, fontWeight: '700' }}>Cancel</Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={() => confirmActions(item.id)}
+                                style={[styles.confirmBtn, { backgroundColor: theme.primary[500] }]}
+                                accessibilityRole="button"
+                            >
+                                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Confirm</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                )}
                 {!item.needsKey && (
                     <View style={styles.meta}>
                         <AiBadge />
@@ -506,7 +592,7 @@ export default function SousScreen() {
                     </Pressable>
                 </View>
             ) : null}
-            <View style={[styles.composer, { borderTopColor: c.borderSoft, backgroundColor: c.background }]}>
+            <View style={[styles.composerWrap, { borderTopColor: c.borderSoft, backgroundColor: c.background }]}>
                 {micTip && (
                     <Enter springy distance={8} style={styles.micTipWrap}>
                         <Pressable
@@ -521,6 +607,9 @@ export default function SousScreen() {
                         </Pressable>
                     </Enter>
                 )}
+                <ChatAttachmentPicker layout="chips" attachments={pendingAttachments} onChange={setPendingAttachments} theme={theme} />
+                <View style={styles.composer}>
+                <ChatAttachmentPicker layout="button" attachments={pendingAttachments} onChange={setPendingAttachments} theme={theme} />
                 <Pressable
                     onPress={pickVideo}
                     style={[styles.roundButton, { backgroundColor: c.surface, borderColor: c.border }]}
@@ -570,14 +659,14 @@ export default function SousScreen() {
                 />
                 <AnimatedPressable
                     onPress={() => send(listening ? mic.transcript : input)}
-                    disabled={(!input.trim() && !attachedVideo) || thinking}
+                    disabled={(!input.trim() && !pendingAttachments.length && !attachedVideo) || thinking}
                     scaleTo={motion.scale.press}
                     style={[
                         styles.roundButton,
                         styles.sendButton,
                         {
                             backgroundColor: theme.primary[500],
-                            opacity: (!input.trim() && !attachedVideo) || thinking ? 0.5 : 1,
+                            opacity: (!input.trim() && !pendingAttachments.length && !attachedVideo) || thinking ? 0.5 : 1,
                         },
                     ]}
                     accessibilityRole="button"
@@ -585,6 +674,7 @@ export default function SousScreen() {
                 >
                     <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
                 </AnimatedPressable>
+                </View>
             </View>
         </KeyboardAvoidingView>
     );
@@ -610,6 +700,12 @@ const styles = StyleSheet.create({
     bubble: { borderRadius: 24, paddingHorizontal: 16, paddingVertical: 12, maxWidth: '88%' },
     userBubble: { alignSelf: 'flex-end', borderBottomRightRadius: 8 },
     userText: { color: '#FFFFFF', fontSize: 16, lineHeight: 24 },
+    userAttach: { color: '#FFFFFF', fontSize: 13, marginTop: 6, opacity: 0.92 },
+    confirmCard: { borderWidth: 1, borderRadius: 16, padding: 14, width: '92%', gap: 8 },
+    confirmTitle: { fontSize: 16, fontWeight: '800' },
+    confirmBody: { fontSize: 14, lineHeight: 20 },
+    confirmRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
+    confirmBtn: { minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' },
     sousBlock: { gap: 8, alignItems: 'flex-start' },
     sousBubble: { borderWidth: 1, borderBottomLeftRadius: 8 },
     sousText: { fontSize: 16, lineHeight: 24 },
@@ -621,6 +717,7 @@ const styles = StyleSheet.create({
     cardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
     cardRowText: { flex: 1, fontSize: 15 },
     cardFooter: { gap: 8 },
+    fine: { fontSize: 12, lineHeight: 16 },
     cost: { fontSize: 28 },
     costLine: { fontSize: 13, marginTop: 4 },
     costNote: { fontSize: 12, marginTop: 8, fontStyle: 'italic' },
@@ -646,8 +743,9 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     videoAttachText: { flex: 1, fontSize: 13 },
-    composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
-    input: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderRadius: 22, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11, fontSize: 16, lineHeight: 20 },
+    composerWrap: { paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
+    composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+    input: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderRadius: 22, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 11, fontSize: 16, lineHeight: 20 },
     roundButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
     sendButton: { borderWidth: 0 },
 });

@@ -61,6 +61,24 @@ function validateImages(images) {
     return out;
 }
 
+const MAX_IMAGES = 6;
+const MAX_IMAGE_BYTES = 4.5 * 1024 * 1024;
+
+function validateMultimodalBody(body) {
+    const images = Array.isArray(body?.images) ? body.images : [];
+    if (images.length > MAX_IMAGES) {
+        throw new Error(`Too many images (max ${MAX_IMAGES}).`);
+    }
+    let bytes = 0;
+    for (const img of images) {
+        const len = String(img?.data || '').length;
+        bytes += Math.floor(len * 0.75);
+    }
+    if (bytes > MAX_IMAGE_BYTES) {
+        throw new Error('Attachment payload is too large. Send fewer or smaller images.');
+    }
+}
+
 function buildMessages(body) {
     const prompt = body?.prompt;
     if (!prompt || typeof prompt !== 'string') {
@@ -207,6 +225,7 @@ export default async function handler(req, res) {
 
     let messages;
     try {
+        if (!isTest) validateMultimodalBody(req.body);
         messages = buildMessages(isTest ? { prompt: 'Reply with the single word: OK' } : req.body);
     } catch (error) {
         console.warn('[ai/chat] bad request:', error?.message || error);

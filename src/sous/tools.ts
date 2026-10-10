@@ -6,6 +6,9 @@ import {
 } from '../database/operations';
 import { parseRecipe, parseRecipeFromUrl } from '../services/recipeParser';
 import { estimateGroceryCost } from '../services/groceryService';
+import { toPersistentImageUri } from '../services/mediaPrep';
+import { Platform } from 'react-native';
+import { ATTACHMENT_SOURCE_LABEL } from './attachmentLimits';
 
 // What Sous can actually do in the app. The model asks for these by name in its
 // JSON reply (see agent.ts); each one runs against the local database and
@@ -39,7 +42,15 @@ export type RecipeSummary = { id: number; title: string; image_uri?: string | nu
 
 export type SousCard =
     | { type: 'recipes'; title: string; recipes: RecipeSummary[] }
-    | { type: 'recipe'; title: string; recipe: RecipeSummary; aiGenerated: boolean; ingredients?: string[] }
+    | {
+          type: 'recipe';
+          title: string;
+          recipe: RecipeSummary;
+          aiGenerated: boolean;
+          ingredients?: string[];
+          sourceLabel?: string;
+          fromUserFile?: boolean;
+      }
     | { type: 'meal_plan'; recipeTitle: string; date: string; mealType: MealType }
     | { type: 'pantry'; items: string[] }
     | { type: 'grocery'; items: string[] }
@@ -55,8 +66,9 @@ export type SousCard =
 /** Tool reference shown to the model inside the system prompt. */
 export const TOOL_SPEC = `
 - find_recipes {"query": string}: search the user's saved recipes.
-- import_recipe {"url"?: string, "text"?: string}: import a real recipe from a link or pasted text into the recipe book.
-- create_recipe {"title", "description"?, "servings"?, "prep_time"?, "cook_time"?, "ingredients": [{"ingredient", "quantity"?, "unit"?}], "instructions": [string]}: save a NEW recipe you wrote.
+- import_recipe {"url"?: string, "text"?: string}: import a recipe from a link, pasted text, or an attached file into the recipe book.
+- create_recipe {"title", "description"?, "servings"?, "prep_time"?, "cook_time"?, "ingredients": [{"ingredient", "quantity"?, "unit"?}], "instructions": [string]}: save a NEW recipe (from an attachment or your draft).
+If the user attached a photo, the app uses it as the recipe image automatically; never put image URLs in tool arguments.
 - add_to_meal_plan {"recipe_id"?: number, "recipe_title"?: string, "date": "YYYY-MM-DD", "meal_type": "breakfast"|"lunch"|"dinner"}: schedule a saved recipe.
 - add_to_pantry {"items": [{"name", "quantity"?, "unit"?, "category"?}]}: record items the user has at home.
 - add_to_grocery {"items": [{"name", "quantity"?, "unit"?}]}: add items to the shopping list.
@@ -77,7 +89,38 @@ async function findRecipe(args: { recipe_id?: number; recipe_title?: string }): 
     return null;
 }
 
-async function run(call: ToolCall): Promise<SousCard> {
+type RunOptions = {
+    /** First image the user attached in this chat turn; the only image Sous may store as a cover. */
+    userRecipeImageUri?: string | null;
+};
+
+// Native pickers hand back local file URIs; they never leave the device.
+const NATIVE_LOCAL_URI = /^(file|content|ph|assets-library):/i;
+
+function isLocalImageUri(uri: string) {
+    if (/^blob:/i.test(uri) || /^data:image\//i.test(uri)) return true;
+    return Platform.OS !== 'web' && NATIVE_LOCAL_URI.test(uri);
+}
+
+/**
+ * Recipe covers come only from the user's own attachment in this chat, never
+ * from the model's tool args: a prompt-injected http(s) URL saved as a cover
+ * would be fetched every time the recipe renders, leaking to whoever controls
+ * that server.
+ */
+export async function persistRecipeImage(attachmentUri: string | null | undefined) {
+    if (!attachmentUri || !isLocalImageUri(attachmentUri)) return null;
+    try {
+        const stored = await toPersistentImageUri(attachmentUri);
+        return typeof stored === 'string' && isLocalImageUri(stored) ? stored : null;
+    } catch {
+        return null;
+    }
+}
+
+const attachmentCover = (options: RunOptions) => persistRecipeImage(options.userRecipeImageUri);
+
+async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> {
     switch (call.tool) {
         case 'find_recipes': {
             const recipes = ((await recipeOperations.search(call.args.query || '')) as RecipeSummary[]).slice(0, 6);
@@ -93,21 +136,28 @@ async function run(call: ToolCall): Promise<SousCard> {
             const aiExtracted = Boolean(
                 ('aiExtracted' in result && result.aiExtracted) || result.recipe.aiExtracted
             );
-            const id = Number(await recipeOperations.create(result.recipe));
+            const userCover = await attachmentCover(options);
+            const cover = userCover || result.recipe.imageUri || null;
+            const id = Number(await recipeOperations.create({ ...result.recipe, imageUri: cover }));
+            const fromFile = Boolean(userCover);
             await recipeOperations.setProvenance(id, {
                 isAiGenerated: aiExtracted,
-                imageSource: result.recipe.imageUri ? 'import' : null,
+                imageSource: cover ? (fromFile ? 'user' : 'import') : null,
             });
             return {
                 type: 'recipe',
                 title: aiExtracted ? 'Imported (AI from video/caption)' : 'Imported to your recipe book',
-                recipe: { id, title: result.recipe.title, is_ai_generated: aiExtracted ? 1 : 0 },
+                recipe: { id, title: result.recipe.title, is_ai_generated: aiExtracted ? 1 : 0, image_uri: cover },
                 aiGenerated: aiExtracted,
+                fromUserFile: fromFile,
+                sourceLabel: fromFile ? ATTACHMENT_SOURCE_LABEL : undefined,
                 ingredients: (result.recipe.ingredients || []).map((ing: { ingredient?: string }) => ing.ingredient || ''),
             };
         }
         case 'create_recipe': {
             const a = call.args;
+            const cover = await attachmentCover(options);
+            const fromFile = Boolean(cover);
             const id = Number(
                 await recipeOperations.create({
                     title: a.title,
@@ -117,6 +167,7 @@ async function run(call: ToolCall): Promise<SousCard> {
                     cookTime: a.cook_time || null,
                     totalTime: a.prep_time && a.cook_time ? a.prep_time + a.cook_time : null,
                     sourcePlatform: 'Ampi',
+                    imageUri: cover,
                     ingredients: (a.ingredients || []).map((ing) => ({
                         ingredient: ing.ingredient,
                         quantity: asText(ing.quantity),
@@ -125,12 +176,14 @@ async function run(call: ToolCall): Promise<SousCard> {
                     instructions: a.instructions || [],
                 })
             );
-            await recipeOperations.setProvenance(id, { isAiGenerated: true });
+            await recipeOperations.setProvenance(id, { isAiGenerated: true, imageSource: cover ? (fromFile ? 'user' : 'ai') : null });
             return {
                 type: 'recipe',
                 title: 'Saved to your recipe book',
-                recipe: { id, title: a.title, is_ai_generated: 1 },
+                recipe: { id, title: a.title, is_ai_generated: 1, image_uri: cover },
                 aiGenerated: true,
+                fromUserFile: fromFile,
+                sourceLabel: fromFile ? ATTACHMENT_SOURCE_LABEL : undefined,
                 ingredients: (a.ingredients || []).map((ing) => [ing.quantity, ing.unit, ing.ingredient].filter(Boolean).join(' ')),
             };
         }
@@ -149,10 +202,16 @@ async function run(call: ToolCall): Promise<SousCard> {
         }
         case 'add_to_grocery': {
             const items = call.args.items || [];
-            for (const item of items) {
+            const pantry = (await pantryOperations.getAll()) as { name: string }[];
+            const have = new Set(pantry.map((p) => p.name.trim().toLowerCase()));
+            const toAdd = items.filter((item) => !have.has(item.name.trim().toLowerCase()));
+            const skipped = items.length - toAdd.length;
+            for (const item of toAdd) {
                 await groceryOperations.add({ name: item.name, quantity: asText(item.quantity), unit: item.unit || null, category: item.category || null });
             }
-            return { type: 'grocery', items: items.map((item) => item.name) };
+            const labels = toAdd.map((item) => item.name);
+            if (skipped) labels.push(`(${skipped} already in pantry)`);
+            return { type: 'grocery', items: labels };
         }
         case 'estimate_cost': {
             const list = await groceryOperations.getAll();
@@ -180,11 +239,11 @@ async function run(call: ToolCall): Promise<SousCard> {
     }
 }
 
-export async function runTools(calls: ToolCall[]): Promise<SousCard[]> {
+export async function runTools(calls: ToolCall[], options: RunOptions = {}): Promise<SousCard[]> {
     const cards: SousCard[] = [];
     for (const call of calls.slice(0, 5)) {
         try {
-            cards.push(await run(call));
+            cards.push(await run(call, options));
         } catch (error) {
             cards.push({ type: 'error', message: (error as Error)?.message || 'That step failed.' });
         }

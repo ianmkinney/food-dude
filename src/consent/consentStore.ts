@@ -19,27 +19,27 @@ export type ConsentTarget = 'anthropic' | 'openai' | 'xai' | 'gemini' | 'platfor
 export const TARGETS: Record<ConsentTarget, { name: string; sends: string; policy: string }> = {
     anthropic: {
         name: 'Anthropic (Claude)',
-        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items and food likes',
+        sends: 'your messages and requests, recipe text, links, photos, PDFs and other files you attach, and, when relevant, your saved recipe names, pantry items and food likes',
         policy: 'https://www.anthropic.com/legal/privacy',
     },
     openai: {
         name: 'OpenAI',
-        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items and food likes',
+        sends: 'your messages and requests, recipe text, links, photos, PDFs and other files you attach, and, when relevant, your saved recipe names, pantry items and food likes',
         policy: 'https://openai.com/policies/privacy-policy',
     },
     xai: {
         name: 'xAI (Grok)',
-        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items and food likes',
+        sends: 'your messages and requests, recipe text, links, photos, PDFs and other files you attach, and, when relevant, your saved recipe names, pantry items and food likes',
         policy: 'https://x.ai/legal/privacy-policy',
     },
     gemini: {
         name: 'Google (Gemini)',
-        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items and food likes',
+        sends: 'your messages and requests, recipe text, links, photos, PDFs and other files you attach, and, when relevant, your saved recipe names, pantry items and food likes',
         policy: 'https://policies.google.com/privacy',
     },
     platform: {
         name: 'AmpliFood platform AI (OpenRouter)',
-        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items and food likes',
+        sends: 'your messages and requests, recipe text, links, photos, PDFs and other files you attach, and, when relevant, your saved recipe names, pantry items and food likes',
         policy: 'https://openrouter.ai/privacy',
     },
 };
