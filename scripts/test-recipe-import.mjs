@@ -11,8 +11,8 @@ const TEST_URLS = [
     'https://www.tasteofhome.com/recipes/slow-cooker-chili/',
 ];
 
-const { safeFetchHtml } = await import('../api/lib/ssrf.js');
-const { extractRecipeFromHtml, hasRecipeShape } = await import('../api/lib/recipeExtract.js');
+const { safeFetchHtml } = await import('../api/_lib/ssrf.js');
+const { extractRecipeFromHtml, hasRecipeShape } = await import('../api/_lib/recipeExtract.js');
 
 for (const url of TEST_URLS) {
     console.log('fetch', url);
@@ -30,7 +30,7 @@ for (const url of TEST_URLS) {
 
 process.env.SESSION_SECRET = 'local-test-secret';
 process.env.ALLOWED_EMAILS = 'owner@example.com';
-const { signSession } = await import('../api/lib/session.js');
+const { signSession } = await import('../api/_lib/session.js');
 const { default: importHandler } = await import('../api/recipes/import.js');
 
 const owner = await signSession({ sub: 'g-1', email: 'owner@example.com', name: 'Owner' });

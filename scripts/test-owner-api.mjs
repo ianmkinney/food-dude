@@ -7,7 +7,7 @@ process.env.OPENROUTER_API_KEY = 'sk-or-fake';
 process.env.ALLOWED_EMAILS = 'owner@example.com';
 process.env.OPENROUTER_DEFAULT_MODEL = 'google/gemini-2.0-flash-001';
 
-const { signSession } = await import('../api/lib/session.js');
+const { signSession } = await import('../api/_lib/session.js');
 const { default: chat } = await import('../api/ai/chat.js');
 
 const retired = new Set(['google/gemini-2.0-flash-001']);

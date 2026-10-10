@@ -1,7 +1,7 @@
-import { applyCors } from '../lib/cors.js';
-import { isEmailAllowed, isOwnerGateConfigured, requireSecrets } from '../lib/env.js';
-import { bearerToken, verifySession } from '../lib/session.js';
-import { checkMinuteRateLimit } from '../lib/store.js';
+import { applyCors } from '../_lib/cors.js';
+import { isEmailAllowed, isOwnerGateConfigured, requireSecrets } from '../_lib/env.js';
+import { bearerToken, verifySession } from '../_lib/session.js';
+import { checkMinuteRateLimit } from '../_lib/store.js';
 
 const RESEND_URL = 'https://api.resend.com/emails';
 const MAX_RECIPIENTS = 20;

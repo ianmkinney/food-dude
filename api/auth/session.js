@@ -1,6 +1,6 @@
-import { applyCors } from '../lib/cors.js';
-import { isOwnerGateConfigured, isEmailAllowed, requireSecrets } from '../lib/env.js';
-import { bearerToken, verifySession } from '../lib/session.js';
+import { applyCors } from '../_lib/cors.js';
+import { isOwnerGateConfigured, isEmailAllowed, requireSecrets } from '../_lib/env.js';
+import { bearerToken, verifySession } from '../_lib/session.js';
 
 export default async function handler(req, res) {
     if (applyCors(req, res)) return;

@@ -1,13 +1,13 @@
-import { applyCors } from '../lib/cors.js';
+import { applyCors } from '../_lib/cors.js';
 import {
     getOpenRouterConfig,
     isEmailAllowed,
     isOwnerGateConfigured,
     requireSecrets,
     resolveOpenRouterApiKey,
-} from '../lib/env.js';
-import { bearerToken, verifySession } from '../lib/session.js';
-import { checkMinuteRateLimit } from '../lib/store.js';
+} from '../_lib/env.js';
+import { bearerToken, verifySession } from '../_lib/session.js';
+import { checkMinuteRateLimit } from '../_lib/store.js';
 
 const DAILY_CREDIT_MSG = 'Daily AI limit reached. Try again tomorrow or ask Ian to raise your OpenRouter credit limit.';
 
