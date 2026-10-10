@@ -47,6 +47,23 @@ const addColumnIfMissing = async (db, table, column, type, defaultValue) => {
     return true;
 };
 
+/** Idempotent repair for v14 party link columns (safe after partial migration runs). */
+export const ensurePartyLinkMemberColumns = async (db) => {
+    await addColumnIfMissing(db, 'parties', 'removed_member_ids', 'TEXT');
+    await addColumnIfMissing(db, 'party_members', 'sync_member_id', 'TEXT');
+    await addColumnIfMissing(db, 'party_members', 'member_status', 'TEXT', "'confirmed'");
+    const members = await db.getAllAsync(
+        "SELECT id FROM party_members WHERE sync_member_id IS NULL OR sync_member_id = ''"
+    );
+    for (const row of members) {
+        const syncId = `legacy-${row.id}`;
+        await db.runAsync('UPDATE party_members SET sync_member_id = ? WHERE id = ?', [syncId, row.id]);
+    }
+    await db.execAsync(
+        "UPDATE party_members SET member_status = 'confirmed' WHERE member_status IS NULL OR member_status = '';"
+    );
+};
+
 // Legacy patches that the pre-migration `migrateDatabase` applied on every boot.
 // Kept verbatim so nothing regresses for users upgrading from Food Dude.
 const LEGACY_USER_COLUMNS = [
@@ -438,16 +455,7 @@ export const MIGRATIONS = [
         version: 14,
         name: 'party_link_members',
         up: async (db) => {
-            await addColumnIfMissing(db, 'parties', 'removed_member_ids', 'TEXT');
-            await addColumnIfMissing(db, 'party_members', 'sync_member_id', 'TEXT');
-            await addColumnIfMissing(db, 'party_members', 'member_status', 'TEXT', "'confirmed'");
-            const members = await db.getAllAsync(
-                "SELECT id, party_id FROM party_members WHERE sync_member_id IS NULL OR sync_member_id = ''"
-            );
-            for (const row of members) {
-                const syncId = `legacy-${row.id}`;
-                await db.runAsync('UPDATE party_members SET sync_member_id = ? WHERE id = ?', [syncId, row.id]);
-            }
+            await ensurePartyLinkMemberColumns(db);
         },
     },
 ];
@@ -461,6 +469,7 @@ export const ensureRequiredColumns = async (db) => {
     for (const col of LEGACY_USER_COLUMNS) {
         await addColumnIfMissing(db, 'users', col.name, col.type, col.defaultValue);
     }
+    await ensurePartyLinkMemberColumns(db);
 };
 
 export const getSchemaVersion = async (db) => {

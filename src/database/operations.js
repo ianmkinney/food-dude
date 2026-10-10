@@ -1,11 +1,56 @@
+import { Platform } from 'react-native';
 import { runMigrations, ensureRequiredColumns } from './migrations';
 import { openAppDatabase } from './openDatabase';
+import { registerDatabase } from './dbRegistry';
+import { saveDatabaseSnapshot } from './webDbMirror';
 
 let db = null;
 let dbMode = 'persistent';
+let mirrorTimer = null;
 
-/** 'memory' when the saved database couldn't be opened and changes won't persist. */
+/** 'memory' | 'indexeddb' | 'persistent' — see openDatabase.web.js */
 export const getDatabaseMode = () => dbMode;
+
+async function mirrorDatabaseToIndexedDb() {
+    if (!db || Platform.OS !== 'web' || dbMode === 'memory') return;
+    try {
+        const bytes = await db.serializeAsync('main');
+        await saveDatabaseSnapshot(bytes);
+    } catch (error) {
+        console.warn('[db] snapshot save failed:', error?.message || error);
+    }
+}
+
+function scheduleIndexedDbMirroring() {
+    if (Platform.OS !== 'web' || mirrorTimer) return;
+    mirrorTimer = setInterval(() => {
+        mirrorDatabaseToIndexedDb();
+    }, 45_000);
+    if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                mirrorDatabaseToIndexedDb();
+            }
+        });
+    }
+}
+
+export async function shutdownDatabase() {
+    if (mirrorTimer) {
+        clearInterval(mirrorTimer);
+        mirrorTimer = null;
+    }
+    await mirrorDatabaseToIndexedDb();
+    if (db) {
+        try {
+            await db.closeAsync();
+        } catch (error) {
+            console.warn('[db] shutdown close failed:', error?.message || error);
+        }
+        db = null;
+    }
+    registerDatabase(null);
+}
 
 // Initialize database
 export const initDatabase = async () => {
@@ -14,10 +59,15 @@ export const initDatabase = async () => {
         const opened = await openAppDatabase('fooddude.db');
         db = opened.db;
         dbMode = opened.mode;
+        registerDatabase(db);
         await db.execAsync('PRAGMA foreign_keys = ON;');
         const version = await runMigrations(db);
         await ensureRequiredColumns(db);
-        console.log(`Galaxy Health database ready at schema v${version}`);
+        if (Platform.OS === 'web' && dbMode !== 'memory') {
+            await mirrorDatabaseToIndexedDb();
+            scheduleIndexedDbMirroring();
+        }
+        console.log(`Galaxy Health database ready at schema v${version} (${dbMode})`);
         return db;
     } catch (error) {
         console.error('Error initializing database:', error);
