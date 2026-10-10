@@ -11,6 +11,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { buildShell } = require('./web-shell');
 
 const dist = path.resolve(process.argv[2] || 'dist');
 const assetsDir = path.join(dist, 'assets');
@@ -64,4 +65,31 @@ if (leftovers.length) {
     process.exit(1);
 }
 
-console.log(`[web-postexport] renamed ${renamedDirs} node_modules folder(s), rewrote ${rewrittenFiles} file(s) in ${dist}`);
+// The app shows nothing until the SQLite wasm and the Fredoka headings have
+// loaded, but the bundle only discovers them after it has downloaded and run.
+// Preloading lets them download alongside the bundle. Both live under
+// /assets/, which is served immutable, so the worker's fetch hits the cache.
+// The wa-sqlite wasm is fetched inside a worker, which can't use a document preload.
+const PRELOADS = [
+    { test: /\/Fredoka_(600SemiBold|700Bold)\.[^/]*\.ttf$/, as: 'font', type: 'font/ttf' },
+];
+const indexHtml = path.join(dist, 'index.html');
+const assetUrls = listFiles(assetsDir, ['.ttf']).map((file) => '/' + path.relative(dist, file).split(path.sep).join('/'));
+const links = PRELOADS.flatMap(({ test, as, type }) =>
+    assetUrls.filter((url) => test.test(url)).map((url) => `<link rel="preload" href="${url}" as="${as}" type="${type}" crossorigin>`)
+);
+let html = fs.readFileSync(indexHtml, 'utf8');
+// Injected after first paint so the downloads don't compete with the shell.
+if (links.length && !html.includes('id="af-preload"')) {
+    const tags = JSON.stringify(links.join(''));
+    html = html.replace(
+        '</head>',
+        `<script id="af-preload">requestAnimationFrame(function(){setTimeout(function(){document.head.insertAdjacentHTML('beforeend',${tags})},0)})</script></head>`
+    );
+}
+const fredokaBold = assetUrls.find((url) => /\/Fredoka_700Bold\.[^/]*\.ttf$/.test(url));
+const fontFaces = fredokaBold ? `@font-face{font-family:Fredoka_700Bold;src:url(${fredokaBold}) format('truetype');font-display:swap}` : '';
+html = html.replace('<!--af-shell-->', buildShell({ fontFaces }));
+fs.writeFileSync(indexHtml, html);
+
+console.log(`[web-postexport] renamed ${renamedDirs} node_modules folder(s), rewrote ${rewrittenFiles} file(s), preloaded ${links.length} asset(s) in ${dist}`);

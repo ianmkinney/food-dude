@@ -12,10 +12,14 @@ const WORDMARK_ASPECT = 521 / 108;
 const MARK_COLOR_ASPECT = 375 / 480;
 const MARK_INK_ASPECT = 245 / 240;
 
-export const Wordmark = ({ height = 26, style }) => {
+/**
+ * @param {{ height?: number, style?: any, nativeID?: string }} props
+ */
+export const Wordmark = ({ height = 26, style, nativeID }) => {
     const { isDark } = useTheme();
     return (
         <Image
+            nativeID={nativeID}
             source={isDark ? WORDMARK_DARK : WORDMARK}
             style={[{ height, width: height * WORDMARK_ASPECT }, style]}
             resizeMode="contain"

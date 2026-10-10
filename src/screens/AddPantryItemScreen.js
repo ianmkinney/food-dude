@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { useViewTransitionTarget } from '../motion/viewTransition';
 import { pantryOperations } from '../database/operations';
 import { lookupBarcode } from '../services/barcodeService';
 
@@ -23,6 +24,7 @@ const AddPantryItemScreen = () => {
     const navigation = useNavigation();
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const sheetRef = useViewTransitionTarget('af-sheet');
 
     const [permission, requestPermission] = useCameraPermissions();
     const [isScanning, setIsScanning] = useState(false);
@@ -130,7 +132,7 @@ const AddPantryItemScreen = () => {
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View ref={sheetRef} style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <ScrollView style={styles.container}>
                 <View style={styles.content}>
                     {/* Scan Button */}
@@ -334,10 +336,12 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     saveButton: {
-        height: 50,
+        minHeight: 50,
         borderRadius: 25,
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        paddingHorizontal: 20,
         marginTop: 24,
     },
     saveButtonText: {

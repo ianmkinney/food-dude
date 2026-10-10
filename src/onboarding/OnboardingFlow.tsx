@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import ThemedSwitch from '../components/ThemedSwitch';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { BrandMark } from '../components/Brand';
+import GuitarMark from '../brand/GuitarMark';
+import { Wordmark } from '../components/Brand';
 import SourceLabel from '../components/SourceLabel';
 import { AiBadge, AiDisclaimer, AllergyNotice } from '../ai/AiLabel';
 import {
@@ -21,11 +23,11 @@ import { getApiKey, getSelectedProvider } from '../services/aiSettings';
 import { generateText, stripCodeFences } from '../services/aiClient';
 import { recipeOperations, userOperations } from '../database/operations';
 import { findAllergenMatches, parseAllergies } from '../safety/allergens';
-import { ASSISTANT_NAME, ASSISTANT_TAGLINE } from '../config/assistant';
+import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION } from '../config/assistant';
 import { MINIMUM_AGE } from '../config/legal';
 import { useSpeechInput } from '../voice/useSpeechInput';
 import { WEB_SPEECH_NOTICE } from '../voice/webSpeechRecognition';
-import { LINES, type LineId } from './script';
+import { INTRO_LINES, LINES, type LineId } from './script';
 import { playLine, stopLine } from './onboardingVoice';
 import { isVoiceMuted, setVoiceMuted } from './onboardingStore';
 import { SAMPLE_RECIPES, type DemoRecipe } from './sampleRecipes';
@@ -210,21 +212,25 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
             accessibilityRole="button"
             accessibilityLabel={a11y || label}
             accessibilityState={{ disabled: !!disabled }}
-            style={[styles.button, primary ? { backgroundColor: theme.primary[500] } : { backgroundColor: c.surfaceMuted }, disabled && { opacity: 0.45 }]}
+            style={[
+                styles.button,
+                primary ? { backgroundColor: theme.primary[500] } : { backgroundColor: c.surfaceMuted },
+                disabled && { backgroundColor: c.surfaceMuted, borderColor: c.borderStrong },
+            ]}
         >
-            <Text style={[styles.buttonText, { color: primary ? '#FFFFFF' : c.text.primary }]}>{label}</Text>
+            <Text style={[styles.buttonText, { color: disabled ? c.text.secondary : primary ? '#FFFFFF' : c.text.primary }]}>{label}</Text>
         </Pressable>
     );
 
     const Check = ({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: React.ReactNode; }) => (
         <View style={styles.checkRow}>
-            <Switch value={value} onValueChange={onChange} accessibilityLabel={typeof label === 'string' ? label : undefined} />
+            <ThemedSwitch value={value} onValueChange={onChange} accessibilityLabel={typeof label === 'string' ? label : undefined} />
             <Text style={[styles.body, { color: c.text.primary, flex: 1 }]}>{label}</Text>
         </View>
     );
 
     const link = (label: string, url: string) => (
-        <Text style={[styles.link, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(url)}>
+        <Text style={[styles.link, { color: theme.link }]} accessibilityRole="link" onPress={() => Linking.openURL(url)}>
             {label}
         </Text>
     );
@@ -234,9 +240,17 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
             case 'intro':
                 return (
                     <>
-                        <Text style={[styles.lead, { color: c.text.primary }]}>
-                            <Text style={styles.bold}>Hi, I'm {ASSISTANT_NAME}, {ASSISTANT_TAGLINE}.</Text> I'm an AI assistant, not a person. My voice is generated on your device, and AI can make mistakes, so always check ingredients and labels yourself.
-                        </Text>
+                        <View style={styles.headline}>
+                            <Text style={[styles.h1, display, { color: c.text.primary }]} accessibilityRole="header">
+                                Hi, I'm {ASSISTANT_NAME}
+                            </Text>
+                            <View style={styles.nameRow}>
+                                <Text style={[styles.small, { color: c.text.tertiary }]}>{ASSISTANT_PRONUNCIATION}</Text>
+                                <AiBadge />
+                            </View>
+                        </View>
+                        <Text style={[styles.lead, { color: c.text.primary }]}>{INTRO_LINES[0]}</Text>
+                        <Text style={[styles.body, { color: c.text.secondary }]}>{INTRO_LINES[1]}</Text>
                         <View style={styles.row}>
                             <Button label="Let's go" primary onPress={() => go('agree')} />
                             <Button
@@ -443,25 +457,29 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
     return (
         <ScrollView style={{ backgroundColor: c.background }} contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
             <View style={styles.topBar}>
-                <BrandMark size={44} style={null} />
-                <View style={{ flex: 1 }}>
-                    <View style={styles.nameRow}>
-                        <Text style={[styles.sous, display, { color: c.text.primary }]}>AmpliFood · {ASSISTANT_NAME}</Text>
-                        <Text style={[styles.small, { color: c.text.tertiary }]}>(Soo)</Text>
-                        <AiBadge />
-                    </View>
+                <GuitarMark size={40} waves="idle" />
+                <View style={styles.nameCol}>
+                    <Wordmark height={26} nativeID="af-onboarding-logo" />
+                    {step !== 'intro' && (
+                        <View style={styles.nameRow}>
+                            <Text style={[styles.small, styles.bold, { color: c.text.secondary }]}>{ASSISTANT_NAME}</Text>
+                            <Text style={[styles.small, { color: c.text.tertiary }]}>{ASSISTANT_PRONUNCIATION}</Text>
+                            <AiBadge />
+                        </View>
+                    )}
                 </View>
-                <Pressable onPress={toggleMute} style={[styles.mute, { borderColor: c.border }]} accessibilityRole="switch" accessibilityState={{ checked: !muted }} accessibilityLabel="AI voice">
-                    <Ionicons name={muted ? 'volume-mute-outline' : 'volume-high-outline'} size={16} color={c.text.secondary} />
-                    <Text style={[styles.muteText, { color: c.text.secondary }]}>{muted ? 'AI voice muted' : 'AI voice'}</Text>
+                <Pressable onPress={toggleMute} style={[styles.mute, { borderColor: c.border }]} accessibilityRole="switch" accessibilityState={{ checked: !muted }} aria-checked={!muted} accessibilityLabel="AI voice">
+                    <Ionicons name={muted ? 'volume-mute-outline' : 'volume-high-outline'} size={20} color={c.text.secondary} />
                 </Pressable>
             </View>
 
             <Animated.View key={step} entering={entering} exiting={exiting} style={styles.content}>
-                <View style={[styles.caption, { backgroundColor: c.surfaceMuted, borderColor: c.border }]} accessibilityLabel={`Caption: ${LINES[STEP_LINE[step]]}`}>
-                    <Text style={[styles.captionTag, { color: c.text.tertiary }]}>CAPTION</Text>
-                    <Text style={[styles.captionText, { color: c.text.primary }]}>{LINES[STEP_LINE[step]]}</Text>
-                </View>
+                {step !== 'intro' && (
+                    <View style={[styles.caption, { backgroundColor: c.surfaceMuted, borderColor: c.border }]} accessibilityLabel={`Caption: ${LINES[STEP_LINE[step]]}`}>
+                        <Text style={[styles.captionTag, { color: c.text.tertiary }]}>CAPTION</Text>
+                        <Text style={[styles.captionText, { color: c.text.primary }]}>{LINES[STEP_LINE[step]]}</Text>
+                    </View>
+                )}
                 {body()}
             </Animated.View>
 
@@ -477,14 +495,15 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
 const styles = StyleSheet.create({
     screen: { flexGrow: 1, padding: 22, gap: 18, maxWidth: 560, width: '100%', alignSelf: 'center' },
     topBar: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    sous: { fontSize: 22 },
-    mute: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-    muteText: { fontSize: 12, fontWeight: '700' },
+    nameCol: { flex: 1, gap: 6, alignItems: 'flex-start' },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+    mute: { width: 44, height: 44, borderWidth: 1, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
     content: { gap: 14 },
     caption: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 4 },
     captionTag: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
     captionText: { fontSize: 15, lineHeight: 22 },
+    headline: { gap: 6 },
+    h1: { fontSize: 32, lineHeight: 38 },
     lead: { fontSize: 18, lineHeight: 27 },
     bold: { fontWeight: '800' },
     h2: { fontSize: 26 },
@@ -494,7 +513,7 @@ const styles = StyleSheet.create({
     link: { fontSize: 15, fontWeight: '800', textDecorationLine: 'underline' },
     bullets: { gap: 6 },
     row: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 4 },
-    button: { borderRadius: 999, paddingVertical: 13, paddingHorizontal: 22, alignItems: 'center' },
+    button: { borderRadius: 999, borderWidth: 1.5, borderColor: 'transparent', paddingVertical: 12, paddingHorizontal: 22, alignItems: 'center' },
     buttonText: { fontSize: 16, fontWeight: '800' },
     checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     warn: { flexDirection: 'row', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12 },

@@ -3,42 +3,478 @@
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>AmpliFood</title>
     <meta name="description" content="AmpliFood is your AI sous chef: recipes, meal plans, pantry, grocery lists, and Ampi. Your data stays in your browser." />
     <meta name="application-name" content="AmpliFood" />
     <meta name="apple-mobile-web-app-title" content="AmpliFood" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#FBF4E8" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#1A1216" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#FBF6EE" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141012" media="(prefers-color-scheme: dark)" />
     <meta property="og:title" content="AmpliFood" />
     <meta property="og:description" content="Your AI sous chef for real-life cooking." />
     <meta property="og:image" content="/icon-512.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <link rel="preload" href="/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
     <style id="expo-reset">
-      /* These styles make the body full-height */
+      @font-face {
+        font-family: 'Inter';
+        src: url('/fonts/inter-var-latin.woff2') format('woff2');
+        font-weight: 100 900;
+        font-style: normal;
+        font-display: swap;
+      }
+      /* App-like locked screen: a fixed full-height shell that never zooms or rubber-bands. */
       html,
       body {
         height: 100%;
+        margin: 0;
+        overscroll-behavior: none;
+        touch-action: manipulation;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
       }
-      /* These styles disable body scrolling if you are using <ScrollView> */
       body {
+        position: fixed;
+        inset: 0;
         overflow: hidden;
-        background-color: #FBF4E8;
+        background-color: #FBF6EE;
+        font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      * {
+        overscroll-behavior: none;
       }
       @media (prefers-color-scheme: dark) {
         body {
-          background-color: #1A1216;
+          background-color: #141012;
         }
       }
-      /* These styles make the root element full-height */
       #root {
+        position: fixed;
+        inset: 0;
+        height: 100vh;
+        height: 100dvh;
         display: flex;
-        height: 100%;
-        flex: 1;
+      }
+      input,
+      textarea,
+      select {
+        font-size: max(16px, 1em);
+      }
+      /* No selection callouts on UI chrome; message and recipe text stay selectable. */
+      [role='button'],
+      [role='tab'],
+      [role='tablist'],
+      [role='switch'],
+      [role='checkbox'],
+      [role='radio'],
+      [role='link'],
+      [role='img'],
+      img,
+      svg {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+      }
+
+      /* Motion tokens: fast 150ms, base 250ms, slow 400ms, ease-out cubic-bezier(.2,.8,.2,1). */
+      :root {
+        --af-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+
+      /* Brand mark (src/brand/GuitarMark.web.js) */
+      .af-mark .af-wave,
+      .af-mark .af-body {
+        transform-box: fill-box;
+      }
+      .af-mark .af-wave-l {
+        transform-origin: 100% 50%;
+      }
+      .af-mark .af-wave-r {
+        transform-origin: 0% 50%;
+      }
+      .af-mark .af-body {
+        transform-origin: 50% 95%;
+      }
+      .af-m-idle .af-wave {
+        animation: af-breathe 3s ease-in-out infinite;
+      }
+      .af-m-thinking .af-wave {
+        animation: af-breathe 0.9s ease-in-out infinite;
+      }
+      .af-m-once .af-wave {
+        animation: af-wave-pulse 0.5s var(--af-ease) 0.2s 1 both;
+      }
+      .af-m-sway .af-body {
+        animation: af-sway 2.4s ease-in-out 1;
+      }
+      @keyframes af-breathe {
+        0%,
+        100% {
+          opacity: 0.55;
+          transform: scale(0.94);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.04);
+        }
+      }
+      @keyframes af-wave-pulse {
+        0% {
+          opacity: 0.3;
+          transform: scale(0.86);
+        }
+        55% {
+          opacity: 1;
+          transform: scale(1.08);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+      @keyframes af-sway {
+        0%,
+        100% {
+          transform: rotate(0deg);
+        }
+        25% {
+          transform: rotate(-5deg);
+        }
+        75% {
+          transform: rotate(4deg);
+        }
+      }
+
+      /* Streamed reply text fades in word by word (SousScreen WordFade). */
+      [data-afw] {
+        animation: af-word-in 250ms var(--af-ease) both;
+      }
+      [data-afw='1'] { animation-delay: 20ms; }
+      [data-afw='2'] { animation-delay: 40ms; }
+      [data-afw='3'] { animation-delay: 60ms; }
+      [data-afw='4'] { animation-delay: 80ms; }
+      [data-afw='5'] { animation-delay: 100ms; }
+      [data-afw='6'] { animation-delay: 120ms; }
+      [data-afw='7'] { animation-delay: 140ms; }
+      [data-afw='8'] { animation-delay: 160ms; }
+      [data-afw='9'] { animation-delay: 180ms; }
+      [data-afw='10'] { animation-delay: 200ms; }
+      [data-afw='11'] { animation-delay: 220ms; }
+      [data-afw='12'] { animation-delay: 240ms; }
+      [data-afw='13'] { animation-delay: 260ms; }
+      [data-afw='14'] { animation-delay: 280ms; }
+      [data-afw='15'] { animation-delay: 300ms; }
+      [data-afw='16'] { animation-delay: 320ms; }
+      [data-afw='17'] { animation-delay: 340ms; }
+      [data-afw='18'] { animation-delay: 360ms; }
+      [data-afw='19'] { animation-delay: 380ms; }
+      [data-afw='20'] { animation-delay: 400ms; }
+      [data-afw='21'] { animation-delay: 420ms; }
+      [data-afw='22'] { animation-delay: 440ms; }
+      [data-afw='23'] { animation-delay: 460ms; }
+      [data-afw='24'] { animation-delay: 480ms; }
+      [data-afw='25'] { animation-delay: 500ms; }
+      [data-afw='26'] { animation-delay: 520ms; }
+      [data-afw='27'] { animation-delay: 540ms; }
+      [data-afw='28'] { animation-delay: 560ms; }
+      [data-afw='29'] { animation-delay: 580ms; }
+      [data-afw='30'] { animation-delay: 600ms; }
+      [data-afw='31'] { animation-delay: 620ms; }
+      [data-afw='32'] { animation-delay: 640ms; }
+      [data-afw='33'] { animation-delay: 660ms; }
+      [data-afw='34'] { animation-delay: 680ms; }
+      [data-afw='35'] { animation-delay: 700ms; }
+      [data-afw='36'] { animation-delay: 720ms; }
+      [data-afw='37'] { animation-delay: 740ms; }
+      [data-afw='38'] { animation-delay: 760ms; }
+      [data-afw='39'] { animation-delay: 780ms; }
+      [data-afw='40'] { animation-delay: 800ms; }
+      @keyframes af-word-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      /* View Transitions: shared recipe image and FAB-to-sheet morph. */
+      ::view-transition-group(*) {
+        animation-duration: 400ms;
+        animation-timing-function: var(--af-ease);
+      }
+      ::view-transition-old(root),
+      ::view-transition-new(root) {
+        animation-duration: 250ms;
+      }
+
+      /* Startup */
+      #af-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      #af-splash .af-bg {
+        position: absolute;
+        inset: 0;
+        background: #FBF6EE;
+      }
+      #af-splash .af-lockup {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        will-change: transform, opacity;
+      }
+      #af-splash .af-mark {
+        width: 132px;
+        height: 132px;
+        overflow: visible;
+        transform-origin: 50% 100%;
+      }
+      #af-splash .af-word {
+        font: 700 44px/1 Fredoka_700Bold, ui-rounded, 'Arial Rounded MT Bold', system-ui, sans-serif;
+        letter-spacing: -0.5px;
+        white-space: nowrap;
+      }
+      #af-splash .af-word span {
+        display: inline-block;
+      }
+      .af-ink {
+        color: #2A1424;
+      }
+      .af-or {
+        color: #EB6A1C;
+      }
+      .af-to {
+        color: #E2261F;
+      }
+      .af-gr {
+        color: #4F802F;
+      }
+      @media (prefers-color-scheme: dark) {
+        #af-splash .af-bg {
+          background: #141012;
+        }
+        .af-ink {
+          color: #FFF4E3;
+        }
+      }
+
+      /* First visit this session: draw, pluck, pulse, rise (about 1.2s). */
+      .af-first .af-draw {
+        stroke-dasharray: 1;
+        stroke-dashoffset: 1;
+        fill-opacity: 0;
+        animation: af-draw 0.5s var(--af-ease) forwards, af-fill 0.2s 0.4s linear forwards;
+      }
+      .af-first .af-strings {
+        opacity: 0;
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+        animation: af-appear 0.1s 0.45s forwards, af-pluck 0.32s 0.5s linear 1;
+      }
+      .af-first .af-wave {
+        opacity: 0;
+        animation: af-wave-pulse 0.25s var(--af-ease) 0.62s 2 both;
+      }
+      .af-first .af-word span {
+        opacity: 0;
+        transform: translateY(14px);
+        animation: af-rise 0.35s var(--af-ease) forwards;
+      }
+      .af-first .af-word span:nth-child(1) { animation-delay: 0.42s; }
+      .af-first .af-word span:nth-child(2) { animation-delay: 0.45s; }
+      .af-first .af-word span:nth-child(3) { animation-delay: 0.48s; }
+      .af-first .af-word span:nth-child(4) { animation-delay: 0.51s; }
+      .af-first .af-word span:nth-child(5) { animation-delay: 0.54s; }
+      .af-first .af-word span:nth-child(6) { animation-delay: 0.57s; }
+      .af-first .af-word span:nth-child(7) { animation-delay: 0.6s; }
+      .af-first .af-word span:nth-child(8) { animation-delay: 0.63s; }
+      .af-first .af-word span:nth-child(9) { animation-delay: 0.66s; }
+      /* App still loading after the intro: keep breathing instead of showing a spinner. */
+      .af-hold .af-wave {
+        opacity: 1;
+        animation: af-breathe 3s ease-in-out infinite;
+      }
+      .af-skipped *,
+      .af-skipped .af-draw,
+      .af-skipped .af-word span {
+        animation-duration: 0s !important;
+        animation-delay: 0s !important;
+      }
+      @keyframes af-draw {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+      @keyframes af-fill {
+        to {
+          fill-opacity: 1;
+        }
+      }
+      @keyframes af-appear {
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes af-pluck {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        15% {
+          transform: translateX(1.8px);
+        }
+        35% {
+          transform: translateX(-1.5px);
+        }
+        55% {
+          transform: translateX(1px);
+        }
+        75% {
+          transform: translateX(-0.6px);
+        }
+      }
+      @keyframes af-rise {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Exit: the wordmark flies onto the app's logo (header, onboarding or the
+         first-run shell) while the mark and backdrop fade; the real logo stays
+         hidden until it lands. Without a visible logo the lockup just fades. */
+      #af-splash.af-exit,
+      #af-splash.af-fly {
+        pointer-events: none;
+      }
+      #af-splash.af-fly .af-word {
+        transition: transform 0.45s var(--af-ease);
+      }
+      #af-splash.af-fly .af-mark {
+        transition: transform 0.3s var(--af-ease), opacity 0.2s var(--af-ease);
+        transform: scale(0.4);
+        opacity: 0;
+      }
+      #af-splash.af-fly .af-bg {
+        transition: opacity 0.3s var(--af-ease) 0.1s;
+        opacity: 0;
+      }
+      #af-header-logo,
+      #af-onboarding-logo,
+      .afs-logo {
+        transition: opacity 0.12s linear;
+      }
+      html.af-handoff #af-header-logo,
+      html.af-handoff #af-onboarding-logo,
+      html.af-handoff .afs-logo {
+        opacity: 0;
+      }
+      .af-first.af-exit .af-lockup {
+        transition: transform 0.4s var(--af-ease), opacity 0.4s var(--af-ease);
+        transform: translateY(calc(env(safe-area-inset-top, 0px) + 28px - 50vh - 38px)) scale(0.6);
+        opacity: 0;
+      }
+      .af-first.af-exit .af-mark {
+        transition: transform 0.3s var(--af-ease);
+        transform: scale(0.3);
+      }
+      .af-first.af-exit .af-bg {
+        transition: opacity 0.3s var(--af-ease) 0.1s;
+        opacity: 0;
+      }
+      .af-repeat.af-exit {
+        transition: opacity 0.3s var(--af-ease);
+        opacity: 0;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #af-splash *,
+        .af-mark * {
+          animation: none !important;
+          transition: none !important;
+        }
+        [data-afw] {
+          animation: none;
+        }
+        ::view-transition-group(*),
+        ::view-transition-old(*),
+        ::view-transition-new(*) {
+          animation: none !important;
+        }
+      }
+
+      /* Desktop: the column's screens scroll without their own scrollbars;
+         src/platform/desktopScroll.web.js draws one at the window edge. */
+      html.af-desktop #root * { scrollbar-width: none; }
+      html.af-desktop #root *::-webkit-scrollbar { display: none; }
+      .af-pagebar { position: fixed; top: 0; right: 0; bottom: 0; width: 14px; z-index: 1000; }
+      .af-pagebar[hidden] { display: none; }
+      .af-pagebar > div { position: absolute; top: 0; right: 3px; width: 8px; border-radius: 4px; background: rgba(115, 100, 106, 0.45); transition: background-color 120ms, width 120ms; }
+      .af-pagebar:hover > div, .af-pagebar.af-drag > div { width: 10px; background: rgba(115, 100, 106, 0.75); }
+
+      /* First-run shell: a static copy of the onboarding intro, generated at
+         export time (scripts/web-shell.js). It is shown once the splash intro
+         finishes if the bundle is still loading, and removed when the app is
+         ready, so slow networks see real content instead of a held logo. */
+      #af-shell {
+        position: fixed;
+        inset: 0;
+        z-index: 2147482000;
+        overflow: hidden;
+        background: #FBF6EE;
+        color: #2A1424;
+        font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        transition: opacity 250ms cubic-bezier(.2, .8, .2, 1);
+        --afs-muted: #F4EDE2;
+        --afs-border: rgba(42, 20, 36, 0.12);
+        --afs-secondary: #5F4D57;
+        --afs-tertiary: #73646A;
+        --afs-primary: #A9420D;
+      }
+      #af-shell.afs-out { opacity: 0; }
+      .afs-screen { max-width: 560px; margin: 0 auto; padding: 22px; padding-top: calc(22px + env(safe-area-inset-top)); display: flex; flex-direction: column; gap: 18px; box-sizing: border-box; }
+      .afs-top { display: flex; align-items: center; gap: 12px; }
+      .afs-mark { width: 40px; height: 40px; flex: none; }
+      .afs-mark svg { width: 40px; height: 40px; display: block; }
+      .afs-name-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+      /* Box matches the 26px-tall wordmark image; the text is nudged so its ink fills it. */
+      .afs-logo { width: 125px; height: 26px; }
+      .afs-word { position: relative; top: -3px; font: 700 26.6px/26px Fredoka_700Bold, ui-rounded, system-ui, sans-serif; letter-spacing: -0.3px; white-space: nowrap; }
+      .afs-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .afs-small { font-size: 13px; line-height: 18px; color: var(--afs-tertiary); }
+      .afs-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; line-height: 14px; font-weight: 700; letter-spacing: 0.2px; border: 1px solid var(--afs-border); border-radius: 999px; padding: 3px 8px; color: var(--afs-secondary); background: var(--afs-muted); }
+      .afs-badge svg, .afs-mute svg { display: block; }
+      .afs-mute { width: 44px; height: 44px; box-sizing: border-box; border: 1px solid var(--afs-border); border-radius: 22px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--afs-secondary); }
+      .afs-content { display: flex; flex-direction: column; gap: 14px; }
+      .afs-headline { display: flex; flex-direction: column; gap: 6px; }
+      .afs-h1 { margin: 0; font: 700 32px/38px Fredoka_700Bold, ui-rounded, system-ui, sans-serif; }
+      .afs-lead { font-size: 18px; line-height: 27px; margin: 0; white-space: pre-wrap; overflow-wrap: break-word; }
+      .afs-body { font-size: 15px; line-height: 22px; margin: 0; color: var(--afs-secondary); white-space: pre-wrap; overflow-wrap: break-word; }
+      .afs-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+      .afs-button { border: 1.5px solid transparent; border-radius: 999px; padding: 12px 22px; font: 800 16px/19px Inter, system-ui, sans-serif; background: var(--afs-muted); color: inherit; }
+      .afs-button.afs-primary { background: var(--afs-primary); color: #FFFFFF; }
+      @media (prefers-color-scheme: dark) {
+        #af-shell {
+          background: #141012;
+          color: #FFF4E3;
+          --afs-muted: #191517;
+          --afs-border: rgba(255, 244, 227, 0.12);
+          --afs-secondary: #DDCFC4;
+          --afs-tertiary: #A8988F;
+          --afs-primary: #EB6A1C;
+        }
       }
     </style>
   </head>
@@ -47,6 +483,132 @@
     <noscript>
       AmpliFood needs JavaScript to run.
     </noscript>
+    <!--af-shell-->
+    <div id="af-splash" aria-hidden="true">
+      <div class="af-bg"></div>
+      <div class="af-lockup">
+        <svg class="af-mark" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg">
+          <g fill="none" stroke="#EB6A1C" stroke-width="6" stroke-linecap="round">
+            <path class="af-wave af-wave-l" d="M30 74 Q18 96 30 118" />
+            <path class="af-wave af-wave-l" d="M17 64 Q1 96 17 128" />
+            <path class="af-wave af-wave-r" d="M110 74 Q122 96 110 118" />
+            <path class="af-wave af-wave-r" d="M123 64 Q139 96 123 128" />
+          </g>
+          <g transform="rotate(12 70 96)" stroke="#2A1424" stroke-width="3.5" stroke-linejoin="round">
+            <path class="af-draw" pathLength="1" fill="#E2261F" d="M70 74 C58 66 44 70 44 84 C44 88 45 91 47 93 C36 100 34 116 44 126 C54 136 86 136 96 126 C106 116 104 100 93 93 C95 91 96 88 96 84 C96 70 82 66 70 74 Z" />
+            <path class="af-draw" pathLength="1" fill="#4F802F" d="M50 79 C44 71 48 64 56 66 C56 72 54 76 50 79 Z M90 79 C96 71 92 64 84 66 C84 72 86 76 90 79 Z" />
+            <path class="af-draw" pathLength="1" fill="#F48A38" d="M64.5 21 A5 5 0 0 1 69.5 16 H70.5 A5 5 0 0 1 75.5 21 V88 H64.5 Z" />
+            <path class="af-draw" pathLength="1" fill="#4F802F" d="M70 17 C62 5 54 6 52 10 C60 10 65 13 70 17 Z M70 17 C78 5 86 6 88 10 C80 10 75 13 70 17 Z" />
+            <rect x="60" y="101" width="20" height="5" rx="2" fill="#FFF4E3" stroke="none" />
+            <rect x="61" y="116" width="18" height="5" rx="2" fill="#2A1424" stroke="none" />
+            <g class="af-strings" stroke="#FFF4E3" stroke-width="1.2">
+              <path d="M67 20 V118 M70 20 V118 M73 20 V118" />
+            </g>
+          </g>
+        </svg>
+        <div class="af-word"><span class="af-ink">A</span><span class="af-ink">m</span><span class="af-ink">p</span><span class="af-ink">l</span><span class="af-ink">i</span><span class="af-or">F</span><span class="af-to">o</span><span class="af-to">o</span><span class="af-gr">d</span></div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var splash = document.getElementById('af-splash');
+        var shell = document.getElementById('af-shell');
+        if (shell) {
+          var onboarded = false;
+          try {
+            onboarded = !!localStorage.getItem('amplifood.onboarding.v1');
+          } catch (e) {}
+          if (onboarded || location.pathname.indexOf('/auth/') === 0) {
+            shell.remove();
+            shell = null;
+          } else {
+            shell.querySelector('.afs-mark').appendChild(splash.querySelector('.af-mark').cloneNode(true));
+          }
+        }
+        var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var first = false;
+        try {
+          first = !sessionStorage.getItem('af.splash');
+          sessionStorage.setItem('af.splash', '1');
+        } catch (e) {}
+        var animated = first && !reduce;
+        splash.className = animated ? 'af-first' : 'af-repeat';
+        var introEnds = Date.now() + (animated ? 1050 : 0);
+        var ready = false;
+        var gone = false;
+        var holdTimer = animated ? setTimeout(function () { splash.classList.add('af-hold'); }, 1200) : 0;
+        // Fredoka's ink is 0.977em tall and sits 0.114em below the centre of a
+        // line-height:1 box; the targets are boxes cropped to the ink.
+        var INK_H = 0.977;
+        var INK_DY = 0.114;
+        function findLogo() {
+          if (shell) return shell.querySelector('.afs-logo');
+          var nodes = document.querySelectorAll('#af-header-logo, #af-onboarding-logo');
+          for (var i = 0; i < nodes.length; i++) {
+            var r = nodes[i].getBoundingClientRect();
+            if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight) return nodes[i];
+          }
+          return null;
+        }
+        function fly(logo) {
+          var word = splash.querySelector('.af-word');
+          var a = word.getBoundingClientRect();
+          var b = logo.getBoundingClientRect();
+          var size = parseFloat(getComputedStyle(word).fontSize) || a.height;
+          var scale = b.height / (size * INK_H);
+          var tx = b.left + b.width / 2 - (a.left + a.width / 2);
+          var ty = b.top + b.height / 2 - (a.top + a.height / 2) - scale * size * INK_DY;
+          document.documentElement.classList.add('af-handoff');
+          splash.classList.add('af-fly');
+          word.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+          setTimeout(function () {
+            document.documentElement.classList.remove('af-handoff');
+            setTimeout(function () { splash.remove(); }, 140);
+          }, 450);
+        }
+        function exit() {
+          if (gone) return;
+          gone = true;
+          clearTimeout(holdTimer);
+          var logo = !reduce && findLogo();
+          if (logo) return fly(logo);
+          splash.classList.add('af-exit');
+          setTimeout(function () { splash.remove(); }, animated ? 520 : 320);
+        }
+        function maybeExit() {
+          if (!ready && !shell) return;
+          var wait = introEnds - Date.now();
+          if (wait > 0) setTimeout(maybeExit, wait);
+          else exit();
+        }
+        splash.addEventListener('click', function () {
+          splash.classList.add('af-skipped');
+          introEnds = 0;
+          maybeExit();
+        });
+        // Pinch zoom: iOS Safari ignores user-scalable=no, so stop its gesture events.
+        ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (type) {
+          document.addEventListener(type, function (event) { event.preventDefault(); }, { passive: false });
+        });
+        window.__afSplash = {
+          ready: function () {
+            if (ready) return;
+            ready = true;
+            if (shell) {
+              var s = shell;
+              shell = null;
+              setTimeout(function () {
+                s.classList.add('afs-out');
+                setTimeout(function () { s.remove(); }, 260);
+              }, 80);
+            }
+            maybeExit();
+          },
+        };
+        if (shell) maybeExit();
+        setTimeout(window.__afSplash.ready, 20000);
+      })();
+    </script>
     <div id="root"></div>
   </body>
 </html>

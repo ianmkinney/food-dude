@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { useViewTransitionTarget } from '../motion/viewTransition';
 import { parseRecipe, parseRecipeFromUrl, parseRecipeFromImages } from '../services/recipeParser';
 import { recipeOperations } from '../database/operations';
 import FunLoader from '../components/FunLoader';
@@ -20,6 +21,7 @@ import FunLoader from '../components/FunLoader';
 const AddRecipeScreen = ({ navigation }) => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const sheetRef = useViewTransitionTarget('af-sheet');
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [mode, setMode] = useState('text'); // 'text', 'image'
@@ -108,7 +110,7 @@ const AddRecipeScreen = ({ navigation }) => {
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View ref={sheetRef} style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <ScrollView contentContainerStyle={styles.content}>
                 <Text style={[styles.title, { color: theme.colors.text.primary }]}>
                     Import Recipe

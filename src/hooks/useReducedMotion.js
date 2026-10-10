@@ -1,38 +1,47 @@
-import { useEffect, useState } from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { useSyncExternalStore } from 'react';
+import { AccessibilityInfo, Platform } from 'react-native';
 
-export const useReducedMotion = () => {
-    const [reduceMotion, setReduceMotion] = useState(false);
+// One subscription for the whole app. On web the media query is read
+// synchronously so the very first frame already honours the setting.
+const listeners = new Set();
+const media =
+    Platform.OS === 'web' && typeof window !== 'undefined' && window.matchMedia
+        ? window.matchMedia('(prefers-reduced-motion: reduce)')
+        : null;
+let reduceMotion = media ? media.matches : false;
+let started = false;
 
-    useEffect(() => {
-        let mounted = true;
+const set = (value) => {
+    const next = Boolean(value);
+    if (next === reduceMotion) return;
+    reduceMotion = next;
+    listeners.forEach((listener) => listener());
+};
 
-        const apply = (value) => {
-            if (mounted) {
-                setReduceMotion(Boolean(value));
-            }
-        };
+const start = () => {
+    if (started) return;
+    started = true;
+    if (media) {
+        media.addEventListener?.('change', (event) => set(event.matches));
+        return;
+    }
+    AccessibilityInfo.isReduceMotionEnabled?.().then(set).catch(() => {});
+    AccessibilityInfo.addEventListener?.('reduceMotionChanged', set);
+};
 
-        if (typeof AccessibilityInfo.isReduceMotionEnabled === 'function') {
-            AccessibilityInfo.isReduceMotionEnabled()
-                .then(apply)
-                .catch(() => apply(false));
-        }
+const subscribe = (listener) => {
+    start();
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+};
 
-        const subscription = AccessibilityInfo.addEventListener?.(
-            'reduceMotionChanged',
-            apply
-        );
+const getSnapshot = () => reduceMotion;
 
-        return () => {
-            mounted = false;
-            if (subscription && typeof subscription.remove === 'function') {
-                subscription.remove();
-            }
-        };
-    }, []);
-
+export const isReducedMotion = () => {
+    start();
     return reduceMotion;
 };
+
+export const useReducedMotion = () => useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
 export default useReducedMotion;

@@ -14,7 +14,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { useViewTransitionTarget } from '../motion/viewTransition';
 import { groceryOperations, recipeOperations } from '../database/operations';
+import { invalidateQueries } from '../data/queryCache';
+import { groceryQuery } from '../data/queries';
 import { parseGroceryItemsWithAI, checkPantryForMatches } from '../services/intelligentGroceryService';
 import PantryMatchModal from '../components/PantryMatchModal';
 
@@ -22,6 +25,7 @@ const AddGroceryItemScreen = () => {
     const navigation = useNavigation();
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const sheetRef = useViewTransitionTarget('af-sheet');
 
     const [activeTab, setActiveTab] = useState('manual'); // manual, list, recipe
     const [loading, setLoading] = useState(false);
@@ -114,6 +118,7 @@ const AddGroceryItemScreen = () => {
             setAiProcessingStatus('Checking pantry...');
 
             await groceryOperations.add(enhancedItem);
+            invalidateQueries(groceryQuery.key);
 
             // Check pantry for matches
             const matches = await checkPantryForMatches([enhancedItem.name]);
@@ -167,6 +172,7 @@ const AddGroceryItemScreen = () => {
                 await groceryOperations.add(item);
                 addedCount++;
             }
+            invalidateQueries(groceryQuery.key);
 
             // Check pantry for matches
             const itemNames = enhancedItems.map(item => item.name);
@@ -222,6 +228,7 @@ const AddGroceryItemScreen = () => {
                 await groceryOperations.add(item);
                 addedCount++;
             }
+            invalidateQueries(groceryQuery.key);
 
             // Check pantry for matches
             const itemNames = enhancedItems.map(item => item.name);
@@ -466,7 +473,7 @@ const AddGroceryItemScreen = () => {
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View ref={sheetRef} style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {renderTabs()}
             {loading && <ActivityIndicator size="large" color={theme.primary[500]} style={styles.loader} />}
 
@@ -538,10 +545,12 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     saveButton: {
-        height: 50,
+        minHeight: 50,
         borderRadius: 25,
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        paddingHorizontal: 20,
         marginTop: 24,
         marginBottom: 24,
     },

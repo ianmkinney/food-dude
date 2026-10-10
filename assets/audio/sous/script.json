@@ -1,7 +1,14 @@
 {
   "voice": "On-device phone voice by default; optional pre-rendered clips via scripts/generate-sous-audio.mjs.",
+  "introScreen": {
+    "note": "On-screen intro: the headline is \"Hi, I'm <name>\" and these two lines follow; lines.intro must read the same.",
+    "lines": [
+      "I'm AmpliFood's AI kitchen assistant, not a person. AI can get things wrong, so check ingredients and labels yourself.",
+      "Let's set up your kitchen. You can skip anytime."
+    ]
+  },
   "lines": {
-    "intro": "Hi, I'm Ampi, AmpliFood's AI kitchen assistant. I'm not a person. My voice and my recipe ideas are made by AI, so I can get things wrong. Let's set up your kitchen. You can skip anytime.",
+    "intro": "Hi, I'm Ampi. I'm AmpliFood's AI kitchen assistant, not a person. AI can get things wrong, so check ingredients and labels yourself. Let's set up your kitchen. You can skip anytime.",
     "agree": "First, the fine print. You need to be eighteen or older, and you'll need to agree to the Terms and Privacy Policy. Recipes I suggest are made by AI, so check ingredients, labels, and cooking temperatures yourself.",
     "allergies": "This step is optional. If you add allergies or diet needs, I'll use them to tailor recipes and flag possible matches. They stay on this device. AI can miss hidden allergens, so this isn't a guarantee or medical advice.",
     "consent": "To come up with ideas, I need to send your requests to the AI provider you picked. You choose what's included, and you can change it anytime.",

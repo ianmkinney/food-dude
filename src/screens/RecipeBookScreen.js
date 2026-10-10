@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -16,7 +16,68 @@ import { recipeOperations } from '../database/operations';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
-import { BrandMark, CheckerStrip } from '../components/Brand';
+import EmptyState from '../components/EmptyState';
+import { navigateWithTransition } from '../motion/viewTransition';
+import { ASSISTANT_NAME } from '../config/assistant';
+
+const RecipeCard = ({ item, index, theme, navigation }) => {
+    const thumbRef = useRef(null);
+    const cooked = item.is_cooked === 1 || item.is_cooked === true;
+    return (
+        <ElevatedCard
+            theme={theme}
+            index={index}
+            style={[styles.recipeCard, cooked && { opacity: 0.72 }]}
+            onPress={() => navigateWithTransition(
+                () => navigation.navigate('RecipeDetail', { recipeId: item.id }),
+                { sourceRef: thumbRef, name: 'recipe-hero' },
+            )}
+        >
+            <View style={styles.recipeCardContent}>
+                <View ref={thumbRef} style={styles.thumb}>
+                    {item.image_uri ? (
+                        <Image source={{ uri: item.image_uri }} style={styles.recipeImage} />
+                    ) : (
+                        <View style={[styles.placeholderImage, { backgroundColor: theme.primary[100] }]}>
+                            <Ionicons name="restaurant" size={32} color={theme.primary[500]} />
+                        </View>
+                    )}
+                </View>
+                <View style={styles.recipeInfo}>
+                    <View style={styles.recipeTitleRow}>
+                        <Text style={[styles.recipeTitle, { color: theme.colors.text.primary }]} numberOfLines={2}>
+                            {item.title}
+                        </Text>
+                        {cooked && <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />}
+                    </View>
+                    {!!item.description && (
+                        <Text style={[styles.recipeDescription, { color: theme.colors.text.secondary }]} numberOfLines={2}>
+                            {item.description}
+                        </Text>
+                    )}
+                    <View style={styles.recipeMeta}>
+                        {!!item.total_time && (
+                            <View style={styles.metaItem}>
+                                <Ionicons name="time-outline" size={14} color={theme.colors.text.tertiary} />
+                                <Text style={[styles.metaText, { color: theme.colors.text.tertiary }]}>
+                                    {item.total_time} min
+                                </Text>
+                            </View>
+                        )}
+                        {!!item.difficulty && (
+                            <View style={styles.metaItem}>
+                                <Ionicons name="bar-chart-outline" size={14} color={theme.colors.text.tertiary} />
+                                <Text style={[styles.metaText, { color: theme.colors.text.tertiary }]}>
+                                    {item.difficulty}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+            </View>
+        </ElevatedCard>
+    );
+};
 
 const RecipeBookScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -109,87 +170,18 @@ const RecipeBookScreen = ({ navigation }) => {
     const recipeKey = useCallback((item) => item.id.toString(), []);
 
     const renderRecipeCard = useCallback(({ item, index }) => (
-        <ElevatedCard
-            theme={theme}
-            index={index}
-            style={[
-                styles.recipeCard,
-                (item.is_cooked === 1 || item.is_cooked === true) && { opacity: 0.72 },
-            ]}
-            onPress={() => {
-                navigation.navigate('RecipeDetail', { recipeId: item.id });
-            }}
-        >
-            <View style={styles.recipeCardContent}>
-                {item.image_uri ? (
-                    <Image source={{ uri: item.image_uri }} style={styles.recipeImage} />
-                ) : (
-                    <View style={[styles.placeholderImage, { backgroundColor: theme.primary[100] }]}>
-                        <Ionicons name="restaurant" size={32} color={theme.primary[500]} />
-                    </View>
-                )}
-                <View style={styles.recipeInfo}>
-                    <View style={styles.recipeTitleRow}>
-                        <Text style={[styles.recipeTitle, { color: theme.colors.text.primary }]} numberOfLines={2}>
-                            {item.title}
-                        </Text>
-                        {(item.is_cooked === 1 || item.is_cooked === true) && (
-                            <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
-                        )}
-                    </View>
-                    {item.description && (
-                        <Text style={[styles.recipeDescription, { color: theme.colors.text.secondary }]} numberOfLines={2}>
-                            {item.description}
-                        </Text>
-                    )}
-                    <View style={styles.recipeMeta}>
-                        {item.total_time && (
-                            <View style={styles.metaItem}>
-                                <Ionicons name="time-outline" size={14} color={theme.colors.text.tertiary} />
-                                <Text style={[styles.metaText, { color: theme.colors.text.tertiary }]}>
-                                    {item.total_time} min
-                                </Text>
-                            </View>
-                        )}
-                        {item.difficulty && (
-                            <View style={styles.metaItem}>
-                                <Ionicons name="bar-chart-outline" size={14} color={theme.colors.text.tertiary} />
-                                <Text style={[styles.metaText, { color: theme.colors.text.tertiary }]}>
-                                    {item.difficulty}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                </View>
-            </View>
-        </ElevatedCard>
+        <RecipeCard item={item} index={index} theme={theme} navigation={navigation} />
     ), [navigation, theme]);
 
     const renderEmptyState = () => (
-        <View style={styles.emptyState}>
-            <BrandMark size={128} />
-            <CheckerStrip squares={8} size={6} style={styles.emptyChecker} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fonts.display }]}>
-                No Recipes Yet
-            </Text>
-            <Text style={[styles.emptyDescription, { color: theme.colors.text.secondary }]}>
-                Start with a sample recipe or ask AI Chef for ideas.
-            </Text>
-            <AnimatedPressable
-                style={[styles.quickStart, { backgroundColor: theme.primary[500] }]}
-                onPress={() => navigation.navigate('AI Chef')}
-                accessibilityRole="button"
-            >
-                <Text style={styles.quickStartText}>Ask AI Chef for a recipe</Text>
-            </AnimatedPressable>
-            <AnimatedPressable
-                style={[styles.quickStart, styles.quickStartOutline, { borderColor: theme.colors.border }]}
-                onPress={addSampleRecipes}
-                accessibilityRole="button"
-            >
-                <Text style={[styles.quickStartText, { color: theme.colors.text.primary }]}>Add sample recipes</Text>
-            </AnimatedPressable>
-        </View>
+        <EmptyState
+            title="No recipes yet"
+            description={`Ask ${ASSISTANT_NAME} for an idea or start with a couple of samples.`}
+            actionLabel={`Ask ${ASSISTANT_NAME} for a recipe`}
+            onAction={() => navigation.navigate(ASSISTANT_NAME)}
+            secondaryLabel="Add sample recipes"
+            onSecondary={addSampleRecipes}
+        />
     );
 
     return (
@@ -286,6 +278,7 @@ const RecipeBookScreen = ({ navigation }) => {
                 style={styles.fab}
                 accessibilityLabel="Add recipe"
                 onPress={() => navigation.navigate('AddRecipe')}
+                morphTo="af-sheet"
             >
                 <Ionicons name="add" size={28} color="#FFFFFF" />
             </FloatingActionButton>
@@ -376,58 +369,27 @@ const styles = StyleSheet.create({
         fontSize: 12,
         textTransform: 'capitalize',
     },
-    emptyState: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 64,
-    },
-    emptyChecker: {
-        marginTop: 18,
-    },
-    emptyTitle: {
-        fontSize: 26,
-        marginTop: 16,
-        marginBottom: 8,
-    },
-    emptyDescription: {
-        fontSize: 16,
-        textAlign: 'center',
-        paddingHorizontal: 32,
-        marginBottom: 16,
-    },
-    quickStart: {
-        marginTop: 10,
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 999,
-        alignSelf: 'stretch',
-        marginHorizontal: 32,
-        alignItems: 'center',
-    },
-    quickStartOutline: {
-        backgroundColor: 'transparent',
-        borderWidth: 1,
-    },
-    quickStartText: {
-        color: '#FFFFFF',
-        fontWeight: '800',
-        fontSize: 15,
-    },
     fab: {
         position: 'absolute',
         right: 20,
         bottom: 20,
     },
+    thumb: {
+        width: 80,
+        height: 80,
+        borderRadius: 12,
+        overflow: 'hidden',
+    },
     recipeImage: {
         width: 80,
         height: 80,
-        borderRadius: 14,
+        borderRadius: 12,
         backgroundColor: '#f0f0f0',
     },
     placeholderImage: {
         width: 80,
         height: 80,
-        borderRadius: 14,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
     },

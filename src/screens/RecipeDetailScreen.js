@@ -26,6 +26,8 @@ import SourceLabel from '../components/SourceLabel';
 import { useAllergies } from '../safety/useAllergies';
 import { findAllergenMatches } from '../safety/allergens';
 import ImageSourceChoice from '../components/ImageSourceChoice';
+import { SkeletonBlock } from '../components/Skeleton';
+import { useViewTransitionTarget } from '../motion/viewTransition';
 
 const RecipeDetailScreen = ({ route, navigation }) => {
     const { recipeId } = route.params;
@@ -35,6 +37,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
 
     const [recipe, setRecipe] = useState(null);
     const [loading, setLoading] = useState(true);
+    const heroRef = useViewTransitionTarget('recipe-hero', !loading && !!recipe);
     const [isEditing, setIsEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [generating, setGenerating] = useState(false);
@@ -452,8 +455,13 @@ const RecipeDetailScreen = ({ route, navigation }) => {
 
     if (loading || !recipe) {
         return (
-            <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-                <ActivityIndicator size="large" color={theme.primary[500]} />
+            <View style={[styles.skeleton, { backgroundColor: theme.colors.background }]} accessibilityRole="progressbar" accessibilityLabel="Loading recipe">
+                <SkeletonBlock height={250} radius={0} />
+                <View style={styles.skeletonBody}>
+                    <SkeletonBlock width="75%" height={28} />
+                    <SkeletonBlock width="50%" height={16} />
+                    <SkeletonBlock height={96} radius={16} />
+                </View>
             </View>
         );
     }
@@ -469,7 +477,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
             >
                 <ScrollView contentContainerStyle={styles.content}>
                 {/* Header Image */}
-                <View style={[styles.imageContainer, { backgroundColor: theme.primary[100] }]}>
+                <View ref={heroRef} style={[styles.imageContainer, { backgroundColor: theme.primary[100] }]}>
                     {(isEditing ? editedRecipe.image_uri : recipe.image_uri) ? (
                         <Image
                             source={{ uri: isEditing ? editedRecipe.image_uri : recipe.image_uri }}
@@ -555,7 +563,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                                 <View style={styles.sourceRow}>
                                     <SourceLabel source={{ kind: 'site', site: recipe.source_platform || recipe.source_url }} />
                                     <Text
-                                        style={[styles.sourceLink, { color: theme.primary[700] }]}
+                                        style={[styles.sourceLink, { color: theme.link }]}
                                         accessibilityRole="link"
                                         onPress={() => Linking.openURL(recipe.source_url)}
                                     >
@@ -1185,6 +1193,13 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    skeleton: {
+        flex: 1,
+    },
+    skeletonBody: {
+        padding: 16,
+        gap: 16,
     },
     content: {
         paddingBottom: 40,

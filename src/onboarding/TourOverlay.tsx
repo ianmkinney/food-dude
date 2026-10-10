@@ -193,7 +193,7 @@ export default function TourOverlay({
                     <AiBadge />
                     <View style={{ flex: 1 }} />
                     <Text style={[styles.counter, { color: c.text.tertiary }]}>{index + 1} of {steps.length}</Text>
-                    <Pressable onPress={toggleMute} accessibilityRole="switch" accessibilityState={{ checked: !muted }} accessibilityLabel="AI voice" hitSlop={8} style={styles.voice}>
+                    <Pressable onPress={toggleMute} accessibilityRole="switch" accessibilityState={{ checked: !muted }} aria-checked={!muted} accessibilityLabel="AI voice" hitSlop={8} style={styles.voice}>
                         <Ionicons name={muted ? 'volume-mute-outline' : 'volume-high-outline'} size={16} color={c.text.secondary} />
                         <Text style={[styles.voiceText, { color: c.text.secondary }]}>AI voice</Text>
                     </Pressable>

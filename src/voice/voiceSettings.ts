@@ -31,3 +31,14 @@ export async function isVoiceMuted(): Promise<boolean> {
 export async function setVoiceMuted(muted: boolean): Promise<void> {
     await AsyncStorage.setItem(MUTED_KEY, String(muted));
 }
+
+const WEB_SPEECH_NOTICE_KEY = 'amplifood.voice.webSpeechNoticeSeen';
+
+/** The browser speech-to-text notice is shown once, on the first mic tap. */
+export async function hasSeenWebSpeechNotice(): Promise<boolean> {
+    return (await AsyncStorage.getItem(WEB_SPEECH_NOTICE_KEY)) != null;
+}
+
+export async function markWebSpeechNoticeSeen(): Promise<void> {
+    await AsyncStorage.setItem(WEB_SPEECH_NOTICE_KEY, String(Date.now()));
+}

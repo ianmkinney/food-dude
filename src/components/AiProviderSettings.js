@@ -441,7 +441,7 @@ const AiProviderSettings = ({ theme }) => {
                             style={[
                                 styles.modelRow,
                                 {
-                                    backgroundColor: selected ? theme.primary[100] : theme.colors.surface,
+                                    backgroundColor: selected ? (theme.isDark ? theme.primary[500] + '29' : theme.primary[100]) : theme.colors.surface,
                                     borderColor: selected ? theme.primary[500] : theme.colors.border,
                                 },
                             ]}
@@ -452,7 +452,6 @@ const AiProviderSettings = ({ theme }) => {
                                     styles.modelId,
                                     { color: theme.colors.text.primary },
                                 ]}
-                                numberOfLines={1}
                             >
                                 {item.id}
                             </Text>
@@ -488,7 +487,7 @@ const AiProviderSettings = ({ theme }) => {
                                     style={[
                                         styles.modelRow,
                                         {
-                                            backgroundColor: selected ? theme.primary[100] : theme.colors.surface,
+                                            backgroundColor: selected ? (theme.isDark ? theme.primary[500] + '29' : theme.primary[100]) : theme.colors.surface,
                                             borderColor: selected ? theme.primary[500] : theme.colors.border,
                                         },
                                     ]}
@@ -499,7 +498,6 @@ const AiProviderSettings = ({ theme }) => {
                                             styles.modelId,
                                             { color: theme.colors.text.primary },
                                         ]}
-                                        numberOfLines={1}
                                     >
                                         {item.id}
                                     </Text>

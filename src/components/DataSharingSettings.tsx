@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import ThemedSwitch from './ThemedSwitch';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -59,7 +60,7 @@ export default function DataSharingSettings({ theme }: { theme: Theme }) {
             )}
             <View style={[styles.row, { borderColor: c.border }]}>
                 <Text style={[styles.rowText, { color: c.text.primary }]}>Also include my allergies & diet needs in AI requests</Text>
-                <Switch
+                <ThemedSwitch
                     value={includeHealth}
                     onValueChange={async (value) => {
                         setIncludeHealth(value);
@@ -80,10 +81,10 @@ export default function DataSharingSettings({ theme }: { theme: Theme }) {
                 <Text style={[styles.revokeText, { color: c.text.primary }]}>Replay tour</Text>
             </Pressable>
             <View style={styles.links}>
-                <Text style={[styles.link, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(TERMS_URL)}>
+                <Text style={[styles.link, { color: theme.link }]} accessibilityRole="link" onPress={() => Linking.openURL(TERMS_URL)}>
                     Terms of Use
                 </Text>
-                <Text style={[styles.link, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(PRIVACY_URL)}>
+                <Text style={[styles.link, { color: theme.link }]} accessibilityRole="link" onPress={() => Linking.openURL(PRIVACY_URL)}>
                     Privacy Policy
                 </Text>
             </View>
