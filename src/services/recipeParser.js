@@ -2,6 +2,11 @@ import { generateMultimodal, generateText, stripCodeFences } from './aiClient';
 import { isAiConfigured, requireAiConfigured } from './aiSettings';
 import { prepareImagesForAi, toPersistentImageUri } from './mediaPrep';
 import { friendlyMediaErrorMessage } from './mediaTypes';
+import {
+    fetchRecipeImportFromServer,
+    mapServerRecipeToClient,
+    shouldUseRecipeImportProxy,
+} from './recipeImportProxy';
 
 /**
  * Extract recipe from images (screenshots).
@@ -227,10 +232,47 @@ ${input}`;
  * Extract recipe from a URL (web scraping via AI)
  */
 export const parseRecipeFromUrl = async (url) => {
-    await requireAiConfigured();
-
     try {
-        // Fetch the webpage content
+        if (shouldUseRecipeImportProxy()) {
+            const proxy = await fetchRecipeImportFromServer(url);
+            if (!proxy.ok) {
+                return { success: false, error: proxy.error };
+            }
+            const payload = proxy.body;
+            const sourceUrl = payload.sourceUrl || url;
+            if (payload.mode === 'structured' && payload.recipe) {
+                return {
+                    success: true,
+                    recipe: mapServerRecipeToClient(payload.recipe, sourceUrl),
+                };
+            }
+            if (payload.mode === 'text' && payload.text) {
+                await requireAiConfigured();
+                const aiResult = await parseRecipe(payload.text);
+                if (!aiResult.success) return aiResult;
+                const hostname = (() => {
+                    try {
+                        return new URL(sourceUrl).hostname.replace(/^www\./, '');
+                    } catch {
+                        return null;
+                    }
+                })();
+                return {
+                    success: true,
+                    recipe: {
+                        ...aiResult.recipe,
+                        imageUri: null,
+                        sourceUrl,
+                        sourcePlatform: hostname,
+                    },
+                };
+            }
+            return { success: false, error: proxy.error || "Couldn't find a recipe on that page." };
+        }
+
+        await requireAiConfigured();
+
+        // Native: fetch the webpage content directly, then parse with AI.
         const fetchResponse = await fetch(url);
         const html = await fetchResponse.text();
 

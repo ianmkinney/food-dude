@@ -5,6 +5,7 @@ import {
     recipeOperations,
 } from '../database/operations';
 import { parseRecipe, parseRecipeFromUrl } from '../services/recipeParser';
+import { IMPORT_URL_FALLBACK_HINT } from '../services/recipeImportProxy';
 import { estimateGroceryCost } from '../services/groceryService';
 
 // What Sous can actually do in the app. The model asks for these by name in its
@@ -50,7 +51,7 @@ export type SousCard =
           store: string | null;
           lineItems?: { name: string; estimatedCost: number }[];
       }
-    | { type: 'error'; message: string };
+    | { type: 'error'; message: string; hint?: string };
 
 /** Tool reference shown to the model inside the system prompt. */
 export const TOOL_SPEC = `
@@ -85,16 +86,31 @@ async function run(call: ToolCall): Promise<SousCard> {
         }
         case 'import_recipe': {
             const source = call.args.url || call.args.text || '';
-            const result = isUrl(source) ? await parseRecipeFromUrl(source.trim()) : await parseRecipe(source);
-            if (!result?.success) throw new Error(result?.error || "Couldn't read a recipe from that.");
-            const id = Number(await recipeOperations.create(result.recipe));
-            await recipeOperations.setProvenance(id, { isAiGenerated: false, imageSource: result.recipe.imageUri ? 'import' : null });
+            const fromUrl = isUrl(source);
+            const result = fromUrl ? await parseRecipeFromUrl(source.trim()) : await parseRecipe(source);
+            if (!result?.success) {
+                const message = result?.error || "Couldn't read a recipe from that.";
+                if (fromUrl) {
+                    return { type: 'error', message, hint: IMPORT_URL_FALLBACK_HINT };
+                }
+                throw new Error(message);
+            }
+            if (!('recipe' in result) || !result.recipe) {
+                throw new Error("Couldn't read a recipe from that.");
+            }
+            const recipe = result.recipe;
+            const id = Number(await recipeOperations.create(recipe));
+            await recipeOperations.setProvenance(id, { isAiGenerated: false, imageSource: recipe.imageUri ? 'import' : null });
             return {
                 type: 'recipe',
                 title: 'Imported to your recipe book',
-                recipe: { id, title: result.recipe.title },
+                recipe: {
+                    id,
+                    title: recipe.title,
+                    image_uri: recipe.imageUri || recipe.image_uri || null,
+                },
                 aiGenerated: false,
-                ingredients: (result.recipe.ingredients || []).map((ing: { ingredient?: string }) => ing.ingredient || ''),
+                ingredients: (recipe.ingredients || []).map((ing: { ingredient?: string }) => ing.ingredient || ''),
             };
         }
         case 'create_recipe': {
@@ -177,7 +193,8 @@ export async function runTools(calls: ToolCall[]): Promise<SousCard[]> {
         try {
             cards.push(await run(call));
         } catch (error) {
-            cards.push({ type: 'error', message: (error as Error)?.message || 'That step failed.' });
+            const message = (error as Error)?.message || 'That step failed.';
+            cards.push({ type: 'error', message });
         }
     }
     return cards;

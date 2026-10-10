@@ -254,6 +254,15 @@ export default function SousScreen() {
                 return (
                     <View key={index} style={[...cardStyle, { borderColor: c.error }]}>
                         <Text style={{ color: c.error }}>{card.message}</Text>
+                        {card.hint ? (
+                            <Pressable
+                                onPress={open('ImportRecipe')}
+                                style={[styles.inlineButton, { backgroundColor: theme.primary[500], marginTop: 10 }]}
+                                accessibilityRole="button"
+                            >
+                                <Text style={styles.inlineButtonText}>Paste text or upload a screenshot</Text>
+                            </Pressable>
+                        ) : null}
                     </View>
                 );
             default:
