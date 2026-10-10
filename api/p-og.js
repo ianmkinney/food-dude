@@ -12,7 +12,7 @@ export default async function handler(req) {
     let title = 'AmpliFood Party';
     if (token && isPartyDatabaseConfigured()) {
         try {
-            const sql = getPartySql();
+            const sql = await getPartySql();
             const rows = await sql`
                 SELECT p.name FROM invite_tokens it
                 JOIN parties p ON p.id = it.party_id

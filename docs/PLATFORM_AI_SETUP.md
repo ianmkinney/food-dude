@@ -100,11 +100,7 @@ Live party sync stores **party metadata only** (name, optional cover image, memb
 
 1. In the [Vercel dashboard](https://vercel.com/dashboard), open the **amplifood** project → **Storage** → add **Neon** from the Marketplace. Vercel injects `POSTGRES_URL` (and often `DATABASE_URL`) into the project.
 2. Optionally add **Vercel Blob** for party cover photos (`BLOB_READ_WRITE_TOKEN`). If Blob is not configured, cover images are stored as `bytea` in Postgres and served from `/api/party?action=image&partyId=…`.
-3. After linking Neon, run the schema once from your machine or CI:
-
-```bash
-DATABASE_URL="$POSTGRES_URL" node scripts/party-db/migrate.mjs
-```
+3. Schema is applied **automatically** on the first party API request (idempotent DDL + Postgres advisory lock per cold start). Optional manual run: `npm run party-db:migrate` (same statements).
 
 | Variable | Required | Description |
 | --- | --- | --- |

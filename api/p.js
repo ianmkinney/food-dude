@@ -25,7 +25,7 @@ export default async function handler(req, res) {
         return;
     }
     try {
-        const sql = getPartySql();
+        const sql = await getPartySql();
         const invites = await sql`
             SELECT it.party_id, it.revoked, p.name, p.image_url
             FROM invite_tokens it

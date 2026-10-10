@@ -44,6 +44,7 @@ const modules = [
     'party/email.js',
     'party/index.js',
     '_lib/partyDb.js',
+    '_lib/partySchema.js',
     '_lib/partyTokens.js',
     '_lib/partyHttp.js',
     '_lib/partySerialize.js',

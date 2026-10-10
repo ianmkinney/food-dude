@@ -2,7 +2,7 @@ import { applyCors } from '../_lib/cors.js';
 import { isEmailAllowed, isOwnerGateConfigured, requireSecrets } from '../_lib/env.js';
 import { bearerToken, verifySession } from '../_lib/session.js';
 import { checkMinuteRateLimit } from '../_lib/store.js';
-import { getPartySql, isPartyDatabaseConfigured } from '../_lib/partyDb.js';
+import { getPartySql, isPartyDatabaseConfigured, MAX_PARTY_IMAGE_BYTES } from '../_lib/partyDb.js';
 import { generateToken, hashToken } from '../_lib/partyTokens.js';
 import { memberTokenFromReq, partyReject } from '../_lib/partyHttp.js';
 import { normalizeMealsInput, rowToPartySnapshot } from '../_lib/partySerialize.js';
@@ -130,7 +130,7 @@ async function handleCreate(req, res, session) {
         partyReject(res, 400, 'bad_request');
         return;
     }
-    const sql = getPartySql();
+    const sql = await getPartySql();
     const inviteToken = generateToken(24);
     const rows = await sql`
         INSERT INTO parties (name, owner_sub, owner_email)
@@ -169,7 +169,7 @@ async function handleGet(req, res, session) {
         partyReject(res, 400, 'bad_request');
         return;
     }
-    const sql = getPartySql();
+    const sql = await getPartySql();
     const memberToken = memberTokenFromReq(req);
     let allowed = false;
     if (session) {
@@ -199,7 +199,7 @@ async function handleJoin(req, res) {
         partyReject(res, 400, 'bad_request');
         return;
     }
-    const sql = getPartySql();
+    const sql = await getPartySql();
     const invites = await sql`
         SELECT party_id, revoked FROM invite_tokens WHERE token = ${inviteToken} LIMIT 1`;
     const invite = invites[0];
@@ -231,7 +231,7 @@ async function handleLeave(req, res) {
         partyReject(res, 400, 'bad_request');
         return;
     }
-    const sql = getPartySql();
+    const sql = await getPartySql();
     const access = await assertMemberAccess(sql, partyId, memberToken);
     if (!access.ok) {
         partyReject(res, access.status, access.error);
@@ -252,7 +252,7 @@ async function handleRemoveMember(req, res, session) {
         partyReject(res, 400, 'bad_request');
         return;
     }
-    const sql = getPartySql();
+    const sql = await getPartySql();
     const owner = await assertPartyOwner(sql, partyId, session);
     if (!owner.ok) {
         partyReject(res, owner.status, owner.error);
@@ -283,7 +283,7 @@ async function handleUpdateMeals(req, res, session) {
         partyReject(res, 400, 'bad_request');
         return;
     }
-    const sql = getPartySql();
+    const sql = await getPartySql();
     const memberToken = memberTokenFromReq(req);
     let allowed = false;
     if (session) {
@@ -322,7 +322,7 @@ async function handleUploadImage(req, res, session) {
         partyReject(res, 400, 'bad_request');
         return;
     }
-    const sql = getPartySql();
+    const sql = await getPartySql();
     const owner = await assertPartyOwner(sql, partyId, session);
     if (!owner.ok) {
         partyReject(res, owner.status, owner.error);
@@ -336,8 +336,8 @@ async function handleUploadImage(req, res, session) {
         partyReject(res, 400, 'bad_request');
         return;
     }
-    if (buffer.length > 2_500_000) {
-        partyReject(res, 400, 'bad_request');
+    if (buffer.length > MAX_PARTY_IMAGE_BYTES) {
+        partyReject(res, 400, 'bad_request', { message: 'Image must be at most 500KB after compression.' });
         return;
     }
     let imageUrl = null;
@@ -363,7 +363,7 @@ async function handleChangesSince(req, res, session) {
         partyReject(res, 400, 'bad_request');
         return;
     }
-    const sql = getPartySql();
+    const sql = await getPartySql();
     const memberToken = memberTokenFromReq(req);
     let allowed = false;
     if (session) {
@@ -399,7 +399,7 @@ async function handleMigrate(req, res, session) {
         partyReject(res, 400, 'bad_request');
         return;
     }
-    const sql = getPartySql();
+    const sql = await getPartySql();
     const inviteToken = generateToken(24);
     const rows = await sql`
         INSERT INTO parties (name, owner_sub, owner_email)
@@ -429,7 +429,7 @@ async function handleMigrate(req, res, session) {
     if (body.imageBase64) {
         const raw = String(body.imageBase64).replace(/^data:image\/\w+;base64,/, '');
         const buffer = Buffer.from(raw, 'base64');
-        if (buffer.length && buffer.length <= 2_500_000) {
+        if (buffer.length && buffer.length <= MAX_PARTY_IMAGE_BYTES) {
             let imageUrl = null;
             let imageBytea = null;
             if (isBlobConfigured()) {
@@ -461,7 +461,7 @@ async function handlePartyImage(req, res) {
         partyReject(res, 400, 'bad_request');
         return;
     }
-    const sql = getPartySql();
+    const sql = await getPartySql();
     const rows = await sql`
         SELECT image_url, image_bytea FROM parties WHERE id = ${partyId}::uuid LIMIT 1`;
     const row = rows[0];
