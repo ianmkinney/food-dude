@@ -12,6 +12,7 @@ import {
 } from '../platform/ownerSession';
 import { getOwnerGoogleClientIds, isOwnerSignInConfigured } from '../platform/ownerSignInConfig';
 import { signInWithGooglePopup, takePendingGoogleIdToken } from '../platform/googleWebAuth';
+import { testOwnerAi } from '../monetization/livePlatformAi';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -34,6 +35,8 @@ function OwnerSignInSettingsInner({ theme }: Props) {
     const [busy, setBusy] = useState(false);
     // One Tap is often suppressed on iOS Safari; then sign in through a popup.
     const [usePopup, setUsePopup] = useState(false);
+    const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
     const [request, , promptAsync] = Google.useAuthRequest({
         webClientId: webClientId!,
@@ -122,6 +125,21 @@ function OwnerSignInSettingsInner({ theme }: Props) {
         finishWebSignIn(() => promptGoogleIdTokenWeb(webClientId));
     };
 
+    const runTest = async () => {
+        setTesting(true);
+        setTestResult(null);
+        try {
+            const result = await testOwnerAi();
+            const fallback = result.fallbackFrom ? ` (configured ${result.fallbackFrom} was rejected)` : '';
+            setTestResult({ ok: true, text: `Working · ${result.model} · ${result.latencyMs} ms${fallback}` });
+            setUsage(await fetchOwnerUsage());
+        } catch (error) {
+            setTestResult({ ok: false, text: error instanceof Error ? error.message : 'Test failed.' });
+        } finally {
+            setTesting(false);
+        }
+    };
+
     const signOut = async () => {
         await clearOwnerSession();
         setSession(null);
@@ -138,7 +156,28 @@ function OwnerSignInSettingsInner({ theme }: Props) {
             </Text>
             {session ? (
                 <>
-                    <Text style={[styles.value, { color: text.primary }]}>{session.email}</Text>
+                    <View style={styles.statusRow}>
+                        <Text style={[styles.value, styles.statusText, { color: text.primary }]}>
+                            Owner AI: connected as {session.email}
+                        </Text>
+                        <Pressable
+                            onPress={runTest}
+                            disabled={testing}
+                            style={[styles.testButton, { borderColor: theme.colors.border }]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Test owner AI"
+                        >
+                            <Text style={[styles.testText, { color: theme.primary[500] }]}>{testing ? 'Testing…' : 'Test'}</Text>
+                        </Pressable>
+                    </View>
+                    {testResult ? (
+                        <Text
+                            accessibilityLiveRegion="polite"
+                            style={[styles.hint, { color: testResult.ok ? text.secondary : theme.colors.error }]}
+                        >
+                            {testResult.text}
+                        </Text>
+                    ) : null}
                     {usage ? (
                         <Text style={[styles.hint, { color: text.tertiary }]}>
                             Today: {usage.requests}/{usage.requestLimit} requests · ~
@@ -216,6 +255,18 @@ const styles = StyleSheet.create({
     title: { fontSize: 17, fontWeight: '600' },
     hint: { fontSize: 14, lineHeight: 20 },
     value: { fontSize: 15, fontWeight: '500' },
+    statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    statusText: { flex: 1 },
+    testButton: {
+        minHeight: 44,
+        minWidth: 64,
+        paddingHorizontal: 14,
+        borderWidth: 1,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    testText: { fontSize: 15, fontWeight: '600' },
     button: {
         marginTop: 4,
         paddingVertical: 12,

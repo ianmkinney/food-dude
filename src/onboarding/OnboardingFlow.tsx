@@ -24,6 +24,7 @@ import { findAllergenMatches, parseAllergies } from '../safety/allergens';
 import { ASSISTANT_NAME, ASSISTANT_TAGLINE } from '../config/assistant';
 import { MINIMUM_AGE } from '../config/legal';
 import { useSpeechInput } from '../voice/useSpeechInput';
+import { WEB_SPEECH_NOTICE } from '../voice/webSpeechRecognition';
 import { LINES, type LineId } from './script';
 import { playLine, stopLine } from './onboardingVoice';
 import { isVoiceMuted, setVoiceMuted } from './onboardingStore';
@@ -377,16 +378,18 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
                         <View style={styles.micRow}>
                             <TextInput value={mic.state === 'listening' ? mic.transcript : likesText} onChangeText={setLikesText} placeholder="e.g., lemony chicken, no mushrooms" placeholderTextColor={c.text.tertiary} accessibilityLabel="Other food likes" accessibilityLabelledBy="obLikes" style={[styles.input, { flex: 1, color: c.text.primary, borderColor: c.border, backgroundColor: c.surface }]} />
                             <Pressable
-                                onPressIn={() => mic.start()}
-                                onPressOut={() => mic.stop()}
+                                {...mic.pressProps}
                                 style={[styles.mic, { backgroundColor: mic.state === 'listening' ? c.error : c.surfaceMuted, opacity: mic.isSupported ? 1 : 0.4 }]}
                                 accessibilityRole="button"
-                                accessibilityLabel={`Hold to tell ${ASSISTANT_NAME} what you like`}
+                                accessibilityLabel={mic.isWeb ? `Tap to tell ${ASSISTANT_NAME} what you like` : `Hold to tell ${ASSISTANT_NAME} what you like`}
                             >
                                 <Ionicons name="mic" size={20} color={mic.state === 'listening' ? '#FFFFFF' : c.text.primary} />
                             </Pressable>
                         </View>
                         {!!mic.error && <Text style={[styles.small, { color: c.error }]}>{mic.error}</Text>}
+                        {mic.isWeb && mic.isSupported && !mic.error && (
+                            <Text style={[styles.small, { color: c.text.tertiary }]}>{WEB_SPEECH_NOTICE}</Text>
+                        )}
                         <View style={styles.row}>
                             <Button label="Continue" primary onPress={saveProfile} />
                             <Button label="Skip" onPress={() => go('recipes')} />

@@ -31,39 +31,89 @@ function buildMessages(body) {
     return [{ role: 'user', content: parts }];
 }
 
+class UpstreamError extends Error {
+    constructor(status, message, model) {
+        super(message);
+        this.name = 'UpstreamError';
+        this.status = status;
+        this.model = model;
+    }
+}
+
+function upstreamMessage(status, text) {
+    try {
+        const json = JSON.parse(text);
+        const msg = json?.error?.message || json?.message;
+        if (msg) return String(msg).slice(0, 300);
+    } catch {
+        // not JSON
+    }
+    return (text || '').replace(/\s+/g, ' ').trim().slice(0, 300) || `HTTP ${status}`;
+}
+
+// OpenRouter retires model IDs; a stale one fails every request with a 400/404.
+const isModelRejected = (error) =>
+    error instanceof UpstreamError &&
+    (error.status === 400 || error.status === 404) &&
+    /model/i.test(error.message);
+
 async function openRouterStream({ model, messages, maxTokens }) {
     const apiKey = process.env.OPENROUTER_API_KEY;
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://amplifood.vercel.app',
-            'X-Title': 'AmpliFood',
-        },
-        body: JSON.stringify({
-            model,
-            messages,
-            max_tokens: maxTokens,
-            stream: true,
-        }),
-    });
+    let response;
+    try {
+        response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://amplifood.vercel.app',
+                'X-Title': 'AmpliFood',
+            },
+            body: JSON.stringify({
+                model,
+                messages,
+                max_tokens: maxTokens,
+                stream: true,
+            }),
+        });
+    } catch (error) {
+        throw new UpstreamError(0, `Couldn't reach OpenRouter: ${error?.message || 'network error'}`, model);
+    }
     if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new Error(text || `OpenRouter error ${response.status}`);
+        throw new UpstreamError(response.status, upstreamMessage(response.status, text), model);
     }
     return response;
+}
+
+async function openRouterWithFallback({ models, messages, maxTokens }) {
+    let lastError;
+    for (const model of models) {
+        try {
+            return { upstream: await openRouterStream({ model, messages, maxTokens }), model };
+        } catch (error) {
+            lastError = error;
+            if (!isModelRejected(error)) throw error;
+            console.warn(`[ai/chat] model rejected by OpenRouter: ${model} (${error.status}) ${error.message}`);
+        }
+    }
+    throw lastError;
+}
+
+function reject(res, status, body) {
+    console.warn(`[ai/chat] ${status} ${body.error}${body.message ? `: ${body.message}` : ''}`);
+    res.status(status).json(body);
 }
 
 export default async function handler(req, res) {
     if (applyCors(req, res)) return;
     if (req.method !== 'POST') {
-        res.status(405).json({ error: 'method_not_allowed' });
+        reject(res, 405, { error: 'method_not_allowed' });
         return;
     }
 
     if (!isOwnerGateConfigured()) {
-        res.status(503).json({
+        reject(res, 503, {
             error: 'platform_disabled',
             message: 'Owner platform AI is not enabled (ALLOWED_EMAILS is required).',
         });
@@ -73,13 +123,13 @@ export default async function handler(req, res) {
     try {
         requireSecrets();
     } catch (error) {
-        res.status(503).json({ error: 'misconfigured', message: error.message });
+        reject(res, 503, { error: 'misconfigured', message: error.message });
         return;
     }
 
     const token = bearerToken(req);
     if (!token) {
-        res.status(401).json({ error: 'unauthorized' });
+        reject(res, 401, { error: 'unauthorized', message: 'No owner session was sent. Sign in again in Account.' });
         return;
     }
 
@@ -87,49 +137,51 @@ export default async function handler(req, res) {
     try {
         session = await verifySession(token);
     } catch {
-        res.status(401).json({ error: 'unauthorized' });
+        reject(res, 401, { error: 'unauthorized', message: 'Owner session expired or invalid. Sign in again in Account.' });
         return;
     }
 
     if (!isEmailAllowed(session.email)) {
-        res.status(403).json({ error: 'not_allowed' });
+        reject(res, 403, { error: 'not_allowed', message: 'This Google account is not on the owner allowlist.' });
         return;
     }
 
     const limits = getDailyLimits();
     const usage = await getUsage(session.sub);
     if (usage.requests >= limits.maxRequests || usage.tokens >= limits.maxTokens) {
-        res.status(429).json({ error: 'rate_limited', message: FRIENDLY_LIMIT });
+        reject(res, 429, { error: 'rate_limited', message: FRIENDLY_LIMIT });
         return;
     }
 
-    const { defaultModel, allowedModels } = getOpenRouterConfig();
+    const { defaultModel, allowedModels, fallbackModels } = getOpenRouterConfig();
     const requested = req.body?.model;
-    const model =
+    const primary =
         requested && allowedModels.includes(requested) ? requested : defaultModel;
-    const maxTokens = Math.min(
-        8192,
-        Math.max(256, Number(process.env.OPENROUTER_MAX_OUTPUT_TOKENS || 4096))
-    );
+    const models = [primary, ...fallbackModels.filter((m) => m !== primary)];
+    const isTest = req.body?.test === true;
+    const maxTokens = isTest
+        ? 16
+        : Math.min(8192, Math.max(256, Number(process.env.OPENROUTER_MAX_OUTPUT_TOKENS || 4096)));
 
     let messages;
     try {
-        messages = buildMessages(req.body);
+        messages = buildMessages(isTest ? { prompt: 'Reply with the single word: OK' } : req.body);
     } catch (error) {
-        res.status(400).json({ error: 'bad_request', message: error.message });
+        reject(res, 400, { error: 'bad_request', message: error.message });
         return;
     }
 
-    const promptEstimate = estimateTokens(req.body?.prompt || '');
+    const promptEstimate = estimateTokens(isTest ? 'OK' : req.body?.prompt || '');
     if (usage.tokens + promptEstimate > limits.maxTokens) {
-        res.status(429).json({ error: 'rate_limited', message: FRIENDLY_LIMIT });
+        reject(res, 429, { error: 'rate_limited', message: FRIENDLY_LIMIT });
         return;
     }
 
-    const streamRequested = req.body?.stream !== false;
+    const streamRequested = !isTest && req.body?.stream !== false;
+    const startedAt = Date.now();
 
     try {
-        const upstream = await openRouterStream({ model, messages, maxTokens });
+        const { upstream, model } = await openRouterWithFallback({ models, messages, maxTokens });
 
         if (!streamRequested) {
             const reader = upstream.body.getReader();
@@ -158,7 +210,12 @@ export default async function handler(req, res) {
             }
             const outEstimate = estimateTokens(full);
             await recordUsage(session.sub, { requestDelta: 1, tokenDelta: promptEstimate + outEstimate });
-            res.status(200).json({ text: full, model });
+            res.status(200).json({
+                text: full,
+                model,
+                ...(model !== primary ? { fallbackFrom: primary } : null),
+                ...(isTest ? { latencyMs: Date.now() - startedAt } : null),
+            });
             return;
         }
 
@@ -197,10 +254,17 @@ export default async function handler(req, res) {
         const outEstimate = estimateTokens(outText);
         await recordUsage(session.sub, { requestDelta: 1, tokenDelta: promptEstimate + outEstimate });
     } catch (error) {
+        const upstreamStatus = error instanceof UpstreamError ? error.status : null;
+        const reason = error?.message || 'Unknown error';
+        console.error(`[ai/chat] upstream failed: status=${upstreamStatus} model=${error?.model || primary} ${reason}`);
         if (!res.headersSent) {
             res.status(502).json({
                 error: 'upstream_failed',
-                message: 'The AI service is temporarily unavailable. Try again shortly.',
+                upstreamStatus,
+                model: error?.model || primary,
+                message: upstreamStatus
+                    ? `OpenRouter ${upstreamStatus}: ${reason}`
+                    : reason,
             });
         } else {
             res.end();
