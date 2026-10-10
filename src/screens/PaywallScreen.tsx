@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
@@ -7,7 +7,6 @@ import { BrandMark, CheckerStrip } from '../components/Brand';
 import { useMonetization } from '../monetization/MonetizationContext';
 import { platformAi } from '../monetization/platformAi';
 import { CREDIT_COSTS, CREDIT_PACKS, PLUS_MONTHLY_CREDITS, PLUS_PLANS } from '../monetization/products';
-
 const PRIVACY_URL = 'https://amplifood.vercel.app/privacy';
 const TERMS_URL = 'https://amplifood.vercel.app/terms';
 
@@ -52,6 +51,7 @@ export default function PaywallScreen() {
 
     const surface = { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border };
     const text = theme.colors.text;
+    const c = theme.colors;
     const display = { fontFamily: theme.typography.fonts.display };
 
     const BuyButton = ({ sku, label }: { sku: string; label: string }) => {
@@ -128,6 +128,7 @@ export default function PaywallScreen() {
                                 <Text style={[styles.planPrice, { color: text.primary }]}>
                                     {priceFor(plan.sku, plan.listPrice)} / {plan.period}
                                 </Text>
+                                {plan.note && <Text style={[styles.small, { color: text.tertiary }]}>{plan.note}</Text>}
                             </View>
                             <BuyButton sku={plan.sku} label={canBuy ? 'Subscribe' : 'Coming soon'} />
                         </View>
@@ -135,7 +136,7 @@ export default function PaywallScreen() {
                 )}
                 {isWeb && !m.isPlus && (
                     <Text style={[styles.small, { color: text.tertiary }]}>
-                        {PLUS_PLANS.map((plan) => `${plan.listPrice} / ${plan.period}`).join(' or ')}, in the mobile app.
+                        {PLUS_PLANS[0].listPrice} / month, in the mobile app.
                     </Text>
                 )}
             </View>
@@ -229,6 +230,12 @@ const styles = StyleSheet.create({
     restoreText: { fontWeight: '800', fontSize: 16 },
     error: { textAlign: 'center', fontSize: 14 },
     legal: { fontSize: 12, lineHeight: 17, textAlign: 'center' },
+    voiceBox: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 },
+    voiceHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    voiceTitle: { fontSize: 15, fontWeight: '800' },
+    aiTag: { fontSize: 11, fontWeight: '800', borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+    previewButton: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+    previewText: { fontWeight: '800', fontSize: 13 },
     legalLinks: { flexDirection: 'row', justifyContent: 'center', gap: 24 },
     legalLink: { fontSize: 14, fontWeight: '700', textDecorationLine: 'underline', paddingVertical: 6 },
 });

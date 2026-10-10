@@ -10,12 +10,11 @@ AmpliFood has two ways to run AI:
 | Product ID | Type | Price | Credits |
 | --- | --- | --- | --- |
 | `amplifood_plus_monthly` | Auto-renewing subscription | $6.99 / month | 200 per month |
-| `amplifood_plus_yearly` | Auto-renewing subscription | $59.99 / year | 200 per month |
 | `amplifood_credits_40` | Consumable | $1.99 | 40 |
 | `amplifood_credits_120` | Consumable | $4.99 | 120 |
 | `amplifood_credits_350` | Consumable | $12.99 | 350 |
 
-Free has no platform AI; BYOK works on Free. Store prices come from the store at runtime; the list prices above are only a fallback and the web copy.
+Free has no platform AI; BYOK works on Free. **Voice at launch:** on-device phone TTS only (`expo-speech`). A hosted premium voice may come later; ElevenLabs proxy work is blocked until commercial approval. Store prices come from the store at runtime; the list prices above are only a fallback and the web copy.
 
 Provisional credit costs (`src/monetization/products.ts`, the server is the authority): AI Chef message 1, grocery cost estimate 1, recipe import from text or a link 2, from screenshots 3, AI recipe photo 5.
 
@@ -74,7 +73,21 @@ There are no accounts today. The ledger needs a stable owner per purchaser:
 - Cap input size: images are already downscaled to 1568 px on the client.
 - Log usage per feature, without storing prompts beyond what's needed for abuse handling.
 
-### 6. Client switch-over
+### 6. Premium voice proxy (`POST /v1/voice/tts`) — not at launch
+
+> **Blocked:** needs ElevenLabs Scale plan or written OK before building this. The shipping app uses on-device TTS only.
+
+- **Who:** Plus subscribers only (checked against the ledger owner's `plus_active_until`).
+- **Request:** `{ text, voice: "sous" }` (`PlatformSpeechRequest`). The server maps `voice: "sous"` to AmpliFood's Voice Design voice ID and model; the client never sees either.
+- **Streaming:** call ElevenLabs' streaming endpoint (`/v1/text-to-speech/{voice_id}/stream`, `mp3_44100_128`, a low-latency model such as `eleven_flash_v2_5`) and pipe the chunks to the app as `audio/mpeg` with chunked transfer, so playback starts before synthesis finishes. Respond with headers `X-Characters-Used` / `X-Characters-Left`; the client wraps this as `PlatformSpeechResult`.
+- **Per-user monthly character cap:** provisional `PLUS_MONTHLY_VOICE_CHARACTERS = 30000` (`products.ts`, about 30 minutes of speech). It resets with the Plus period. Over the cap, return `429 { reason: "voice_cap" }`; the app falls back to the phone voice and says so. Voice doesn't spend AI credits (decide later whether packs can top it up).
+- **Metering:** count characters **after** the app's `toSpokenText` cleanup, server-side, before calling ElevenLabs. Record `(owner, characters, model, ms, cached)` per request; reserve before the call and commit on success, as with credits. Alert on spend per day.
+- **Limits:** max 1,000 characters per request; rate-limit per owner and per IP; refuse when the Plus entitlement is unverified.
+- **Caching:** cache audio by hash of `(voice, model, text)` for repeated scripted lines. Scripted onboarding uses the phone voice, so this mainly helps common replies.
+- **Keys and compliance:** the ElevenLabs key lives only in the server environment. The account must be on a Starter-or-higher plan (commercial rights), the Sous voice must be a Voice Design voice, and training on our data must be off. This is pending Ian's spend approval.
+- **Client:** `PlatformAiClient.synthesizeSpeech` (here) and `PlatformVoiceClient` (#12, `src/voice/platformVoice.ts`) are the same call. Merge them into one live client when the backend exists.
+
+### 7. Client switch-over
 
 1. Implement a `livePlatformAi: PlatformAiClient` that calls the endpoints above, and export it as `platformAi`.
 2. Pass `appAccountToken` / `obfuscatedAccountId` in `iap.ts` → `startPurchase`.

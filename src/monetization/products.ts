@@ -2,9 +2,8 @@
 // list prices here are only shown when the store can't be reached (and on web).
 
 export const PLUS_MONTHLY_SKU = 'amplifood_plus_monthly';
-export const PLUS_YEARLY_SKU = 'amplifood_plus_yearly';
 
-export const SUBSCRIPTION_SKUS = [PLUS_MONTHLY_SKU, PLUS_YEARLY_SKU] as const;
+export const SUBSCRIPTION_SKUS = [PLUS_MONTHLY_SKU] as const;
 
 export const PLUS_MONTHLY_CREDITS = 200;
 
@@ -24,14 +23,12 @@ export const CREDIT_PACK_SKUS = CREDIT_PACKS.map((pack) => pack.sku);
 
 export type SubscriptionPlan = {
     sku: string;
-    period: 'month' | 'year';
+    period: 'month';
     listPrice: string;
-    note?: string;
 };
 
 export const PLUS_PLANS: readonly SubscriptionPlan[] = [
     { sku: PLUS_MONTHLY_SKU, period: 'month', listPrice: '$6.99' },
-    { sku: PLUS_YEARLY_SKU, period: 'year', listPrice: '$59.99', note: 'About 28% less than monthly' },
 ];
 
 export function creditPackFor(sku: string): CreditPack | undefined {
