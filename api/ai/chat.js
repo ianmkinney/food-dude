@@ -1,14 +1,14 @@
-const { applyCors } = require('../lib/cors');
-const {
+import { applyCors } from '../lib/cors.js';
+import {
     estimateTokens,
     getDailyLimits,
     getOpenRouterConfig,
     isEmailAllowed,
     isOwnerGateConfigured,
     requireSecrets,
-} = require('../lib/env');
-const { bearerToken, verifySession } = require('../lib/session');
-const { getUsage, recordUsage } = require('../lib/store');
+} from '../lib/env.js';
+import { bearerToken, verifySession } from '../lib/session.js';
+import { getUsage, recordUsage } from '../lib/store.js';
 
 const FRIENDLY_LIMIT =
     "You've hit today's owner AI safety limit. Try again tomorrow, or use your own API key in Account.";
@@ -55,7 +55,7 @@ async function openRouterStream({ model, messages, maxTokens }) {
     return response;
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
     if (applyCors(req, res)) return;
     if (req.method !== 'POST') {
         res.status(405).json({ error: 'method_not_allowed' });

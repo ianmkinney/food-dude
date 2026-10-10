@@ -1,9 +1,9 @@
-const { applyCors } = require('../lib/cors');
-const { getDailyLimits, isOwnerGateConfigured, isEmailAllowed } = require('../lib/env');
-const { bearerToken, verifySession } = require('../lib/session');
-const { getUsage } = require('../lib/store');
+import { applyCors } from '../lib/cors.js';
+import { getDailyLimits, isOwnerGateConfigured, isEmailAllowed } from '../lib/env.js';
+import { bearerToken, verifySession } from '../lib/session.js';
+import { getUsage } from '../lib/store.js';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
     if (applyCors(req, res)) return;
     if (req.method !== 'GET') {
         res.status(405).json({ error: 'method_not_allowed' });
@@ -45,4 +45,4 @@ module.exports = async function handler(req, res) {
     } catch {
         res.status(401).json({ error: 'unauthorized' });
     }
-};
+}

@@ -1,9 +1,9 @@
-const { applyCors } = require('../lib/cors');
-const { isOwnerGateConfigured, isEmailAllowed, requireSecrets } = require('../lib/env');
-const { verifyGoogleIdToken } = require('../lib/google');
-const { signSession } = require('../lib/session');
+import { applyCors } from '../lib/cors.js';
+import { isOwnerGateConfigured, isEmailAllowed, requireSecrets } from '../lib/env.js';
+import { verifyGoogleIdToken } from '../lib/google.js';
+import { signSession } from '../lib/session.js';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
     if (applyCors(req, res)) return;
     if (req.method !== 'POST') {
         res.status(405).json({ error: 'method_not_allowed' });
@@ -52,4 +52,4 @@ module.exports = async function handler(req, res) {
             message: error?.message || 'Google sign-in failed',
         });
     }
-};
+}

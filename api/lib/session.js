@@ -1,4 +1,4 @@
-const { SignJWT, jwtVerify } = require('jose');
+import { SignJWT, jwtVerify } from 'jose';
 
 const SESSION_TTL = '2h';
 
@@ -10,7 +10,7 @@ function getSecretKey() {
     return new TextEncoder().encode(secret);
 }
 
-async function signSession({ sub, email, name }) {
+export async function signSession({ sub, email, name }) {
     return new SignJWT({ email, name })
         .setProtectedHeader({ alg: 'HS256' })
         .setSubject(sub)
@@ -19,7 +19,7 @@ async function signSession({ sub, email, name }) {
         .sign(getSecretKey());
 }
 
-async function verifySession(token) {
+export async function verifySession(token) {
     const { payload } = await jwtVerify(token, getSecretKey());
     const sub = payload.sub;
     const email = payload.email;
@@ -33,11 +33,9 @@ async function verifySession(token) {
     };
 }
 
-function bearerToken(req) {
+export function bearerToken(req) {
     const header = req.headers.authorization || req.headers.Authorization;
     if (!header || typeof header !== 'string') return null;
     const match = header.match(/^Bearer\s+(.+)$/i);
     return match ? match[1].trim() : null;
 }
-
-module.exports = { signSession, verifySession, bearerToken };
