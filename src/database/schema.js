@@ -115,9 +115,13 @@ export const createTablesSQL = `
   -- Parties table
   CREATE TABLE IF NOT EXISTS parties (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    party_uuid TEXT,
     name TEXT NOT NULL,
     description TEXT,
     created_by TEXT,
+    owner_email TEXT,
+    sync_version INTEGER NOT NULL DEFAULT 1,
+    sync_secret TEXT,
     scheduled_date TEXT,
     scheduled_meal_type TEXT,
     created_at INTEGER NOT NULL,
@@ -130,6 +134,7 @@ export const createTablesSQL = `
     party_id INTEGER NOT NULL,
     user_id TEXT NOT NULL,
     user_name TEXT,
+    member_email TEXT,
     role TEXT DEFAULT 'member' CHECK(role IN ('owner', 'member')),
     joined_at INTEGER NOT NULL,
     FOREIGN KEY (party_id) REFERENCES parties(id) ON DELETE CASCADE
@@ -139,6 +144,7 @@ export const createTablesSQL = `
   CREATE TABLE IF NOT EXISTS party_meals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     party_id INTEGER NOT NULL,
+    sync_meal_id TEXT,
     name TEXT NOT NULL,
     description TEXT,
     recipe_ids TEXT, -- JSON array of recipe IDs
@@ -191,6 +197,7 @@ export const createTablesSQL = `
   CREATE INDEX IF NOT EXISTS idx_pantry_items_category ON pantry_items(category);
   CREATE INDEX IF NOT EXISTS idx_party_members_party_id ON party_members(party_id);
   CREATE INDEX IF NOT EXISTS idx_party_meals_party_id ON party_meals(party_id);
+  CREATE INDEX IF NOT EXISTS idx_parties_party_uuid ON parties(party_uuid);
 `;
 
 export const dropTablesSQL = `

@@ -19,6 +19,10 @@ import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { partyOperations, partyMealOperations, partyMemberOperations, recipeOperations, userOperations, partyMealIngredientClaimOperations, pantryOperations } from '../database/operations';
 import aiChefService from '../services/aiChefService';
+import { generatePartyUuid, generateSyncSecret } from '../services/partySync';
+import PartySyncPanel from '../components/PartySyncPanel';
+import { sendInviteEmailForParty } from '../components/PartySyncPanel';
+import { usePartyDeepLink } from '../hooks/usePartyDeepLink';
 
 const PartyScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -53,6 +57,22 @@ const PartyScreen = ({ navigation }) => {
     const [matchingIngredients, setMatchingIngredients] = useState(false);
     const [matchingStatus, setMatchingStatus] = useState('');
     const [estimatingStatus, setEstimatingStatus] = useState('');
+
+    const { pendingReview, clearPendingReview, importSummary, clearImportSummary } = usePartyDeepLink({
+        viewerEmail: currentUser?.email,
+        onImported: async (partyId) => {
+            const party = await partyOperations.getById(partyId);
+            if (party) setSelectedParty(party);
+            const allParties = await partyOperations.getAll();
+            setParties(allParties);
+        },
+    });
+
+    useEffect(() => {
+        if (importSummary) {
+            Alert.alert('Party link', importSummary, [{ text: 'OK', onPress: clearImportSummary }]);
+        }
+    }, [importSummary, clearImportSummary]);
 
     useFocusEffect(
         useCallback(() => {
@@ -106,6 +126,22 @@ const PartyScreen = ({ navigation }) => {
         }
     };
 
+    const refreshParty = useCallback(async () => {
+        await loadParties();
+        if (selectedParty?.id) {
+            const refreshed = await partyOperations.getById(selectedParty.id);
+            if (refreshed) setSelectedParty(refreshed);
+        }
+    }, [selectedParty?.id]);
+
+    useEffect(() => {
+        if (pendingReview?.localPartyId) {
+            partyOperations.getById(pendingReview.localPartyId).then((party) => {
+                if (party) setSelectedParty(party);
+            });
+        }
+    }, [pendingReview?.localPartyId]);
+
     const loadMeals = async (partyId) => {
         try {
             const partyMeals = await partyMealOperations.getByPartyId(partyId);
@@ -128,10 +164,15 @@ const PartyScreen = ({ navigation }) => {
                 return;
             }
 
+            const ownerEmail = (user.email || '').trim().toLowerCase();
             const partyId = await partyOperations.create({
                 name: newPartyName.trim(),
                 description: newPartyDescription.trim() || null,
                 createdBy: user.user_id,
+                partyUuid: generatePartyUuid(),
+                ownerEmail: ownerEmail || null,
+                syncSecret: generateSyncSecret(),
+                syncVersion: 1,
             });
             
             // Add creator as owner member
@@ -139,6 +180,7 @@ const PartyScreen = ({ navigation }) => {
                 partyId: partyId,
                 userId: user.user_id,
                 userName: user.name || user.username || 'You',
+                memberEmail: ownerEmail || null,
                 role: 'owner',
             });
             
@@ -279,7 +321,9 @@ const PartyScreen = ({ navigation }) => {
             setNewMealDescription('');
             setSelectedRecipes([]);
             setShowCreateMealModal(false);
+            await partyOperations.updateSyncFields(selectedParty.id, { updated_at: Date.now() });
             await loadMeals(selectedParty.id);
+            await refreshParty();
             Alert.alert('Success', 'Meal created!');
         } catch (error) {
             console.error('Error creating meal:', error);
@@ -299,49 +343,14 @@ const PartyScreen = ({ navigation }) => {
         }
 
         try {
-            // Get current user for the invite message
-            const currentUser = await userOperations.getCurrent();
-            const userName = currentUser?.name || currentUser?.username || 'A friend';
-            const appName = 'AmpliFood';
-            
-            // Create email subject and body
-            const subject = `Join my party "${selectedParty.name}" on ${appName}!`;
-            const body = `Hi there!
-
-${userName} has invited you to join their party "${selectedParty.name}" on ${appName}!
-
-${selectedParty.description ? `About this party:\n${selectedParty.description}\n\n` : ''}To join this party:
-1. Download the ${appName} app
-2. Open the app and go to the Party section
-3. Look for the party "${selectedParty.name}"
-
-We're planning some amazing meals together and would love to have you join us!
-
-Happy cooking!
-${userName}`;
-
-            // Create mailto link
-            const emailUrl = `mailto:${inviteEmail.trim()}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-            
-            // Check if we can open the email client
-            const canOpen = await Linking.canOpenURL(emailUrl);
-            
-            if (canOpen) {
-                await Linking.openURL(emailUrl);
-                Alert.alert(
-                    'Invitation Ready',
-                    `An email invitation has been prepared for ${inviteEmail}. Please send it from your email app.`,
-                    [{ text: 'OK' }]
-                );
-            } else {
-                // Fallback: show the email content so user can copy it
-                Alert.alert(
-                    'Email Invitation',
-                    `To invite ${inviteEmail}:\n\nSubject: ${subject}\n\nBody:\n${body}\n\nPlease copy this and send it manually.`,
-                    [{ text: 'OK' }]
-                );
-            }
-            
+            const user = currentUser || await userOperations.getCurrent();
+            await sendInviteEmailForParty({
+                selectedParty,
+                currentUser: user,
+                inviteEmail: inviteEmail.trim(),
+                onPartyUpdated: refreshParty,
+            });
+            Alert.alert('Invitation', `Invite prepared for ${inviteEmail.trim()}.`);
             setInviteEmail('');
             setShowInviteModal(false);
         } catch (error) {
@@ -779,6 +788,18 @@ ${userName}`;
             {/* Meals List */}
             {selectedParty ? (
                 <View style={styles.mealsContainer}>
+                    <PartySyncPanel
+                        theme={theme}
+                        selectedParty={selectedParty}
+                        currentUser={currentUser}
+                        onPartyUpdated={refreshParty}
+                        pendingImport={
+                            pendingReview
+                                ? { doc: pendingReview.doc, secret: pendingReview.secret }
+                                : null
+                        }
+                        onClearPendingImport={clearPendingReview}
+                    />
                     <View style={styles.mealsHeader}>
                         <Text style={[styles.mealsTitle, { color: theme.colors.text.primary }]}>
                             Meals for {selectedParty.name}
