@@ -1,5 +1,6 @@
-import { registerRootComponent } from 'expo';
 import { Platform } from 'react-native';
+
+const registerRootComponent = (component) => require('expo').registerRootComponent(component);
 
 // A sign-in popup or redirect that lands on the app origin must not boot a
 // second AmpliFood: it would take the on-device database (OPFS) away from the
@@ -18,6 +19,28 @@ if (isAuthCallbackWindow()) {
   const AuthCallback = require('./src/platform/AuthCallbackScreen').default;
   maybeCompleteAuthSession();
   registerRootComponent(AuthCallback);
+} else if (Platform.OS === 'web') {
+  // Evaluating the whole bundle in one go is a single long task that blocks
+  // input while the page boots. Require the heaviest dependencies in separate
+  // tasks first; each later require is then a cache hit.
+  const stages = [
+    () => require('expo'),
+    () => require('react-dom/client'),
+    () => require('react-native-reanimated'),
+    () => require('@react-navigation/native'),
+    () => require('@react-navigation/bottom-tabs'),
+    () => require('./src/database/operations'),
+    () => require('./src/onboarding/OnboardingGate'),
+    () => require('./src/sous/SousScreen'),
+    () => require('./src/navigation/AppNavigator'),
+    () => require('./App'),
+    () => registerRootComponent(require('./App').default),
+  ];
+  const runStage = () => {
+    stages.shift()();
+    if (stages.length) setTimeout(runStage, 0);
+  };
+  setTimeout(runStage, 0);
 } else {
   // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
   // It also ensures that whether you load the app in Expo Go or in a native build,

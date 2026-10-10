@@ -28,6 +28,11 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (fromApp && WEB_DEEP_EXPORTS[moduleName]) {
     return { type: 'sourceFile', filePath: path.join(RN_SHIM_DIR, WEB_DEEP_EXPORTS[moduleName]) };
   }
+  // The barrel entry registers every icon family (≈500 KB of glyph maps); the
+  // app only uses Ionicons.
+  if (fromApp && moduleName === '@expo/vector-icons') {
+    return { type: 'sourceFile', filePath: path.join(RN_SHIM_DIR, 'icons.js') };
+  }
   if (fromApp && (moduleName === 'react-native' || moduleName === 'react-native-web')) {
     return { type: 'sourceFile', filePath: path.join(RN_SHIM_DIR, 'index.js') };
   }

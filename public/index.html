@@ -389,6 +389,56 @@
           animation: none !important;
         }
       }
+
+      /* First-run shell: a static copy of the onboarding intro, generated at
+         export time (scripts/web-shell.js). It is shown once the splash intro
+         finishes if the bundle is still loading, and removed when the app is
+         ready, so slow networks see real content instead of a held logo. */
+      #af-shell {
+        position: fixed;
+        inset: 0;
+        z-index: 2147482000;
+        overflow: hidden;
+        background: #FBF6EE;
+        color: #2A1424;
+        font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        transition: opacity 250ms cubic-bezier(.2, .8, .2, 1);
+        --afs-muted: #F4EDE2;
+        --afs-border: rgba(42, 20, 36, 0.12);
+        --afs-tertiary: #73646A;
+        --afs-primary: #A9420D;
+      }
+      #af-shell.afs-out { opacity: 0; }
+      .afs-screen { max-width: 560px; margin: 0 auto; padding: 22px; padding-top: calc(22px + env(safe-area-inset-top)); display: flex; flex-direction: column; gap: 18px; box-sizing: border-box; }
+      .afs-top { display: flex; align-items: center; gap: 12px; }
+      .afs-mark { width: 44px; height: 44px; flex: none; }
+      .afs-mark svg { width: 44px; height: 44px; display: block; }
+      .afs-name-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+      .afs-name { font-family: Fredoka_700Bold, Fredoka, system-ui, sans-serif; font-size: 20px; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .afs-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .afs-small { font-size: 13px; line-height: 18px; color: var(--afs-tertiary); }
+      .afs-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; line-height: 14px; font-weight: 700; letter-spacing: 0.2px; border: 1px solid var(--afs-border); border-radius: 999px; padding: 3px 8px; color: var(--afs-tertiary); background: var(--afs-muted); }
+      .afs-badge svg, .afs-mute svg { display: block; }
+      .afs-mute { width: 44px; height: 44px; box-sizing: border-box; border: 1px solid var(--afs-border); border-radius: 22px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--afs-tertiary); }
+      .afs-content { display: flex; flex-direction: column; gap: 14px; }
+      .afs-caption { background: var(--afs-muted); border: 1px solid var(--afs-border); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+      .afs-caption-tag { font-size: 10px; font-weight: 800; letter-spacing: 1px; color: var(--afs-tertiary); }
+      .afs-caption-text { font-size: 15px; line-height: 22px; white-space: pre-wrap; overflow-wrap: break-word; }
+      .afs-lead { font-size: 18px; line-height: 27px; margin: 0; white-space: pre-wrap; overflow-wrap: break-word; }
+      .afs-lead b { font-weight: 800; }
+      .afs-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+      .afs-button { border: 0; border-radius: 999px; padding: 13px 22px; font: 800 16px/19px Inter, system-ui, sans-serif; background: var(--afs-muted); color: inherit; }
+      .afs-button.afs-primary { background: var(--afs-primary); color: #FFFFFF; }
+      @media (prefers-color-scheme: dark) {
+        #af-shell {
+          background: #141012;
+          color: #FFF4E3;
+          --afs-muted: #191517;
+          --afs-border: rgba(255, 244, 227, 0.12);
+          --afs-tertiary: #A8988F;
+          --afs-primary: #EB6A1C;
+        }
+      }
     </style>
   </head>
 
@@ -396,6 +446,7 @@
     <noscript>
       AmpliFood needs JavaScript to run.
     </noscript>
+    <!--af-shell-->
     <div id="af-splash" aria-hidden="true">
       <div class="af-bg"></div>
       <div class="af-lockup">
@@ -424,6 +475,19 @@
     <script>
       (function () {
         var splash = document.getElementById('af-splash');
+        var shell = document.getElementById('af-shell');
+        if (shell) {
+          var onboarded = false;
+          try {
+            onboarded = !!localStorage.getItem('amplifood.onboarding.v1');
+          } catch (e) {}
+          if (onboarded || location.pathname.indexOf('/auth/') === 0) {
+            shell.remove();
+            shell = null;
+          } else {
+            shell.querySelector('.afs-mark').appendChild(splash.querySelector('.af-mark').cloneNode(true));
+          }
+        }
         var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
         var first = false;
         try {
@@ -444,7 +508,7 @@
           setTimeout(function () { splash.remove(); }, animated ? 520 : 320);
         }
         function maybeExit() {
-          if (!ready) return;
+          if (!ready && !shell) return;
           var wait = introEnds - Date.now();
           if (wait > 0) setTimeout(maybeExit, wait);
           else exit();
@@ -460,10 +524,20 @@
         });
         window.__afSplash = {
           ready: function () {
+            if (ready) return;
             ready = true;
+            if (shell) {
+              var s = shell;
+              shell = null;
+              setTimeout(function () {
+                s.classList.add('afs-out');
+                setTimeout(function () { s.remove(); }, 260);
+              }, 80);
+            }
             maybeExit();
           },
         };
+        if (shell) maybeExit();
         setTimeout(window.__afSplash.ready, 20000);
       })();
     </script>

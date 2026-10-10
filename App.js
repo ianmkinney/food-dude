@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import GestureHandlerRootView from './src/platform/GestureRoot';
 import { StyleSheet, View, Text, Platform, Pressable, ScrollView } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts, Fredoka_600SemiBold, Fredoka_700Bold } from '@expo-google-fonts/fredoka';
