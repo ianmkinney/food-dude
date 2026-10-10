@@ -37,8 +37,8 @@ export default function PrivacyDataExplainer({ theme, variant = 'account' }: Pro
             </Text>
             <Text style={[styles.body, { color: c.text.secondary }]}>
                 When you message Ampi, your text (and anything you attach) is sent to the AI provider you chose to generate a
-                reply. Optional ElevenLabs voice sends reply text to ElevenLabs under your own account when you add a key in
-                Account → Voice.
+                reply.                 Optional ElevenLabs voice sends reply text to ElevenLabs (your own key on device, or the owner platform
+                voice when you use owner sign-in) from Account → Voice.
             </Text>
             {!compact && (
                 <Pressable

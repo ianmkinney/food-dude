@@ -28,6 +28,17 @@ import {
     setElevenLabsVoice,
     type ElevenLabsVoice,
 } from '../voice/elevenLabsSettings';
+import { getOwnerSession } from '../platform/ownerSession';
+import {
+    fetchOwnerSessionElevenLabsAvailable,
+    listPlatformElevenLabsVoices,
+    PlatformElevenLabsError,
+} from '../voice/platformElevenLabsClient';
+import {
+    getPlatformElevenLabsConfig,
+    setPlatformElevenLabsEnabled,
+    setPlatformElevenLabsVoice,
+} from '../voice/platformElevenLabsSettings';
 
 function voiceSubtitle(v: ElevenLabsVoice): string | null {
     if (!v.category) return null;
@@ -53,6 +64,17 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
     const [previewingId, setPreviewingId] = useState<string | null>(null);
     const [elStatus, setElStatus] = useState('');
     const selectedVoiceIdRef = useRef<string | null>(null);
+    const [ownerSignedIn, setOwnerSignedIn] = useState(false);
+    const [platformAvailable, setPlatformAvailable] = useState(false);
+    const [platformEnabled, setPlatformEnabled] = useState(false);
+    const [platformVoices, setPlatformVoices] = useState<ElevenLabsVoice[]>([]);
+    const [platformVoicesLoaded, setPlatformVoicesLoaded] = useState(false);
+    const [platformVoiceId, setPlatformVoiceId] = useState<string | null>(null);
+    const [platformVoiceName, setPlatformVoiceName] = useState<string | null>(null);
+    const [loadingPlatformVoices, setLoadingPlatformVoices] = useState(false);
+    const [platformPreviewingId, setPlatformPreviewingId] = useState<string | null>(null);
+    const [platformStatus, setPlatformStatus] = useState('');
+    const platformVoiceIdRef = useRef<string | null>(null);
 
     const load = useCallback(() => {
         getVoiceSettings().then((s) => {
@@ -65,6 +87,21 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
             setVoiceId(cfg.voiceId);
             setVoiceName(cfg.voiceName);
             selectedVoiceIdRef.current = cfg.voiceId;
+        });
+        getPlatformElevenLabsConfig().then((cfg) => {
+            setPlatformEnabled(cfg.enabled);
+            setPlatformVoiceId(cfg.voiceId);
+            setPlatformVoiceName(cfg.voiceName);
+            platformVoiceIdRef.current = cfg.voiceId;
+        });
+        getOwnerSession().then(async (session) => {
+            const signedIn = Boolean(session?.token);
+            setOwnerSignedIn(signedIn);
+            if (!signedIn) {
+                setPlatformAvailable(false);
+                return;
+            }
+            setPlatformAvailable(await fetchOwnerSessionElevenLabsAvailable());
         });
     }, []);
 
@@ -102,6 +139,39 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
         }
     }, []);
 
+    const refreshPlatformVoices = useCallback(async () => {
+        if (!ownerSignedIn || !platformAvailable) return;
+        setLoadingPlatformVoices(true);
+        setPlatformStatus('');
+        try {
+            const list = await listPlatformElevenLabsVoices();
+            setPlatformVoices(list);
+            setPlatformVoicesLoaded(true);
+            const current = platformVoiceIdRef.current;
+            if (!list.length) {
+                setPlatformStatus('No voices returned from the owner ElevenLabs account. Try Refresh.');
+                return;
+            }
+            if (!current || !list.some((v) => v.voice_id === current)) {
+                const first = list[0];
+                await setPlatformElevenLabsVoice(first.voice_id, first.name);
+                platformVoiceIdRef.current = first.voice_id;
+                setPlatformVoiceId(first.voice_id);
+                setPlatformVoiceName(first.name);
+            }
+        } catch (error) {
+            setPlatformVoices([]);
+            setPlatformVoicesLoaded(true);
+            if (error instanceof PlatformElevenLabsError) {
+                setPlatformStatus(error.message);
+            } else {
+                setPlatformStatus((error as Error).message || 'Could not load owner voices.');
+            }
+        } finally {
+            setLoadingPlatformVoices(false);
+        }
+    }, [ownerSignedIn, platformAvailable]);
+
     useEffect(() => {
         load();
     }, [load]);
@@ -111,6 +181,12 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
             refreshVoices();
         }
     }, [elKeySaved, refreshVoices]);
+
+    useEffect(() => {
+        if (ownerSignedIn && platformAvailable && platformEnabled) {
+            refreshPlatformVoices();
+        }
+    }, [ownerSignedIn, platformAvailable, platformEnabled, refreshPlatformVoices]);
 
     const saveElevenKey = async () => {
         try {
@@ -183,6 +259,45 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
         await engine.speak(`This is ${ASSISTANT_NAME} using your ElevenLabs voice.`);
     };
 
+    const togglePlatformVoice = async (next: boolean) => {
+        setPlatformEnabled(next);
+        await setPlatformElevenLabsEnabled(next);
+        if (next) {
+            setPlatformVoicesLoaded(false);
+            await refreshPlatformVoices();
+            setPlatformStatus('Owner ElevenLabs voice enabled. Reply text is sent to the server for speech.');
+        } else {
+            setPlatformStatus('Using built-in voice (unless you saved your own ElevenLabs key).');
+        }
+    };
+
+    const selectPlatformVoice = async (v: ElevenLabsVoice) => {
+        await setPlatformElevenLabsVoice(v.voice_id, v.name);
+        platformVoiceIdRef.current = v.voice_id;
+        setPlatformVoiceId(v.voice_id);
+        setPlatformVoiceName(v.name);
+        setPlatformStatus(`Using ${v.name} via owner ElevenLabs.`);
+    };
+
+    const playPlatformPreview = async (v: ElevenLabsVoice) => {
+        if (!v.preview_url) {
+            setPlatformStatus(`No preview clip for ${v.name}. Use Test voice after selecting it.`);
+            return;
+        }
+        primeSpeechOnWeb();
+        setPlatformPreviewingId(v.voice_id);
+        try {
+            stopElevenLabsPlayback();
+            await playElevenLabsAudio(v.preview_url, 20_000);
+        } catch {
+            setPlatformStatus('Could not play preview. Try Refresh or Test voice.');
+        } finally {
+            setPlatformPreviewingId(null);
+        }
+    };
+
+    const hasElevenVoice = Boolean((elKeySaved && voiceId) || (platformEnabled && platformVoiceId));
+
     return (
         <View>
             <Text style={[styles.title, { color: c.text.primary }]} accessibilityRole="header">
@@ -217,6 +332,127 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
             <Pressable onPress={preview} style={[styles.button, { borderColor: c.border }]} accessibilityRole="button">
                 <Text style={{ color: c.text.primary }}>Preview voice</Text>
             </Pressable>
+
+            {ownerSignedIn && platformAvailable ? (
+                <>
+                    <View style={[styles.divider, { borderColor: c.border }]} />
+                    <Text style={[styles.subtitle, { color: c.text.primary }]}>Owner ElevenLabs voice</Text>
+                    <Text style={[styles.body, { color: c.text.secondary }]}>
+                        Use the platform owner's ElevenLabs account for {ASSISTANT_NAME}. Reply text is sent to
+                        AmpliFood's server for speech; your own API key below takes priority if saved.
+                    </Text>
+                    <View style={styles.row}>
+                        <Text style={[styles.rowText, { color: c.text.primary }]}>Use owner ElevenLabs voice</Text>
+                        <ThemedSwitch
+                            value={platformEnabled}
+                            onValueChange={togglePlatformVoice}
+                            accessibilityLabel="Use owner ElevenLabs voice"
+                        />
+                    </View>
+                    {platformEnabled ? (
+                        <View style={styles.voiceSection}>
+                            <View style={styles.voiceSectionHeader}>
+                                <Text style={[styles.label, { color: c.text.secondary }]}>Owner voices</Text>
+                                <Pressable
+                                    onPress={() => refreshPlatformVoices()}
+                                    disabled={loadingPlatformVoices}
+                                    style={[
+                                        styles.refreshBtn,
+                                        { borderColor: c.border, opacity: loadingPlatformVoices ? 0.6 : 1 },
+                                    ]}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Refresh owner voice list"
+                                >
+                                    {loadingPlatformVoices ? (
+                                        <ActivityIndicator size="small" />
+                                    ) : (
+                                        <>
+                                            <Ionicons name="refresh-outline" size={16} color={c.text.primary} />
+                                            <Text style={{ color: c.text.primary, marginLeft: 4 }}>Refresh</Text>
+                                        </>
+                                    )}
+                                </Pressable>
+                            </View>
+                            {platformVoices.length > 0 ? (
+                                <ScrollView style={[styles.voiceScroll, { borderColor: c.border }]} nestedScrollEnabled>
+                                    {platformVoices.map((v) => {
+                                        const selected = v.voice_id === platformVoiceId;
+                                        const subtitle = voiceSubtitle(v);
+                                        return (
+                                            <View
+                                                key={`platform-${v.voice_id}`}
+                                                style={[
+                                                    styles.voiceRow,
+                                                    {
+                                                        borderColor: c.border,
+                                                        backgroundColor: selected ? c.surfaceMuted : c.surface,
+                                                    },
+                                                ]}
+                                            >
+                                                <Pressable
+                                                    onPress={() => selectPlatformVoice(v)}
+                                                    style={styles.voiceMain}
+                                                    accessibilityRole="button"
+                                                    accessibilityState={{ selected }}
+                                                    accessibilityLabel={`Select owner voice ${v.name}`}
+                                                >
+                                                    <Ionicons
+                                                        name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                                                        size={20}
+                                                        color={selected ? theme.primary[500] : c.text.tertiary}
+                                                    />
+                                                    <View style={styles.voiceTextCol}>
+                                                        <Text
+                                                            style={[styles.voiceName, { color: c.text.primary }]}
+                                                            numberOfLines={1}
+                                                        >
+                                                            {v.name}
+                                                        </Text>
+                                                        {subtitle ? (
+                                                            <Text
+                                                                style={[styles.voiceMeta, { color: c.text.tertiary }]}
+                                                                numberOfLines={1}
+                                                            >
+                                                                {subtitle}
+                                                            </Text>
+                                                        ) : null}
+                                                    </View>
+                                                </Pressable>
+                                                <Pressable
+                                                    onPress={() => playPlatformPreview(v)}
+                                                    disabled={!v.preview_url || platformPreviewingId === v.voice_id}
+                                                    style={[
+                                                        styles.previewBtn,
+                                                        { borderColor: c.border, opacity: v.preview_url ? 1 : 0.4 },
+                                                    ]}
+                                                    accessibilityRole="button"
+                                                    accessibilityLabel={`Play preview for ${v.name}`}
+                                                >
+                                                    {platformPreviewingId === v.voice_id ? (
+                                                        <ActivityIndicator size="small" />
+                                                    ) : (
+                                                        <Ionicons name="play-outline" size={18} color={c.text.primary} />
+                                                    )}
+                                                </Pressable>
+                                            </View>
+                                        );
+                                    })}
+                                </ScrollView>
+                            ) : platformVoicesLoaded && !loadingPlatformVoices ? (
+                                <Text style={[styles.body, { color: c.text.secondary }]}>
+                                    No voices to show. Tap Refresh.
+                                </Text>
+                            ) : null}
+                            {platformVoiceName ? (
+                                <Text style={[styles.body, { color: c.text.secondary }]}>Selected: {platformVoiceName}</Text>
+                            ) : null}
+                        </View>
+                    ) : null}
+                    {platformStatus ? (
+                        <Text style={[styles.body, { color: c.text.tertiary }]}>{platformStatus}</Text>
+                    ) : null}
+                </>
+            ) : null}
 
             <View style={[styles.divider, { borderColor: c.border }]} />
             <Text style={[styles.subtitle, { color: c.text.primary }]}>ElevenLabs (optional)</Text>
@@ -365,8 +601,8 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
             ) : null}
             <Pressable
                 onPress={testEleven}
-                disabled={!elKeySaved || !voiceId}
-                style={[styles.button, { borderColor: c.border, opacity: elKeySaved && voiceId ? 1 : 0.5 }]}
+                disabled={!hasElevenVoice}
+                style={[styles.button, { borderColor: c.border, opacity: hasElevenVoice ? 1 : 0.5 }]}
                 accessibilityRole="button"
             >
                 <Text style={{ color: c.text.primary }}>Test voice</Text>

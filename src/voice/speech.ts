@@ -4,6 +4,9 @@ import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION } from '../config/assistant';
 import { isVoiceMuted } from './voiceSettings';
 import { getElevenLabsConfig } from './elevenLabsSettings';
 import { createElevenLabsEngine } from './elevenLabsEngine';
+import { getOwnerSessionToken } from '../platform/ownerSession';
+import { isPlatformElevenLabsActive } from './platformElevenLabsSettings';
+import { createPlatformElevenLabsEngine } from './platformElevenLabsEngine';
 
 // On-device text-to-speech via expo-speech, or optional ElevenLabs BYOK from the device.
 
@@ -81,6 +84,10 @@ export async function getSpeechEngine(): Promise<SpeechEngine> {
     const { apiKey, voiceId } = await getElevenLabsConfig();
     if (apiKey && voiceId) {
         return createElevenLabsEngine();
+    }
+    const hasOwnerSession = Boolean(await getOwnerSessionToken());
+    if (await isPlatformElevenLabsActive(hasOwnerSession)) {
+        return createPlatformElevenLabsEngine();
     }
     return deviceSpeechEngine;
 }
