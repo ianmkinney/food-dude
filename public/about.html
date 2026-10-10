@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AmpliFood · A kitchen companion with a little attitude</title>
+  <meta name="description" content="AmpliFood imports recipes with AI, plans your week, tracks your pantry with barcode scanning, builds grocery lists and gives you an AI chef. Bring your own AI key; your data stays on your device." />
+  <meta property="og:title" content="AmpliFood" />
+  <meta property="og:description" content="A kitchen companion with a little attitude." />
+  <meta property="og:image" content="/icon-512.png" />
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="stylesheet" href="/site.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="site">
+      <a href="/about"><picture><source srcset="/brand/wordmark-dark.png" media="(prefers-color-scheme: dark)" /><img src="/brand/wordmark.png" alt="AmpliFood" /></picture></a>
+      <nav><a href="/about" aria-current="page">About</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/support">Support</a><a href="/">Open app</a></nav>
+    </header>
+    <div class="checker" aria-hidden="true"></div>
+
+    <main>
+      <section class="hero">
+        <div>
+          <h1>Cooking, turned up.</h1>
+          <p class="lede">AmpliFood is a kitchen companion with a little attitude: graphic, delicious, warm, and built for real-life cooking. Save recipes from anywhere, plan the week, know what's in the cupboard, and ask an AI chef what to make tonight.</p>
+          <a class="btn" href="/">Open AmpliFood in your browser</a>
+          <a class="btn ghost" href="#byok">How the AI works</a>
+        </div>
+        <img src="/brand/mark-color.png" alt="" />
+      </section>
+
+      <h2>What it does</h2>
+      <div class="grid">
+        <div class="card"><h3>AI recipe import</h3><p>Paste recipe text or a link, or drop in screenshots from social posts. AmpliFood pulls out the ingredients, steps, and servings for you.</p></div>
+        <div class="card"><h3>Meal planner</h3><p>Lay out breakfast, lunch, and dinner for the week and move meals around as plans change.</p></div>
+        <div class="card"><h3>Pantry with barcode scan</h3><p>Scan a product's barcode to add it, or type it in. Track quantities and what's about to expire.</p></div>
+        <div class="card"><h3>Smart grocery lists</h3><p>Build a list from your meal plan, check things off in the store, and get an AI estimate of what the haul will cost.</p></div>
+        <div class="card"><h3>AI chef</h3><p>Ask cooking questions, get recipes from what's already in your pantry, and get step-by-step help while you cook.</p></div>
+      </div>
+
+      <h2 id="byok">Bring your own AI key</h2>
+      <p>AmpliFood doesn't resell AI or run its own AI servers. You connect the provider you already use by pasting your own API key from <strong>Anthropic (Claude)</strong>, <strong>OpenAI</strong>, <strong>xAI (Grok)</strong>, or <strong>Google Gemini</strong>.</p>
+      <ul>
+        <li><strong>Your key stays on your device.</strong> On iPhone and Android it's stored in the system's secure storage (iOS Keychain / Android Keystore, via SecureStore). In the web version it's kept in your browser's storage for this site.</li>
+        <li><strong>Requests go straight to your provider.</strong> When you use an AI feature, your device talks directly to the provider you picked. There is no AmpliFood server in between.</li>
+        <li><strong>You stay in control.</strong> Your provider bills you for what you use under your own account. Remove the key at any time in Account → Clear.</li>
+        <li><strong>No key? No problem.</strong> The recipe book, planner, pantry, and grocery lists all work without one.</li>
+      </ul>
+
+      <h2>Pricing</h2>
+      <div class="note">
+        <p><strong>Pricing coming soon.</strong> We'll share plans and details here before anything changes.</p>
+      </div>
+    </main>
+
+    <footer class="site">
+      <a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/support">Support</a><a href="/accessibility">Accessibility</a><a href="/">Open app</a>
+      <p>© AmpliFood</p>
+    </footer>
+  </div>
+</body>
+</html>

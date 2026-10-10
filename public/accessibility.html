@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Accessibility · AmpliFood</title>
+  <meta name="description" content="AmpliFood's accessibility statement: what works today, what we're fixing, and how to report a barrier." />
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="stylesheet" href="/site.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="site">
+      <a href="/about"><picture><source srcset="/brand/wordmark-dark.png" media="(prefers-color-scheme: dark)" /><img src="/brand/wordmark.png" alt="AmpliFood" /></picture></a>
+      <nav><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/support">Support</a><a href="/">Open app</a></nav>
+    </header>
+    <div class="checker" aria-hidden="true"></div>
+
+    <main>
+      <h1>Accessibility</h1>
+      <!-- TODO(Ian): set the review date before publishing. -->
+      <p><em>Last reviewed: <span class="todo">[date TODO (Ian)]</span></em></p>
+      <p class="lede">We want everyone to be able to cook with AmpliFood. We're working toward the <a href="https://www.w3.org/TR/WCAG21/">Web Content Accessibility Guidelines (WCAG) 2.1</a> at level AA across the iPhone, Android, and web versions.</p>
+
+      <h2>What works today</h2>
+      <ul>
+        <li><strong>Dark mode.</strong> AmpliFood follows your device's light or dark setting, and you can switch it in the app.</li>
+        <li><strong>Reduce Motion.</strong> When Reduce Motion is on, AmpliFood turns off its decorative animations.</li>
+        <li><strong>Text scaling.</strong> Text follows your device's font size setting.</li>
+      </ul>
+
+      <h2>What we're still fixing</h2>
+      <ul>
+        <li>Some icon-only buttons don't have spoken labels yet.</li>
+        <li>Some text fields rely on placeholder text instead of a proper label.</li>
+        <li>Orange text and buttons don't yet meet the 4.5:1 contrast ratio in light mode.</li>
+        <li>Screen readers don't yet announce new AI and Ampi replies automatically.</li>
+      </ul>
+
+      <h2>Report a barrier</h2>
+      <!-- TODO(Ian): real support address and confirm the response time. -->
+      <p>If something in AmpliFood is hard or impossible to use, tell us at <span class="todo">[support email TODO (Ian)]</span>. Please include your device, the assistive technology you use (for example VoiceOver, TalkBack, or a screen magnifier), and where you got stuck. We'll reply within <span class="todo">[5]</span> business days.</p>
+    </main>
+
+    <footer class="site">
+      <a href="/terms">Terms</a><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/support">Support</a><a href="/">Open app</a>
+      <p>© AmpliFood</p>
+    </footer>
+  </div>
+</body>
+</html>

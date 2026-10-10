@@ -42,6 +42,10 @@ npm run preview:web    # serves dist/ with SPA fallback on http://localhost:8080
 
 Open http://localhost:8080. Add a grocery item, reload the page, and it should still be there. Deep links such as `/pantry`, `/grocery`, and `/account` should open directly.
 
+## Info pages: /about, /privacy, /terms, /support, /accessibility
+
+These are static HTML files in `public/` (`about.html`, `privacy.html`, `terms.html`, `support.html`, `accessibility.html`, sharing `site.css` and `public/brand/`). They load without JavaScript, so app-store reviewers and crawlers can read them, and they don't wait for the app's database. `vercel.json` rewrites `/about`, `/privacy`, `/terms`, `/support` and `/accessibility` to those files before the app's catch-all. `/` stays the app. The contact email in `support.html` and `terms.html`, and the terms' effective date, are TODO placeholders until Ian adds the real address.
+
 ## What `vercel.json` does
 
 | Setting | Why |
