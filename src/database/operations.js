@@ -1,13 +1,19 @@
-import * as SQLite from 'expo-sqlite';
 import { runMigrations, ensureRequiredColumns } from './migrations';
+import { openAppDatabase } from './openDatabase';
 
 let db = null;
+let dbMode = 'persistent';
+
+/** 'memory' when the saved database couldn't be opened and changes won't persist. */
+export const getDatabaseMode = () => dbMode;
 
 // Initialize database
 export const initDatabase = async () => {
     try {
         // Pre-rebrand file name; renaming it would orphan every existing install's data.
-        db = await SQLite.openDatabaseAsync('fooddude.db');
+        const opened = await openAppDatabase('fooddude.db');
+        db = opened.db;
+        dbMode = opened.mode;
         await db.execAsync('PRAGMA foreign_keys = ON;');
         const version = await runMigrations(db);
         await ensureRequiredColumns(db);
