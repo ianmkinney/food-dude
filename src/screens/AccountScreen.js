@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
     View,
     Text,
@@ -18,6 +19,7 @@ import AiProviderSettings from '../components/AiProviderSettings';
 import VoicePreferences from '../components/VoicePreferences';
 import DataSharingSettings from '../components/DataSharingSettings';
 import OwnerSignInSettings from '../components/OwnerSignInSettings';
+import { isOwnerSignInConfigured } from '../platform/ownerSignInConfig';
 import AccountAboutSheet from '../components/AccountAboutSheet';
 import ElevatedCard from '../components/ElevatedCard';
 import { PRIVACY_URL } from '../consent/consentStore';
@@ -54,6 +56,17 @@ const AccountScreen = ({ navigation }) => {
             scrollRef.current.scrollTo({ y: Math.max(0, aiPrivacySectionY - 12), animated: true });
         }
     }, [aiPrivacySectionY]);
+
+    useFocusEffect(
+        useCallback(() => {
+            if (Platform.OS === 'web' && typeof document !== 'undefined') {
+                const active = document.activeElement;
+                if (active instanceof HTMLElement && active !== document.body) {
+                    active.blur();
+                }
+            }
+        }, [])
+    );
 
     useEffect(() => {
         loadUser();
@@ -338,9 +351,11 @@ const AccountScreen = ({ navigation }) => {
                 </Text>
             </ElevatedCard>
 
-            <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
-                <OwnerSignInSettings theme={theme} />
-            </ElevatedCard>
+            {isOwnerSignInConfigured() ? (
+                <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
+                    <OwnerSignInSettings theme={theme} />
+                </ElevatedCard>
+            ) : null}
 
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                 <AiProviderSettings theme={theme} />

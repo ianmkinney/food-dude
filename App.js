@@ -15,6 +15,7 @@ import { ConsentHost } from './src/consent/ConsentHost';
 import OnboardingGate from './src/onboarding/OnboardingGate';
 import { MonetizationProvider } from './src/monetization/MonetizationContext';
 import WebShell from './src/components/WebShell';
+import ScreenErrorBoundary from './src/components/ScreenErrorBoundary';
 
 import { ShareIntentProvider } from './src/platform/shareIntent';
 
@@ -144,7 +145,17 @@ function AppContent() {
         <OnboardingGate navigate={navigateToTab}>
           <WebShell>
             <NavigationContainer ref={navigationRef} linking={linking} documentTitle={documentTitle}>
-              <AppNavigator />
+              <ScreenErrorBoundary
+                isDark={theme.isDark}
+                onGoBack={() => {
+                  if (navigationRef.isReady()) {
+                    if (navigationRef.canGoBack()) navigationRef.goBack();
+                    else navigationRef.navigate('Main', { screen: 'Recipes' });
+                  }
+                }}
+              >
+                <AppNavigator />
+              </ScreenErrorBoundary>
               <StatusBar style={theme.isDark ? 'light' : 'dark'} />
             </NavigationContainer>
           </WebShell>
