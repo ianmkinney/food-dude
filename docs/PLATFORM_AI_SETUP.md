@@ -105,6 +105,7 @@ Live party sync stores **party metadata only** (name, optional cover image, memb
 | Variable | Required | Description |
 | --- | --- | --- |
 | `DATABASE_URL` or `POSTGRES_URL` | For live parties | Neon connection string from the Vercel Neon integration. |
+| `PARTY_AUTO_MIGRATE` | Optional | Set to `0` to skip automatic idempotent schema DDL on first party API call (default: on). |
 | `BLOB_READ_WRITE_TOKEN` | Recommended | Vercel Blob read/write token for public party cover images. |
 
 API surface (single serverless entrypoint `api/party/index.js`, actions via `?action=`): `create`, `get`, `join`, `leave`, `remove_member`, `update_meals`, `upload_image`, `changes_since`, `migrate`. Invite previews: `/p/<token>` → `api/p.js` (Open Graph HTML + redirect to `/party?inviteToken=…`).
