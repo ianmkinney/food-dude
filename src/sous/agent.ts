@@ -6,6 +6,7 @@ import { prepareAttachmentPayload } from './chatAttachments';
 import { isMutatingAction, summarizeActions } from './confirmActions';
 import { loadThreadTurns, memoriesForPrompt } from '../chat/promptContext';
 import { CHAT_THREAD_AMPI } from '../chat/chatThreads';
+import { chatRecipesForPrompt, recipeEventsFromCards, recordChatRecipes } from '../chat/chatRecipes';
 import { TOOL_SPEC, runTools, type SousCard, type ToolCall } from './tools';
 import { getIncludeHealthData } from '../consent/consentStore';
 
@@ -57,9 +58,13 @@ async function kitchenContext(userMessage: string): Promise<string> {
     const allergies = includeHealth ? (user as { allergies?: string } | null)?.allergies : null;
     const diet = includeHealth ? (user as { diet?: string } | null)?.diet : null;
     const memories = await memoriesForPrompt(userMessage);
+    const chatRecipes = await chatRecipesForPrompt(CHAT_THREAD_AMPI).catch(() => '');
     return [
         `Today is ${today()}.`,
         `Saved recipes: ${recipeLines || 'none yet'}.`,
+        chatRecipes
+            ? `Recipes saved in this conversation (oldest first; the LAST one is what "it", "this recipe" or a follow-up answer refers to):\n${chatRecipes}`
+            : '',
         `Pantry: ${pantryLines || 'empty'}.`,
         flavor ? `Flavor preferences: ${flavor}.` : '',
         allergies ? `Allergies (hard exclusion, never duplicate in memory — reference this field only): ${allergies}.` : '',
@@ -87,6 +92,10 @@ Full meals & pairings:
 Rules:
 - Only call a tool when the user asked for that action or clearly agreed to it. Never invent recipe ids; use ids from the list below or a recipe_title.
 - When you write new recipes the user wants to keep, call create_recipe for each dish (main and sides) instead of pasting full recipes in the reply. Then add_to_grocery for missing ingredients and estimate_cost when they want pricing.
+- Only call create_recipe when the user asks for a new recipe or a new dish you wrote for them. Never use it to rename, tweak or "finalize" a recipe that is already saved; call update_recipe with that recipe's id instead.
+- When the user is refining a recipe you just discussed (follow-up answers, "you choose", "make it spicier", "call it…"), stay on that exact recipe. Never invent a different dish.
+- Don't ask the user to name a recipe that was imported with a title; it already has one. Only rename it if they ask.
+- If the user asks you to pick a name ("you choose", "you pick", "surprise me"), choose one that matches that recipe's actual ingredients and dish type (a soup stays a soup), then call update_recipe with the new title. If its current title already fits, say so and keep it.
 - When the user attaches a photo, PDF, or recipe file, read it carefully. You can import it, answer questions, scale servings, convert units, or suggest allergy-safe substitutions in your reply. Only call tools when saving data to the app.
 - For add_to_grocery, only list ingredients they still need; the app skips items already in the pantry.
 - Never use the user's allergens, or ingredients that commonly contain them, in anything you suggest or save.
@@ -166,7 +175,7 @@ User: ${message}${attachmentBlock}`;
             reply: reply || 'I can do that in AmpliFood — confirm below.',
             cards,
             pendingActions: mutating,
-            confirmSummary: summarizeActions(mutating),
+            confirmSummary: summarizeActions(mutating, await titlesForUpdates(mutating)),
             userRecipeImageUri,
         };
     }
@@ -178,9 +187,22 @@ User: ${message}${attachmentBlock}`;
     };
 }
 
+async function titlesForUpdates(actions: ToolCall[]): Promise<Record<number, string>> {
+    const titles: Record<number, string> = {};
+    for (const action of actions) {
+        if (action.tool !== 'update_recipe') continue;
+        const id = Number(action.args.recipe_id);
+        const recipe = (await recipeOperations.getById(id).catch(() => null)) as { title?: string } | null;
+        if (recipe?.title) titles[id] = recipe.title;
+    }
+    return titles;
+}
+
 export async function confirmSousActions(
     actions: ToolCall[],
     userRecipeImageUri?: string | null
 ): Promise<SousCard[]> {
-    return runTools(actions, { userRecipeImageUri });
+    const cards = await runTools(actions, { userRecipeImageUri });
+    await recordChatRecipes(CHAT_THREAD_AMPI, recipeEventsFromCards(cards)).catch(() => undefined);
+    return cards;
 }

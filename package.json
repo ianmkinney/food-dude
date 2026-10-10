@@ -12,7 +12,8 @@
     "brand:assets": "python3 scripts/generate-brand-assets.py",
     "typecheck": "tsc --noEmit",
     "verify:api": "node scripts/verify-api-handlers.mjs",
-    "test:web-db-tabs": "node scripts/test-web-db-two-tabs.mjs"
+    "test:web-db-tabs": "node scripts/test-web-db-two-tabs.mjs",
+    "test:ampi": "node scripts/test-ampi-recipe-followup.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/fredoka": "^0.4.1",
