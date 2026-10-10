@@ -1,9 +1,15 @@
 import { applyCors } from '../lib/cors.js';
-import { isEmailAllowed, isOwnerGateConfigured, requireSecrets } from '../lib/env.js';
+import { isEmailAllowed, isOwnerGateConfigured, requireSecrets, resolveOpenRouterApiKey } from '../lib/env.js';
 import { bearerToken, verifySession } from '../lib/session.js';
 import { checkMinuteRateLimit } from '../lib/store.js';
 import { assertHttpOrHttpsUrl, safeFetchHtml } from '../lib/ssrf.js';
 import { extractRecipeFromHtml, hasRecipeShape } from '../lib/recipeExtract.js';
+import { importInstagramPost, isInstagramPostUrl } from '../lib/instagramImport.js';
+import { importTikTokPost, isTikTokPostUrl } from '../lib/tiktokImport.js';
+import { isStructuredImportPayload, jsonFromSocialImport, mapSocialImportError } from '../lib/socialImportRespond.js';
+import { runVideoRecipeExtraction, validateUploadedVideo } from '../lib/importVideoShared.js';
+
+const HEAVY_RL_PER_MINUTE = 3;
 
 const MSG = {
     method_not_allowed: 'Method not allowed.',
@@ -11,10 +17,18 @@ const MSG = {
     misconfigured: 'Server configuration error.',
     unauthorized: 'Sign in again in Account.',
     not_allowed: 'This Google account is not authorized.',
+    no_platform_key: 'No platform AI key is configured for this account.',
     rate_limited: 'Too many import requests. Wait a moment and try again.',
     bad_request: 'Invalid request.',
     site_blocked: "That site couldn't be reached from AmpliFood's server (blocked or unavailable). Paste the recipe text or upload a screenshot instead.",
     no_recipe_found: "No recipe was found on that page. Paste the recipe text or upload a screenshot instead.",
+    instagram_login_wall:
+        "Instagram didn't share the caption (login required). Paste the caption text below or upload a screenshot or screen recording of the post.",
+    instagram_no_caption:
+        "Couldn't read an Instagram caption from that link. Paste the caption or upload a screenshot or screen recording of the post.",
+    tiktok_no_caption:
+        "Couldn't read a TikTok description from that link. Paste the caption or upload a screen recording of the video.",
+    video_too_large: 'That video is too large (max 25 MB). Trim the clip or upload a shorter screen recording.',
 };
 
 function reject(res, status, error, extra = {}) {
@@ -30,6 +44,64 @@ function mapFetchError(code) {
         return 'site_blocked';
     }
     return 'site_blocked';
+}
+
+async function handleSocialImport(res, platform, inputUrl, session) {
+    const apiKey = resolveOpenRouterApiKey(session.email);
+    const importer = platform === 'tiktok' ? importTikTokPost : importInstagramPost;
+    try {
+        const result = await importer(inputUrl, {
+            apiKey,
+            onHeavyRateLimit: () => checkMinuteRateLimit(`import-heavy:${session.sub}`, HEAVY_RL_PER_MINUTE),
+        });
+        const { status, body } = jsonFromSocialImport(result, platform);
+        res.status(status).json(body);
+    } catch (error) {
+        const code = error?.message || `${platform}_no_caption`;
+        const mapped = mapSocialImportError(code, platform);
+        reject(res, mapped.status, mapped.error);
+    }
+}
+
+async function handleVideoUpload(req, res, session) {
+    const apiKey = resolveOpenRouterApiKey(session.email);
+    if (!apiKey) {
+        reject(res, 403, 'no_platform_key');
+        return;
+    }
+    if (!checkMinuteRateLimit(`import-heavy:${session.sub}`, HEAVY_RL_PER_MINUTE)) {
+        reject(res, 429, 'rate_limited');
+        return;
+    }
+    let video;
+    try {
+        video = validateUploadedVideo(req.body?.video);
+    } catch (error) {
+        if (error?.message === 'video_too_large' || error?.code === 'video_too_large') {
+            reject(res, 413, 'video_too_large');
+            return;
+        }
+        reject(res, 400, 'bad_request');
+        return;
+    }
+    const sourceUrl = typeof req.body?.sourceUrl === 'string' ? req.body.sourceUrl : null;
+    const author = typeof req.body?.author === 'string' ? req.body.author : null;
+    const sourcePlatform = typeof req.body?.sourcePlatform === 'string' ? req.body.sourcePlatform : 'video';
+    const note = typeof req.body?.note === 'string' ? req.body.note : '';
+
+    try {
+        const payload = await runVideoRecipeExtraction({
+            apiKey,
+            mimeType: video.mimeType,
+            base64: video.base64,
+            extraContext: note,
+            meta: { sourceUrl, sourcePlatform, author },
+        });
+        res.status(200).json(payload);
+    } catch (error) {
+        console.error('[recipes/import] video upload extract failed:', error?.message || error);
+        reject(res, 422, 'no_recipe_found');
+    }
 }
 
 export default async function handler(req, res) {
@@ -71,6 +143,16 @@ export default async function handler(req, res) {
         return;
     }
 
+    if (!checkMinuteRateLimit(`import:${session.sub}`)) {
+        reject(res, 429, 'rate_limited');
+        return;
+    }
+
+    if (req.body?.video) {
+        await handleVideoUpload(req, res, session);
+        return;
+    }
+
     const url = req.body?.url;
     if (!url || typeof url !== 'string') {
         reject(res, 400, 'bad_request');
@@ -84,8 +166,13 @@ export default async function handler(req, res) {
         return;
     }
 
-    if (!checkMinuteRateLimit(`import:${session.sub}`)) {
-        reject(res, 429, 'rate_limited');
+    if (isTikTokPostUrl(url)) {
+        await handleSocialImport(res, 'tiktok', url, session);
+        return;
+    }
+
+    if (isInstagramPostUrl(url)) {
+        await handleSocialImport(res, 'instagram', url, session);
         return;
     }
 

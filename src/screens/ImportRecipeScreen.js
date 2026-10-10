@@ -20,6 +20,7 @@ import { parseRecipe, parseRecipeFromUrl, parseRecipeFromImages } from '../servi
 import { friendlyMediaErrorMessage } from '../services/mediaTypes';
 import { recipeOperations } from '../database/operations';
 import FunLoader from '../components/FunLoader';
+import { isSocialPostUrl, socialImportFallbackHint } from '../services/recipeUrlImport';
 
 const ImportRecipeScreen = () => {
     const navigation = useNavigation();
@@ -38,6 +39,10 @@ const ImportRecipeScreen = () => {
         if (route.params?.sharedContent) {
             const content = route.params.sharedContent;
             setInput(content);
+        } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const shared = (params.get('url') || params.get('text') || params.get('title') || '').trim();
+            if (shared) setInput(shared);
         }
         if (route.params?.sharedFiles) {
             const files = route.params.sharedFiles;
@@ -77,29 +82,14 @@ const ImportRecipeScreen = () => {
                 const isUrl = /^(http|https):\/\/[^ "]+$/.test(input.trim());
 
                 if (isUrl) {
-                    if (input.includes('instagram.com') || input.includes('tiktok.com')) {
-                        Alert.alert(
-                            'Social Media Link Detected',
-                            'Instagram/TikTok links are hard to read. For best results, take a SCREENSHOT and share it to AmpliFood, or paste the caption text.',
-                            [
-                                {
-                                    text: 'Try URL Anyway', onPress: async () => {
-                                        setIsLoading(true);
-                                        setImportStatus('Extracting recipe from URL...');
-                                        try {
-                                            const res = await parseRecipeFromUrl(input.trim());
-                                            if (res.success) setParsedRecipe(res.recipe);
-                                            else setError(res.error || 'Failed');
-                                        } catch (e) { setError(e.message); }
-                                        finally { setIsLoading(false); setImportStatus(''); }
-                                    }
-                                },
-                                { text: 'Cancel', style: 'cancel', onPress: () => { setIsLoading(false); setImportStatus(''); } }
-                            ]
-                        );
-                        return;
-                    }
-                    setImportStatus('Extracting recipe from URL...');
+                    const trimmedUrl = input.trim();
+                    setImportStatus(
+                        trimmedUrl.includes('tiktok.com')
+                            ? 'Reading TikTok description…'
+                            : trimmedUrl.includes('instagram.com')
+                              ? 'Reading Instagram caption…'
+                              : 'Extracting recipe from URL...'
+                    );
                     result = await parseRecipeFromUrl(input.trim());
                 } else {
                     setImportStatus('Parsing recipe text with AI...');
@@ -114,9 +104,12 @@ const ImportRecipeScreen = () => {
                 console.error('[Import Recipe] Import failed:', result.error);
                 const friendly = friendlyMediaErrorMessage(result.error) || result.error || 'Failed to parse recipe';
                 const isUrlImport = !images.length && /^(http|https):\/\//i.test(input.trim());
+                const isSocial = isUrlImport && isSocialPostUrl(input.trim());
                 const hint =
-                    Platform.OS === 'web' && isUrlImport
-                        ? ' Try pasting the recipe text below, or use Import with a screenshot or PDF.'
+                    isUrlImport && (Platform.OS === 'web' || isSocial)
+                        ? isSocial
+                            ? socialImportFallbackHint(input.trim())
+                            : ' Try pasting the recipe text below, or use Import with a screenshot or PDF.'
                         : '';
                 setError(`${friendly}${hint}`);
             }
@@ -135,6 +128,9 @@ const ImportRecipeScreen = () => {
         try {
             setIsLoading(true);
             const recipeId = await recipeOperations.create(parsedRecipe);
+            if (parsedRecipe.aiExtracted) {
+                await recipeOperations.setProvenance(recipeId, { isAiGenerated: true });
+            }
             // Ensure recipe is fully saved and database is ready
             await new Promise(resolve => setTimeout(resolve, 200));
             Alert.alert(

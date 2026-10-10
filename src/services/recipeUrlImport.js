@@ -2,6 +2,33 @@ import { Platform } from 'react-native';
 import { getApiBaseUrl } from '../config/api';
 import { getOwnerSessionToken } from '../platform/ownerSession';
 
+export function isTikTokPostUrl(url) {
+    try {
+        const parsed = new URL(String(url).trim());
+        const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+        if (host === 'vm.tiktok.com' || host === 'vt.tiktok.com') return true;
+        if (!host.endsWith('tiktok.com')) return false;
+        return /\/@[^/]+\/video\/\d+/i.test(parsed.pathname) || /\/video\/\d+/i.test(parsed.pathname) || /\/t\/\w+/i.test(parsed.pathname);
+    } catch {
+        return false;
+    }
+}
+
+export function isSocialPostUrl(url) {
+    return isInstagramPostUrl(url) || isTikTokPostUrl(url);
+}
+
+export function isInstagramPostUrl(url) {
+    try {
+        const parsed = new URL(String(url).trim());
+        const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+        if (host !== 'instagram.com' && host !== 'm.instagram.com') return false;
+        return /\/(p|reel|reels|tv)\/[A-Za-z0-9_-]+/.test(parsed.pathname);
+    } catch {
+        return false;
+    }
+}
+
 const IMPORT_ERRORS = {
     unauthorized: 'Sign in with Owner in Account to import recipe links on the web, or paste the recipe text / upload a screenshot.',
     not_allowed: 'This Google account is not authorized for link import on the web. Paste the recipe text or upload a screenshot instead.',
@@ -10,8 +37,30 @@ const IMPORT_ERRORS = {
         "That site couldn't be loaded from AmpliFood's server. Paste the recipe text or upload a screenshot or PDF instead.",
     no_recipe_found:
         "No recipe was found on that page. Paste the recipe text or upload a screenshot or PDF instead.",
+    instagram_login_wall:
+        "Instagram didn't share the caption (login required). Paste the caption below or upload a screenshot of the post.",
+    instagram_no_caption:
+        "Couldn't read an Instagram caption from that link. Paste the caption or upload a screenshot of the post.",
+    tiktok_no_caption:
+        "Couldn't read a TikTok description from that link. Paste the caption or upload a screen recording of the video.",
     rate_limited: 'Too many import attempts. Wait a moment and try again.',
 };
+
+export function instagramImportFallbackHint() {
+    return ' Paste the caption text below, or upload a screenshot of the post.';
+}
+
+export function socialImportFallbackHint(url) {
+    if (isTikTokPostUrl(url)) {
+        return ' Paste the caption below, or attach a screen recording in Ampi chat.';
+    }
+    return instagramImportFallbackHint();
+}
+
+function tiktokPlatformLabel(author) {
+    const handle = author ? String(author).replace(/^@/, '') : null;
+    return handle ? `TikTok · @${handle}` : 'TikTok';
+}
 
 function hostnameFromUrl(url) {
     try {
@@ -19,6 +68,11 @@ function hostnameFromUrl(url) {
     } catch {
         return 'recipe site';
     }
+}
+
+function instagramPlatformLabel(sourceUrl, author) {
+    const handle = author ? String(author).replace(/^@/, '') : null;
+    return handle ? `Instagram · @${handle}` : 'Instagram';
 }
 
 function mapStructuredPayload(payload, fallbackUrl) {
@@ -29,9 +83,15 @@ function mapStructuredPayload(payload, fallbackUrl) {
         unit: null,
         section: null,
     }));
+    let platform = hostnameFromUrl(sourceUrl);
+    if (payload.sourcePlatform === 'instagram') {
+        platform = instagramPlatformLabel(sourceUrl, payload.author);
+    } else if (payload.sourcePlatform === 'tiktok') {
+        platform = tiktokPlatformLabel(payload.author);
+    }
     return {
         title: payload.title || 'Imported recipe',
-        description: null,
+        description: payload.description || null,
         servings: payload.servings ?? null,
         prepTime: payload.times?.prepMinutes ?? null,
         cookTime: payload.times?.cookMinutes ?? null,
@@ -41,7 +101,8 @@ function mapStructuredPayload(payload, fallbackUrl) {
         tags: [],
         imageUri: null,
         sourceUrl,
-        sourcePlatform: hostnameFromUrl(sourceUrl),
+        sourcePlatform: platform,
+        aiExtracted: Boolean(payload.aiExtracted),
     };
 }
 
@@ -92,7 +153,8 @@ async function postRecipeImport(url) {
  * @returns {Promise<{ kind: 'structured', recipe: object } | { kind: 'text', text: string, sourceUrl: string } | { kind: 'error', message: string, code?: string }>}
  */
 export async function fetchRecipeImportViaApi(url) {
-    if (Platform.OS !== 'web') {
+    const useServer = Platform.OS === 'web' || isSocialPostUrl(url);
+    if (!useServer) {
         return { kind: 'error', message: 'Server import is only used on web.', code: 'not_web' };
     }
     const result = await postRecipeImport(url);
@@ -101,10 +163,20 @@ export async function fetchRecipeImportViaApi(url) {
     }
     const payload = result.body;
     if (payload?.ingredients?.length || payload?.steps?.length) {
-        return { kind: 'structured', recipe: mapStructuredPayload(payload, url) };
+        return {
+            kind: 'structured',
+            recipe: mapStructuredPayload(payload, url),
+            aiExtracted: Boolean(payload.aiExtracted),
+        };
     }
     if (payload?.text) {
-        return { kind: 'text', text: payload.text, sourceUrl: payload.sourceUrl || url };
+        return {
+            kind: 'text',
+            text: payload.text,
+            sourceUrl: payload.sourceUrl || url,
+            sourcePlatform: payload.sourcePlatform,
+            author: payload.author,
+        };
     }
     return {
         kind: 'error',

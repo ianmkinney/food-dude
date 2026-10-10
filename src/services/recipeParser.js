@@ -3,7 +3,23 @@ import { generateMultimodal, generateText, stripCodeFences } from './aiClient';
 import { isAiConfigured, requireAiConfigured } from './aiSettings';
 import { prepareImagesForAi, toPersistentImageUri } from './mediaPrep';
 import { friendlyMediaErrorMessage } from './mediaTypes';
-import { fetchRecipeImportViaApi } from './recipeUrlImport';
+import { fetchRecipeImportViaApi, isSocialPostUrl } from './recipeUrlImport';
+
+function sourcePlatformLabel({ sourceUrl, sourcePlatform, author }) {
+    if (sourcePlatform === 'instagram') {
+        const handle = author ? String(author).replace(/^@/, '') : null;
+        return handle ? `Instagram · @${handle}` : 'Instagram';
+    }
+    if (sourcePlatform === 'tiktok') {
+        const handle = author ? String(author).replace(/^@/, '') : null;
+        return handle ? `TikTok · @${handle}` : 'TikTok';
+    }
+    try {
+        return new URL(sourceUrl).hostname.replace(/^www\./, '');
+    } catch {
+        return sourcePlatform || 'recipe site';
+    }
+}
 
 /**
  * Extract recipe from images (screenshots).
@@ -230,10 +246,16 @@ ${input}`;
  */
 export const parseRecipeFromUrl = async (url) => {
     try {
-        if (Platform.OS === 'web') {
-            const viaApi = await fetchRecipeImportViaApi(url);
+        const viaApi =
+            Platform.OS === 'web' || isSocialPostUrl(url) ? await fetchRecipeImportViaApi(url) : null;
+        if (viaApi) {
             if (viaApi.kind === 'structured') {
-                return { success: true, recipe: viaApi.recipe };
+                const aiExtracted = Boolean(viaApi.aiExtracted || viaApi.recipe?.aiExtracted);
+                return {
+                    success: true,
+                    recipe: { ...viaApi.recipe, aiExtracted },
+                    aiExtracted,
+                };
             }
             if (viaApi.kind === 'text') {
                 await requireAiConfigured();
@@ -241,20 +263,27 @@ export const parseRecipeFromUrl = async (url) => {
                 if (!parsed.success) {
                     return parsed;
                 }
+                const sourceUrl = viaApi.sourceUrl || url;
                 return {
                     success: true,
                     recipe: {
                         ...parsed.recipe,
                         imageUri: null,
-                        sourceUrl: viaApi.sourceUrl || url,
-                        sourcePlatform: new URL(viaApi.sourceUrl || url).hostname.replace(/^www\./, ''),
+                        sourceUrl,
+                        sourcePlatform: sourcePlatformLabel({
+                            sourceUrl,
+                            sourcePlatform: viaApi.sourcePlatform,
+                            author: viaApi.author,
+                        }),
                     },
                 };
             }
-            return {
-                success: false,
-                error: viaApi.message || "Couldn't import that link.",
-            };
+            if (viaApi.kind === 'error') {
+                return {
+                    success: false,
+                    error: viaApi.message || "Couldn't import that link.",
+                };
+            }
         }
 
         await requireAiConfigured();
