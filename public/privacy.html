@@ -18,11 +18,13 @@
 
     <main>
       <h1>Privacy Policy</h1>
-      <p class="lede">The short version: AmpliFood has no accounts and no servers that collect your data. Your kitchen stays on your device, and your AI key goes only to the provider you choose.</p>
-      <p><em>Last updated: October 7, 2026</em></p>
+      <p class="lede">The short version: for most people, AmpliFood has no sign-in and no servers that collect your kitchen data. Your recipes and plans stay on your device, and your AI key goes only to the provider you choose.</p>
+      <p><em>Last updated: October 10, 2026</em></p>
+      <p class="note"><strong>Pending Legal review:</strong> Owner-only Google sign-in and platform AI (OpenRouter) described below.</p>
 
-      <h2>No account</h2>
-      <p>You don't sign up or log in. The name, username, email, and flavor preferences on the Account screen are stored only on your device, as labels for your own use. They are never sent to us.</p>
+      <h2>Accounts and sign-in</h2>
+      <p><strong>Regular users do not sign in.</strong> The name, username, email, and flavor preferences on the Account screen are stored only on your device, as labels for your own use. They are not sent to AmpliFood.</p>
+      <p><strong>Owner sign-in (app owner only):</strong> A hidden <em>Owner sign-in</em> control in Account lets the app owner authenticate with Google. We receive their Google account ID, email address, and display name to verify identity against an allowlist. We keep a short-lived session token on the device and per-day <strong>usage counters</strong> on the server (request count and estimated tokens). We do <strong>not</strong> store AI prompts on the server. When the owner uses platform AI, requests go through AmpliFood's server to <a href="https://openrouter.ai/privacy">OpenRouter</a> and the underlying model provider.</p>
 
       <h2>Your data stays on your device</h2>
       <ul>
@@ -35,12 +37,13 @@
       <ul>
         <li>On iPhone and Android, the API key you add is stored with SecureStore in the system's encrypted storage (iOS Keychain / Android Keystore).</li>
         <li>In the web version, there is no system keychain, so the key is kept in your browser's local storage for this site. Anyone with access to that browser profile could read it, so use Account → Clear on shared computers.</li>
-        <li>The key is never sent to AmpliFood. It's only sent, with your requests, to the AI provider you picked.</li>
+        <li>The key is never sent to AmpliFood. It's only sent, with your requests, to the AI provider you picked (unless you are the signed-in owner using platform AI; see above).</li>
       </ul>
 
       <h2>What leaves your device, and where it goes</h2>
       <ul>
-        <li><strong>AI requests go directly to your chosen provider</strong> (Anthropic, OpenAI, xAI, or Google Gemini), and only after you've allowed AI requests in the app and use an AI feature. You can turn that permission off in settings. A request can include the text, links, screenshots, or photos you submit, and, for AI chef features, relevant pantry items, recipes, and flavor preferences. That provider's own privacy policy and terms govern what it does with the request.</li>
+        <li><strong>AI requests (BYOK)</strong> go directly to your chosen provider (Anthropic, OpenAI, xAI, or Google Gemini), and only after you've allowed AI requests in the app and use an AI feature. You can turn that permission off in settings. A request can include the text, links, screenshots, or photos you submit, and, for AI chef features, relevant pantry items, recipes, and flavor preferences. That provider's own privacy policy and terms govern what it does with the request.</li>
+        <li><strong>Owner platform AI</strong> (owner sign-in only): prompts pass through AmpliFood's server to OpenRouter and the selected model provider; prompts are not stored on our server.</li>
         <li><strong>Barcode numbers go to Open Food Facts</strong>, a public product database, so the app can look up the product name and details. Only the barcode number is sent, not your profile.</li>
         <li><strong>Recipe links you import</strong> are fetched by your device so the recipe can be read.</li>
         <li><strong>Web version:</strong> the site is hosted on Vercel, which, like any web host, receives standard request information (such as IP address and browser type) when it serves the pages. AmpliFood doesn't add tracking on top of that.</li>

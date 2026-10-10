@@ -14,7 +14,7 @@ const LEGAL_KEY = 'amplifood.legal.accepted';
 const CONSENT_KEY = 'amplifood.dataConsent.v1';
 const HEALTH_KEY = 'amplifood.dataConsent.includeAllergies';
 
-export type ConsentTarget = 'anthropic' | 'openai' | 'xai' | 'gemini';
+export type ConsentTarget = 'anthropic' | 'openai' | 'xai' | 'gemini' | 'platform';
 
 export const TARGETS: Record<ConsentTarget, { name: string; sends: string; policy: string }> = {
     anthropic: {
@@ -36,6 +36,11 @@ export const TARGETS: Record<ConsentTarget, { name: string; sends: string; polic
         name: 'Google (Gemini)',
         sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items and food likes',
         policy: 'https://policies.google.com/privacy',
+    },
+    platform: {
+        name: 'AmpliFood platform AI (OpenRouter)',
+        sends: 'your messages and requests, recipe text, links and photos you add, and, when relevant, your saved recipe names, pantry items and food likes',
+        policy: 'https://openrouter.ai/privacy',
     },
 };
 

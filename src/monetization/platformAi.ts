@@ -61,4 +61,12 @@ export const stubPlatformAi: PlatformAiClient = {
     generateImage: notLive,
 };
 
-export const platformAi: PlatformAiClient = stubPlatformAi;
+import { livePlatformAi } from './livePlatformAi';
+
+/** Owner OpenRouter proxy when signed in; purchase verification still stubbed. */
+export const platformAi: PlatformAiClient = {
+    ...stubPlatformAi,
+    generateText: livePlatformAi.generateText,
+    generateMultimodal: livePlatformAi.generateMultimodal,
+    generateImage: livePlatformAi.generateImage,
+};

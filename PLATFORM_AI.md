@@ -2,8 +2,9 @@
 
 AmpliFood has two ways to run AI:
 
-- **BYOK (any plan):** the user's own Anthropic, OpenAI, xAI or Gemini key, stored on the device, calling the provider directly. Never uses credits. This is unchanged.
-- **Platform AI (Plus or credit packs):** AmpliFood pays the provider and charges credits. **The client side is built; the backend is not.** Every platform request currently throws `PlatformAiNotLiveError` ("AmpliFood AI isn't switched on yet, so no credits were used…").
+- **BYOK (everyone):** the user's own Anthropic, OpenAI, xAI or Gemini key, stored on the device, calling the provider directly. This is the default for all users.
+- **Owner platform AI (Ian only):** after **Account → Owner sign-in** with an allowlisted Google account, AI requests can go through AmpliFood's Vercel `/api/ai/chat` proxy to **OpenRouter** (Ian’s `OPENROUTER_API_KEY` on the server). **Regular users are never prompted to sign in.** Routing: BYOK key first, else owner session, else "Add an API key". Setup: `docs/PLATFORM_AI_SETUP.md`. The proxy is **disabled unless `ALLOWED_EMAILS` is set** on Vercel.
+- **Plus / credit packs (future):** store purchases and a credit ledger are still stubbed (`platformAi.isLive` remains `false` for IAP until receipt validation exists).
 
 ## Pricing (locked)
 
@@ -25,7 +26,9 @@ Provisional credit costs (`src/monetization/products.ts`, the server is the auth
 | `src/monetization/products.ts` | Product IDs, plans, packs, credit costs |
 | `src/monetization/iap.ts` / `iap.web.ts` | `expo-iap` wrapper (connect, prices, purchase, restore, finish). The web build never loads `expo-iap` and reports purchases as mobile-only. |
 | `src/monetization/entitlements.ts` | Local, **unverified** cache of Plus status and pack credits (AsyncStorage `amplifood.entitlements.v1`). Drives the UI and routing only. |
-| `src/monetization/platformAi.ts` | `PlatformAiClient` interface plus `stubPlatformAi`. Swap `platformAi` for a live client when the backend exists. |
+| `src/monetization/platformAi.ts` | `PlatformAiClient` interface; owner `generateText` / `generateMultimodal` call `livePlatformAi` → `/api/ai/chat`. IAP paths still stubbed. |
+| `src/platform/ownerSession.ts` | Stores owner session JWT; exchanges Google ID token at `/api/auth/google`. |
+| `api/ai/chat.js` | Owner-only OpenRouter proxy (streaming upstream; client uses JSON mode). |
 | `src/monetization/MonetizationContext.tsx` | Connects to the store at launch, so unfinished transactions replay. Calls `verifyPurchase`, then grants locally, then finishes the transaction. |
 | `src/screens/PaywallScreen.tsx` | Tiers, prices, credit costs, Restore purchases, renewal terms. Opened from Account → AmpliFood Plus, or `/plus` on web. |
 | `src/services/aiSettings.js` → `requireAiConfigured` | Routing: own key → `byok`; no key but Plus/credits → `platform`; neither → "Add an API key". |

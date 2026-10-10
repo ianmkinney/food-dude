@@ -42,18 +42,21 @@ export function ConsentHost() {
     if (!target) return null;
     const info = TARGETS[target];
     const c = theme.colors;
+    const isPlatform = target === 'platform';
     return (
         <Modal transparent visible animationType="fade" onRequestClose={() => answer(false)}>
             <View style={[styles.backdrop, { backgroundColor: c.overlay }]}>
                 <View style={[styles.card, { backgroundColor: c.surfaceElevated, borderColor: c.border }]} accessibilityViewIsModal>
                     <Text style={[styles.title, { color: c.text.primary, fontFamily: theme.typography.fonts.display }]} accessibilityRole="header">
-                        Send to {info.name}?
+                        {isPlatform ? 'Use owner platform AI?' : `Send to ${info.name}?`}
                     </Text>
                     <Text style={[styles.body, { color: c.text.secondary }]}>
-                        To answer, AmpliFood sends {info.sends} to {info.name}, using your own API key. {info.name} handles it under its own privacy policy. Nothing is sent to AmpliFood.
+                        {isPlatform
+                            ? `To answer, AmpliFood sends ${info.sends} through AmpliFood's server to OpenRouter, which routes the request to an underlying model provider (for example Google, Anthropic, or OpenAI, depending on the model). Prompts are not stored on the server; only usage counters are kept.`
+                            : `To answer, AmpliFood sends ${info.sends} to ${info.name}, using your own API key. ${info.name} handles it under its own privacy policy. Nothing is sent to AmpliFood.`}
                     </Text>
                     <Text style={[styles.link, { color: theme.primary[700] }]} accessibilityRole="link" onPress={() => Linking.openURL(info.policy)}>
-                        {info.name} privacy policy
+                        {isPlatform ? 'OpenRouter privacy policy' : `${info.name} privacy policy`}
                     </Text>
                     <Text style={[styles.small, { color: c.text.tertiary }]}>You can turn this off any time in Account → AI & privacy.</Text>
                     <View style={styles.buttons}>
