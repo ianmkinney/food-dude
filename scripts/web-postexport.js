@@ -65,11 +65,9 @@ if (leftovers.length) {
     process.exit(1);
 }
 
-// The app shows nothing until the SQLite wasm and the Fredoka headings have
-// loaded, but the bundle only discovers them after it has downloaded and run.
-// Preloading lets them download alongside the bundle. Both live under
-// /assets/, which is served immutable, so the worker's fetch hits the cache.
-// The wa-sqlite wasm is fetched inside a worker, which can't use a document preload.
+// The Fredoka headings are only discovered once the bundle has downloaded and
+// run; preloading lets them download alongside it. (The wa-sqlite wasm is
+// fetched inside a worker, which can't use a document preload.)
 const PRELOADS = [
     { test: /\/Fredoka_(600SemiBold|700Bold)\.[^/]*\.ttf$/, as: 'font', type: 'font/ttf' },
 ];
@@ -86,6 +84,21 @@ if (links.length && !html.includes('id="af-preload"')) {
         '</head>',
         `<script id="af-preload">requestAnimationFrame(function(){setTimeout(function(){document.head.insertAdjacentHTML('beforeend',${tags})},0)})</script></head>`
     );
+}
+// Run the bundle after the first frame. A cached bundle could otherwise
+// evaluate before the shell paints and hold up the first paint; preload links
+// keep the download starting at parse time. The timeout covers background tabs,
+// where requestAnimationFrame doesn't fire.
+const BUNDLE_TAG = /<script src="(\/_expo\/static\/js\/web\/[^"]+\.js)" defer><\/script>/g;
+const bundles = [...html.matchAll(BUNDLE_TAG)].map((match) => match[1]);
+if (bundles.length && !html.includes('id="af-boot"')) {
+    html = html.replace(BUNDLE_TAG, '');
+    html = html.replace('</head>', bundles.map((src) => `<link rel="preload" href="${src}" as="script">`).join('') + '</head>');
+    const boot =
+        `<script id="af-boot">(function(){var started=false;function boot(){if(started)return;started=true;` +
+        `${JSON.stringify(bundles)}.forEach(function(src){var s=document.createElement('script');s.src=src;s.async=false;document.body.appendChild(s)})}` +
+        `requestAnimationFrame(function(){setTimeout(boot,0)});setTimeout(boot,250)})()</script>`;
+    html = html.replace('</body>', `${boot}</body>`);
 }
 const fredokaBold = assetUrls.find((url) => /\/Fredoka_700Bold\.[^/]*\.ttf$/.test(url));
 const fontFaces = fredokaBold ? `@font-face{font-family:Fredoka_700Bold;src:url(${fredokaBold}) format('truetype');font-display:swap}` : '';
