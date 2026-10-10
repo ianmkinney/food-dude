@@ -1,9 +1,11 @@
 import {
     groceryOperations,
     mealPlanOperations,
+    memoryOperations,
     pantryOperations,
     recipeOperations,
 } from '../database/operations';
+import { isMemoryEnabled } from '../memory/memorySettings';
 import { parseRecipe, parseRecipeFromUrl } from '../services/recipeParser';
 import { estimateGroceryCost } from '../services/groceryService';
 import { toPersistentImageUri } from '../services/mediaPrep';
@@ -36,7 +38,8 @@ export type ToolCall =
     | { tool: 'add_to_meal_plan'; args: { recipe_id?: number; recipe_title?: string; date: string; meal_type: MealType } }
     | { tool: 'add_to_pantry'; args: { items: ItemArg[] } }
     | { tool: 'add_to_grocery'; args: { items: ItemArg[] } }
-    | { tool: 'estimate_cost'; args: { store?: string } };
+    | { tool: 'estimate_cost'; args: { store?: string } }
+    | { tool: 'remember_fact'; args: { fact: string; category: string } };
 
 export type RecipeSummary = { id: number; title: string; image_uri?: string | null; is_ai_generated?: number | null };
 
@@ -61,7 +64,8 @@ export type SousCard =
           store: string | null;
           lineItems?: { name: string; estimatedCost: number }[];
       }
-    | { type: 'error'; message: string };
+    | { type: 'error'; message: string }
+    | { type: 'notice'; message: string };
 
 /** Tool reference shown to the model inside the system prompt. */
 export const TOOL_SPEC = `
@@ -72,7 +76,10 @@ If the user attached a photo, the app uses it as the recipe image automatically;
 - add_to_meal_plan {"recipe_id"?: number, "recipe_title"?: string, "date": "YYYY-MM-DD", "meal_type": "breakfast"|"lunch"|"dinner"}: schedule a saved recipe.
 - add_to_pantry {"items": [{"name", "quantity"?, "unit"?, "category"?}]}: record items the user has at home.
 - add_to_grocery {"items": [{"name", "quantity"?, "unit"?}]}: add items to the shopping list.
-- estimate_cost {"store"?: string}: estimate what the current grocery list will cost (run after add_to_grocery when pricing a meal).`.trim();
+- estimate_cost {"store"?: string}: estimate what the current grocery list will cost (run after add_to_grocery when pricing a meal).
+- remember_fact {"fact": string, "category": "likes"|"dislikes"|"household"|"equipment"|"skill"|"goals"}: save a durable fact about the user (not allergies — those stay in Account).`.trim();
+
+const MEMORY_CATEGORIES = new Set(['likes', 'dislikes', 'household', 'equipment', 'skill', 'goals']);
 
 const asText = (value: unknown) => (value == null || value === '' ? null : String(value));
 const isUrl = (value?: string) => !!value && /^https?:\/\/\S+$/i.test(value.trim());
@@ -212,6 +219,17 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
             const labels = toAdd.map((item) => item.name);
             if (skipped) labels.push(`(${skipped} already in pantry)`);
             return { type: 'grocery', items: labels };
+        }
+        case 'remember_fact': {
+            if (!(await isMemoryEnabled())) {
+                return { type: 'notice', message: 'Memory is turned off in Account. I did not save that.' };
+            }
+            const fact = String(call.args.fact || '').trim();
+            const category = String(call.args.category || 'likes').toLowerCase();
+            if (!fact) throw new Error('Nothing to remember.');
+            if (!MEMORY_CATEGORIES.has(category)) throw new Error('Invalid memory category.');
+            await memoryOperations.upsert({ fact, category, sourceChat: 'ampi' as string | null });
+            return { type: 'notice', message: `I'll remember: ${fact}` };
         }
         case 'estimate_cost': {
             const list = await groceryOperations.getAll();

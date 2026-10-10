@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 12;
+export const CURRENT_SCHEMA_VERSION = 13;
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
@@ -380,6 +380,57 @@ export const MIGRATIONS = [
             for (const row of rows) {
                 const uuid = `00000000-0000-4000-8000-${String(row.id).padStart(12, '0')}`;
                 await db.runAsync('UPDATE parties SET party_uuid = ? WHERE id = ?', [uuid, row.id]);
+            }
+        },
+    },
+    {
+        version: 13,
+        name: 'chat_threads_and_memories',
+        up: async (db) => {
+            await db.execAsync(`
+              CREATE TABLE IF NOT EXISTS chat_threads (
+                id TEXT PRIMARY KEY,
+                summary TEXT,
+                updated_at INTEGER NOT NULL
+              );
+              CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                thread_id TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'sous')),
+                text TEXT NOT NULL,
+                meta_json TEXT,
+                created_at INTEGER NOT NULL
+              );
+              CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, created_at);
+              CREATE TABLE IF NOT EXISTS memories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fact TEXT NOT NULL,
+                category TEXT NOT NULL,
+                source_chat TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+              );
+            `);
+            const now = Date.now();
+            await db.runAsync(
+                `INSERT OR IGNORE INTO chat_threads (id, summary, updated_at) VALUES (?, NULL, ?)`,
+                ['ai_chef', now]
+            );
+            await db.runAsync(`INSERT OR IGNORE INTO chat_threads (id, summary, updated_at) VALUES (?, NULL, ?)`, ['ampi', now]);
+            const legacy = await db.getAllAsync(
+                'SELECT message, role, media_uri, media_type, created_at FROM ai_conversations ORDER BY created_at ASC'
+            );
+            for (const row of legacy) {
+                await db.runAsync(
+                    `INSERT INTO chat_messages (thread_id, role, text, meta_json, created_at) VALUES (?, ?, ?, ?, ?)`,
+                    [
+                        'ai_chef',
+                        row.role,
+                        row.message,
+                        row.media_uri ? JSON.stringify({ media_uri: row.media_uri, media_type: row.media_type }) : null,
+                        row.created_at,
+                    ]
+                );
             }
         },
     },

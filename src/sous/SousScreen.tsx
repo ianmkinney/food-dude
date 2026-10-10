@@ -39,6 +39,9 @@ import { isSocialPostUrl, isTikTokPostUrl, isInstagramPostUrl } from '../service
 import ChatAttachmentPicker from '../components/ChatAttachmentPicker';
 import { ATTACHMENT_SOURCE_LABEL } from './attachmentLimits';
 import type { PendingAttachment } from './chatAttachments';
+import { persistAmpiExchange } from '../chat/promptContext';
+import { CHAT_THREAD_AMPI } from '../chat/chatThreads';
+import { chatOperations } from '../database/operations';
 import { askSous, confirmSousActions, type SousTurn } from './agent';
 import type { SousCard, ToolCall } from './tools';
 
@@ -92,6 +95,17 @@ export default function SousScreen() {
 
     useEffect(() => {
         getVoiceSettings().then((s) => setAutoSpeakState(s.autoSpeak));
+        chatOperations.getRecent(CHAT_THREAD_AMPI, 40).then((rows) => {
+            if (!rows.length) return;
+            rows.forEach((row: { id: number }) => freshUntil.current.set(String(row.id), 0));
+            setMessages(
+                rows.map((row: { id: number; role: string; text: string }) => ({
+                    id: String(row.id),
+                    role: row.role === 'sous' ? 'sous' : 'user',
+                    text: row.text,
+                }))
+            );
+        });
         return () => engineRef.current?.stop();
     }, []);
 
@@ -215,6 +229,7 @@ export default function SousScreen() {
                         : undefined,
                 };
                 setMessages((prev) => [...prev, reply]);
+                await persistAmpiExchange(userMessage.text, result.reply);
                 AccessibilityInfo.announceForAccessibility(`${ASSISTANT_NAME} says: ${result.reply}`);
                 if (autoSpeak && (await shouldSpeak()) && !reply.confirm) speak(reply);
             } catch (error) {
@@ -386,6 +401,12 @@ export default function SousScreen() {
                 return (
                     <View key={index} style={[...cardStyle, { borderColor: c.error }]}>
                         <Text style={{ color: c.error }}>{card.message}</Text>
+                    </View>
+                );
+            case 'notice':
+                return (
+                    <View key={index} style={[...cardStyle, { borderColor: c.border }]}>
+                        <Text style={{ color: c.text.secondary }}>{card.message}</Text>
                     </View>
                 );
             default:

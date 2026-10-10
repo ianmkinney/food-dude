@@ -611,50 +611,157 @@ export const groceryOperations = {
     },
 };
 
-// AI conversation operations
-export const aiConversationOperations = {
-    // Add message
-    async add(message) {
+// Persisted chat threads (Ampi, AI Chef, …)
+export const chatOperations = {
+    async touchThread(threadId) {
         const db = getDatabase();
         const now = Date.now();
+        await db.runAsync(
+            `INSERT INTO chat_threads (id, summary, updated_at) VALUES (?, NULL, ?)
+       ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at`,
+            [threadId, now]
+        );
+    },
 
+    async addMessage(threadId, { role, text, meta = null }) {
+        const db = getDatabase();
+        const now = Date.now();
+        await this.touchThread(threadId);
+        const result = await db.runAsync(
+            `INSERT INTO chat_messages (thread_id, role, text, meta_json, created_at) VALUES (?, ?, ?, ?, ?)`,
+            [threadId, role, text, meta ? JSON.stringify(meta) : null, now]
+        );
+        return result.lastInsertRowId;
+    },
+
+    async getRecent(threadId, limit = 40) {
+        const db = getDatabase();
+        const rows = await db.getAllAsync(
+            `SELECT * FROM chat_messages WHERE thread_id = ? ORDER BY created_at DESC LIMIT ?`,
+            [threadId, limit]
+        );
+        return rows.reverse();
+    },
+
+    async getSummary(threadId) {
+        const db = getDatabase();
+        const row = await db.getFirstAsync('SELECT summary FROM chat_threads WHERE id = ?', [threadId]);
+        return row?.summary || '';
+    },
+
+    async setSummary(threadId, summary) {
+        const db = getDatabase();
+        const now = Date.now();
+        await db.runAsync(
+            `INSERT INTO chat_threads (id, summary, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET summary = excluded.summary, updated_at = excluded.updated_at`,
+            [threadId, summary || null, now]
+        );
+    },
+
+    async clearThread(threadId) {
+        const db = getDatabase();
+        await db.runAsync('DELETE FROM chat_messages WHERE thread_id = ?', [threadId]);
+        await db.runAsync('UPDATE chat_threads SET summary = NULL WHERE id = ?', [threadId]);
+    },
+};
+
+// AI Chef legacy API (backed by chat_messages / ai_chef thread)
+export const aiConversationOperations = {
+    async add(message) {
         try {
-            const result = await db.runAsync(
-                `INSERT INTO ai_conversations (message, role, media_uri, media_type, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
-                [message.message, message.role, message.mediaUri || null, message.mediaType || null, now]
-            );
-            return result.lastInsertRowId;
+            return await chatOperations.addMessage('ai_chef', {
+                role: message.role === 'assistant' ? 'assistant' : 'user',
+                text: message.message,
+                meta: message.mediaUri ? { media_uri: message.mediaUri, media_type: message.mediaType } : null,
+            });
         } catch (error) {
             console.error('Error adding AI message:', error);
             throw error;
         }
     },
 
-    // Get all messages
     async getAll() {
-        const db = getDatabase();
         try {
-            const messages = await db.getAllAsync(
-                'SELECT * FROM ai_conversations ORDER BY created_at ASC'
-            );
-            return messages;
+            const rows = await chatOperations.getRecent('ai_chef', 200);
+            return rows.map((row) => ({
+                id: row.id,
+                message: row.text,
+                role: row.role,
+                media_uri: row.meta_json ? JSON.parse(row.meta_json).media_uri : null,
+                media_type: row.meta_json ? JSON.parse(row.meta_json).media_type : null,
+                created_at: row.created_at,
+            }));
         } catch (error) {
             console.error('Error getting AI messages:', error);
             throw error;
         }
     },
 
-    // Clear conversation
     async clear() {
-        const db = getDatabase();
         try {
-            await db.runAsync('DELETE FROM ai_conversations');
+            await chatOperations.clearThread('ai_chef');
             return true;
         } catch (error) {
             console.error('Error clearing AI conversation:', error);
             throw error;
         }
+    },
+};
+
+export const memoryOperations = {
+    async list() {
+        const db = getDatabase();
+        return db.getAllAsync('SELECT * FROM memories ORDER BY updated_at DESC');
+    },
+
+    async search(query) {
+        const db = getDatabase();
+        const q = `%${String(query || '').trim()}%`;
+        if (!q.replace(/%/g, '')) return this.list();
+        return db.getAllAsync(
+            'SELECT * FROM memories WHERE fact LIKE ? OR category LIKE ? ORDER BY updated_at DESC LIMIT 50',
+            [q, q]
+        );
+    },
+
+    /** @param {{ fact: string, category: string, sourceChat?: string | null }} entry */
+    async upsert({ fact, category, sourceChat = null }) {
+        const db = getDatabase();
+        const now = Date.now();
+        const existing = await db.getFirstAsync(
+            'SELECT id FROM memories WHERE fact = ? AND category = ? LIMIT 1',
+            [fact, category]
+        );
+        if (existing?.id) {
+            await db.runAsync('UPDATE memories SET fact = ?, source_chat = ?, updated_at = ? WHERE id = ?', [
+                fact,
+                sourceChat,
+                now,
+                existing.id,
+            ]);
+            return existing.id;
+        }
+        const result = await db.runAsync(
+            'INSERT INTO memories (fact, category, source_chat, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+            [fact, category, sourceChat, now, now]
+        );
+        return result.lastInsertRowId;
+    },
+
+    async update(id, fact) {
+        const db = getDatabase();
+        await db.runAsync('UPDATE memories SET fact = ?, updated_at = ? WHERE id = ?', [fact, Date.now(), id]);
+    },
+
+    async delete(id) {
+        const db = getDatabase();
+        await db.runAsync('DELETE FROM memories WHERE id = ?', [id]);
+    },
+
+    async clearAll() {
+        const db = getDatabase();
+        await db.runAsync('DELETE FROM memories');
     },
 };
 
