@@ -415,6 +415,15 @@
         }
       }
 
+      /* Desktop: the column's screens scroll without their own scrollbars;
+         src/platform/desktopScroll.web.js draws one at the window edge. */
+      html.af-desktop #root * { scrollbar-width: none; }
+      html.af-desktop #root *::-webkit-scrollbar { display: none; }
+      .af-pagebar { position: fixed; top: 0; right: 0; bottom: 0; width: 14px; z-index: 1000; }
+      .af-pagebar[hidden] { display: none; }
+      .af-pagebar > div { position: absolute; top: 0; right: 3px; width: 8px; border-radius: 4px; background: rgba(115, 100, 106, 0.45); transition: background-color 120ms, width 120ms; }
+      .af-pagebar:hover > div, .af-pagebar.af-drag > div { width: 10px; background: rgba(115, 100, 106, 0.75); }
+
       /* First-run shell: a static copy of the onboarding intro, generated at
          export time (scripts/web-shell.js). It is shown once the splash intro
          finishes if the bundle is still loading, and removed when the app is
