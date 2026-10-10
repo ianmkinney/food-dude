@@ -40,6 +40,11 @@ function hostnameFromUrl(url) {
     }
 }
 
+function instagramPlatformLabel(sourceUrl, author) {
+    const handle = author ? String(author).replace(/^@/, '') : null;
+    return handle ? `Instagram · @${handle}` : 'Instagram';
+}
+
 function mapStructuredPayload(payload, fallbackUrl) {
     const sourceUrl = payload.sourceUrl || fallbackUrl;
     const ingredients = (payload.ingredients || []).map((line) => ({
@@ -48,9 +53,13 @@ function mapStructuredPayload(payload, fallbackUrl) {
         unit: null,
         section: null,
     }));
+    const platform =
+        payload.sourcePlatform === 'instagram'
+            ? instagramPlatformLabel(sourceUrl, payload.author)
+            : hostnameFromUrl(sourceUrl);
     return {
         title: payload.title || 'Imported recipe',
-        description: null,
+        description: payload.description || null,
         servings: payload.servings ?? null,
         prepTime: payload.times?.prepMinutes ?? null,
         cookTime: payload.times?.cookMinutes ?? null,
@@ -60,7 +69,8 @@ function mapStructuredPayload(payload, fallbackUrl) {
         tags: [],
         imageUri: null,
         sourceUrl,
-        sourcePlatform: hostnameFromUrl(sourceUrl),
+        sourcePlatform: platform,
+        aiExtracted: Boolean(payload.aiExtracted),
     };
 }
 
@@ -121,7 +131,11 @@ export async function fetchRecipeImportViaApi(url) {
     }
     const payload = result.body;
     if (payload?.ingredients?.length || payload?.steps?.length) {
-        return { kind: 'structured', recipe: mapStructuredPayload(payload, url) };
+        return {
+            kind: 'structured',
+            recipe: mapStructuredPayload(payload, url),
+            aiExtracted: Boolean(payload.aiExtracted),
+        };
     }
     if (payload?.text) {
         return {

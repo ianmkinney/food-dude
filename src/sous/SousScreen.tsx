@@ -32,6 +32,10 @@ import { getSpeechEngine, primeSpeechOnWeb, shouldSpeak, type SpeechEngine } fro
 import { getVoiceSettings, hasSeenWebSpeechNotice, markWebSpeechNoticeSeen, setAutoSpeak, setVoiceMuted } from '../voice/voiceSettings';
 import { useSpeechInput } from '../voice/useSpeechInput';
 import { WEB_SPEECH_NOTICE } from '../voice/webSpeechRecognition';
+import * as ImagePicker from 'expo-image-picker';
+import { recipeOperations } from '../database/operations';
+import { importRecipeFromVideoAsset, extractInstagramUrlFromText } from '../services/recipeVideoImport';
+import { isInstagramPostUrl } from '../services/recipeUrlImport';
 import { askSous, type SousTurn } from './agent';
 import type { SousCard } from './tools';
 
@@ -65,6 +69,7 @@ export default function SousScreen() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [thinking, setThinking] = useState(false);
+    const [attachedVideo, setAttachedVideo] = useState<{ uri: string; mimeType?: string; fileName?: string } | null>(null);
     const [autoSpeak, setAutoSpeakState] = useState(false);
     const [speakingId, setSpeakingId] = useState<string | null>(null);
     const engineRef = useRef<SpeechEngine | null>(null);
@@ -99,17 +104,76 @@ export default function SousScreen() {
         }
     }, []);
 
+    const pickVideo = useCallback(async () => {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+            setMessages((prev) => [
+                ...prev,
+                { id: newId(), role: 'sous', text: 'Allow photo library access to attach a screen recording.' },
+            ]);
+            return;
+        }
+        const picked = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+            quality: 1,
+        });
+        if (picked.canceled || !picked.assets?.[0]) return;
+        const asset = picked.assets[0];
+        setAttachedVideo({
+            uri: asset.uri,
+            mimeType: asset.mimeType ?? undefined,
+            fileName: asset.fileName ?? undefined,
+        });
+    }, []);
+
     const send = useCallback(
         async (raw: string) => {
             const text = raw.trim();
-            if (!text || thinking) return;
+            if ((!text && !attachedVideo) || thinking) return;
             if (autoSpeak) primeSpeechOnWeb();
             setInput('');
             const history: SousTurn[] = messages.map((m) => ({ role: m.role, text: m.text }));
-            const userMessage: Message = { id: newId(), role: 'user', text };
+            const displayText = text || (attachedVideo ? '[Screen recording attached]' : '');
+            const userMessage: Message = { id: newId(), role: 'user', text: displayText };
             setMessages((prev) => [...prev, userMessage]);
             setThinking(true);
+            const videoAsset = attachedVideo;
+            setAttachedVideo(null);
             try {
+                if (videoAsset) {
+                    const igUrl = extractInstagramUrlFromText(text) || (isInstagramPostUrl(text) ? text : null);
+                    const imported = await importRecipeFromVideoAsset(videoAsset, {
+                        sourceUrl: igUrl || undefined,
+                        sourcePlatform: igUrl ? 'instagram' : undefined,
+                        note: text,
+                    });
+                    if (!imported.success || !imported.recipe) {
+                        throw new Error(
+                            imported.error ||
+                                "Couldn't read a recipe from that video. Paste the caption or try a shorter clip."
+                        );
+                    }
+                    const recipe = imported.recipe;
+                    const id = Number(await recipeOperations.create(recipe));
+                    await recipeOperations.setProvenance(id, { isAiGenerated: true });
+                    const card: SousCard = {
+                        type: 'recipe',
+                        title: 'Imported from video (AI)',
+                        recipe: { id, title: recipe.title, is_ai_generated: 1 },
+                        aiGenerated: true,
+                        ingredients: (recipe.ingredients || []).map((ing: { ingredient?: string }) => ing.ingredient || ''),
+                    };
+                    const reply: Message = {
+                        id: newId(),
+                        role: 'sous',
+                        text: recipe.sourceUrl
+                            ? `I pulled a recipe from your video and credited the creator. Tap the card to review it.`
+                            : `I pulled a recipe from your video. Tap the card to review it.`,
+                        cards: [card],
+                    };
+                    setMessages((prev) => [...prev, reply]);
+                    return;
+                }
                 const result = await askSous(history, text);
                 const reply: Message = { id: newId(), role: 'sous', text: result.reply, cards: result.cards };
                 setMessages((prev) => [...prev, reply]);
@@ -130,7 +194,7 @@ export default function SousScreen() {
                 setThinking(false);
             }
         },
-        [messages, thinking, autoSpeak, speak]
+        [messages, thinking, autoSpeak, speak, attachedVideo]
     );
 
     const mic = useSpeechInput((finalText) => send(finalText));
@@ -424,6 +488,17 @@ export default function SousScreen() {
                 </Text>
             )}
             {!started && chips}
+            {attachedVideo ? (
+                <View style={[styles.videoAttachBar, { backgroundColor: c.surface, borderColor: c.border }]}>
+                    <Ionicons name="videocam" size={18} color={theme.primary[500]} />
+                    <Text style={[styles.videoAttachText, { color: c.text.secondary }]} numberOfLines={1}>
+                        Screen recording ready — send to extract recipe
+                    </Text>
+                    <Pressable onPress={() => setAttachedVideo(null)} accessibilityRole="button" accessibilityLabel="Remove video">
+                        <Ionicons name="close-circle" size={22} color={c.text.tertiary} />
+                    </Pressable>
+                </View>
+            ) : null}
             <View style={[styles.composer, { borderTopColor: c.borderSoft, backgroundColor: c.background }]}>
                 {micTip && (
                     <Enter springy distance={8} style={styles.micTipWrap}>
@@ -439,6 +514,14 @@ export default function SousScreen() {
                         </Pressable>
                     </Enter>
                 )}
+                <Pressable
+                    onPress={pickVideo}
+                    style={[styles.roundButton, { backgroundColor: c.surface, borderColor: c.border }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Attach screen recording for recipe import"
+                >
+                    <Ionicons name="film-outline" size={20} color={c.text.primary} />
+                </Pressable>
                 {mic.isSupported ? (
                     <Pressable
                         ref={micTarget}
@@ -479,10 +562,17 @@ export default function SousScreen() {
                     blurOnSubmit
                 />
                 <AnimatedPressable
-                    onPress={() => send(input)}
-                    disabled={!input.trim() || thinking}
+                    onPress={() => send(listening ? mic.transcript : input)}
+                    disabled={(!input.trim() && !attachedVideo) || thinking}
                     scaleTo={motion.scale.press}
-                    style={[styles.roundButton, styles.sendButton, { backgroundColor: theme.primary[500], opacity: !input.trim() || thinking ? 0.5 : 1 }]}
+                    style={[
+                        styles.roundButton,
+                        styles.sendButton,
+                        {
+                            backgroundColor: theme.primary[500],
+                            opacity: (!input.trim() && !attachedVideo) || thinking ? 0.5 : 1,
+                        },
+                    ]}
                     accessibilityRole="button"
                     accessibilityLabel="Send"
                 >
@@ -537,6 +627,18 @@ const styles = StyleSheet.create({
     micTipText: { fontSize: 13, lineHeight: 19 },
     micTipArrow: { position: 'absolute', left: 16, bottom: -6, width: 12, height: 12, borderRightWidth: 1, borderBottomWidth: 1, transform: [{ rotate: '45deg' }] },
     micStatus: { textAlign: 'center', fontSize: 13, paddingHorizontal: 16, paddingBottom: 8 },
+    videoAttachBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginHorizontal: 12,
+        marginBottom: 4,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 12,
+        borderWidth: 1,
+    },
+    videoAttachText: { flex: 1, fontSize: 13 },
     composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
     input: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderRadius: 22, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11, fontSize: 16, lineHeight: 20 },
     roundButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },

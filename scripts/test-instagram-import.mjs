@@ -8,9 +8,10 @@ import assert from 'node:assert/strict';
 const {
     buildInstagramImportPayload,
     extractAuthorFromHtml,
-    extractCaptionFromHtml,
+    extractAllCaptionsFromHtml,
     importInstagramPost,
     isInstagramPostUrl,
+    looksLikeFullRecipe,
 } = await import('../api/lib/instagramImport.js');
 
 const FIXTURE = `<!DOCTYPE html><html><head>
@@ -19,8 +20,9 @@ const FIXTURE = `<!DOCTYPE html><html><head>
 <meta property="og:image" content="https://cdn.example/photo.jpg" />
 </head><body></body></html>`;
 
-const caption = extractCaptionFromHtml(FIXTURE);
+const caption = extractAllCaptionsFromHtml(FIXTURE).join('\n');
 assert.ok(caption.includes('Ingredients'), 'og:description caption');
+assert.ok(looksLikeFullRecipe(caption), 'fixture should be full recipe');
 assert.equal(extractAuthorFromHtml(FIXTURE), 'ChefNina');
 
 const built = buildInstagramImportPayload({
@@ -34,15 +36,19 @@ assert.equal(built.author, 'ChefNina');
 
 const bioFixture = `<html><head><meta property="og:description" content="Full recipe in bio 🔗" /></head></html>`;
 const bioPayload = buildInstagramImportPayload({
-    caption: extractCaptionFromHtml(bioFixture),
+    caption: extractAllCaptionsFromHtml(bioFixture).join('\n'),
     image: null,
     author: null,
     sourceUrl: 'https://www.instagram.com/p/BIO123/',
 });
 assert.ok(bioPayload.text.includes('recipe in the bio'), 'bio warning');
 
-const jsonFixture = `<html><script>{"edge_media_to_caption":{"edges":[{"node":{"text":"Taco night!\\n1 lb beef\\n8 tortillas"}}]}}</script></html>`;
-assert.ok(extractCaptionFromHtml(jsonFixture).includes('Taco night'));
+const jsonFixture = `<html><script>{"edge_media_to_caption":{"edges":[{"node":{"text":"Taco night!\\n1 lb beef\\n8 tortillas\\nSteps: brown beef"}}]}}</script></html>`;
+const jsonText = extractAllCaptionsFromHtml(jsonFixture).join('\n');
+assert.ok(jsonText.includes('Taco night'));
+
+const vttFixture = `<html>"captions_uri":"https://cdn.example.com/subs.vtt"</html>`;
+assert.ok(vttFixture.includes('captions_uri'));
 
 assert.ok(isInstagramPostUrl('https://www.instagram.com/reel/DBwlLNhuw8X/'));
 assert.ok(isInstagramPostUrl('https://www.instagram.com/karancooks/reel/DEDWV8OufjW/'));

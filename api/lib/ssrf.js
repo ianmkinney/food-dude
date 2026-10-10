@@ -114,6 +114,9 @@ const MAX_BYTES = 3 * 1024 * 1024;
 const TIMEOUT_MS = 8000;
 const MAX_REDIRECTS = 3;
 
+const DEFAULT_BINARY_MAX = 25 * 1024 * 1024;
+const DEFAULT_BINARY_TIMEOUT_MS = 180_000;
+
 /**
  * Fetch a public recipe page with SSRF checks on every hop.
  * @returns {Promise<{ finalUrl: string, html: string, contentType: string }>}
@@ -185,5 +188,77 @@ export async function safeFetchHtml(startUrl, options = {}) {
         }
         const html = Buffer.concat(chunks).toString('utf8');
         return { finalUrl: current.toString(), html, contentType };
+    }
+}
+
+/**
+ * SSRF-safe binary download (e.g. public CDN video URLs discovered in page HTML).
+ */
+export async function safeFetchBinary(startUrl, options = {}) {
+    const maxBytes = options.maxBytes ?? DEFAULT_BINARY_MAX;
+    const timeoutMs = options.timeoutMs ?? DEFAULT_BINARY_TIMEOUT_MS;
+    const userAgent = options.userAgent || BROWSER_UA;
+
+    let current = assertHttpOrHttpsUrl(startUrl);
+    await assertSafeUrl(current);
+
+    let redirects = 0;
+    while (true) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        let response;
+        try {
+            response = await fetch(current.toString(), {
+                method: 'GET',
+                redirect: 'manual',
+                signal: controller.signal,
+                headers: {
+                    'User-Agent': userAgent,
+                    Accept: '*/*',
+                },
+            });
+        } catch (error) {
+            clearTimeout(timer);
+            if (error?.name === 'AbortError') throw new Error('timeout');
+            throw new Error('fetch_failed');
+        } finally {
+            clearTimeout(timer);
+        }
+
+        if (response.status >= 300 && response.status < 400) {
+            const location = response.headers.get('location');
+            if (!location) throw new Error('fetch_failed');
+            if (redirects >= MAX_REDIRECTS) throw new Error('too_many_redirects');
+            redirects += 1;
+            const next = new URL(location, current);
+            current = assertHttpOrHttpsUrl(next.toString());
+            await assertSafeUrl(current);
+            continue;
+        }
+
+        if (!response.ok) throw new Error('fetch_failed');
+
+        const contentType = response.headers.get('content-type') || '';
+        const reader = response.body?.getReader();
+        if (!reader) {
+            const buf = Buffer.from(await response.arrayBuffer());
+            if (buf.byteLength > maxBytes) throw new Error('response_too_large');
+            return { finalUrl: current.toString(), buffer: buf, contentType };
+        }
+
+        const chunks = [];
+        let total = 0;
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            total += value.byteLength;
+            if (total > maxBytes) {
+                reader.cancel().catch(() => {});
+                throw new Error('response_too_large');
+            }
+            chunks.push(value);
+        }
+        const buffer = Buffer.concat(chunks);
+        return { finalUrl: current.toString(), buffer, contentType };
     }
 }

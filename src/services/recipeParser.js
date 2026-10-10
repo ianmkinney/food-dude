@@ -246,7 +246,12 @@ export const parseRecipeFromUrl = async (url) => {
             Platform.OS === 'web' || isInstagramPostUrl(url) ? await fetchRecipeImportViaApi(url) : null;
         if (viaApi) {
             if (viaApi.kind === 'structured') {
-                return { success: true, recipe: viaApi.recipe };
+                const aiExtracted = Boolean(viaApi.aiExtracted || viaApi.recipe?.aiExtracted);
+                return {
+                    success: true,
+                    recipe: { ...viaApi.recipe, aiExtracted },
+                    aiExtracted,
+                };
             }
             if (viaApi.kind === 'text') {
                 await requireAiConfigured();

@@ -145,6 +145,9 @@ const ImportRecipeScreen = () => {
         try {
             setIsLoading(true);
             const recipeId = await recipeOperations.create(parsedRecipe);
+            if (parsedRecipe.aiExtracted) {
+                await recipeOperations.setProvenance(recipeId, { isAiGenerated: true });
+            }
             // Ensure recipe is fully saved and database is ready
             await new Promise(resolve => setTimeout(resolve, 200));
             Alert.alert(

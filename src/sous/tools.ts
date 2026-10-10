@@ -86,14 +86,23 @@ async function run(call: ToolCall): Promise<SousCard> {
         case 'import_recipe': {
             const source = call.args.url || call.args.text || '';
             const result = isUrl(source) ? await parseRecipeFromUrl(source.trim()) : await parseRecipe(source);
-            if (!result?.success) throw new Error(result?.error || "Couldn't read a recipe from that.");
+            if (!result?.success || !result.recipe) {
+                const err = 'error' in result ? result.error : undefined;
+                throw new Error(err || "Couldn't read a recipe from that.");
+            }
+            const aiExtracted = Boolean(
+                ('aiExtracted' in result && result.aiExtracted) || result.recipe.aiExtracted
+            );
             const id = Number(await recipeOperations.create(result.recipe));
-            await recipeOperations.setProvenance(id, { isAiGenerated: false, imageSource: result.recipe.imageUri ? 'import' : null });
+            await recipeOperations.setProvenance(id, {
+                isAiGenerated: aiExtracted,
+                imageSource: result.recipe.imageUri ? 'import' : null,
+            });
             return {
                 type: 'recipe',
-                title: 'Imported to your recipe book',
-                recipe: { id, title: result.recipe.title },
-                aiGenerated: false,
+                title: aiExtracted ? 'Imported (AI from video/caption)' : 'Imported to your recipe book',
+                recipe: { id, title: result.recipe.title, is_ai_generated: aiExtracted ? 1 : 0 },
+                aiGenerated: aiExtracted,
                 ingredients: (result.recipe.ingredients || []).map((ing: { ingredient?: string }) => ing.ingredient || ''),
             };
         }
