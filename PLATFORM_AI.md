@@ -3,7 +3,7 @@
 AmpliFood has two ways to run AI:
 
 - **BYOK (everyone):** the user's own Anthropic, OpenAI, xAI or Gemini key, stored on the device, calling the provider directly. This is the default for all users.
-- **Owner platform AI (Ian only):** after **Account → Owner sign-in** with an allowlisted Google account, AI requests can go through AmpliFood's Vercel `/api/ai/chat` proxy to **OpenRouter** (Ian’s `OPENROUTER_API_KEY` on the server). **Regular users are never prompted to sign in.** Routing: BYOK key first, else owner session, else "Add an API key". Setup: `docs/PLATFORM_AI_SETUP.md`. The proxy is **disabled unless `ALLOWED_EMAILS` is set** on Vercel.
+- **Owner platform AI (Ian + allowlisted testers):** after **Account → Owner sign-in** with an allowlisted Google account, AI requests can go through AmpliFood's Vercel `/api/ai/chat` proxy to **OpenRouter** using **per-user server keys** (`OPENROUTER_KEYS_JSON` and/or Ian’s `OPENROUTER_API_KEY`). **Regular users are never prompted to sign in.** Routing: BYOK key first, else owner session, else "Add an API key". Setup: `docs/PLATFORM_AI_SETUP.md`. The proxy is **disabled unless `ALLOWED_EMAILS` is set** on Vercel. No KV/database; caps are OpenRouter credit limits per key.
 - **Plus / credit packs (future):** store purchases and a credit ledger are still stubbed (`platformAi.isLive` remains `false` for IAP until receipt validation exists).
 
 ## Pricing (locked)

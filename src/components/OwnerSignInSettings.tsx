@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
@@ -11,7 +11,11 @@ import {
     type OwnerUsage,
 } from '../platform/ownerSession';
 import { getOwnerGoogleClientIds, isOwnerSignInConfigured } from '../platform/ownerSignInConfig';
-import { signInWithGooglePopup, takePendingGoogleIdToken } from '../platform/googleWebAuth';
+import {
+    signInWithGooglePopup,
+    takePendingGoogleSignIn,
+    type GoogleSignInPayload,
+} from '../platform/googleWebAuth';
 import { testOwnerAi } from '../monetization/livePlatformAi';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -38,12 +42,14 @@ function OwnerSignInSettingsInner({ theme }: Props) {
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
+    const googleNonce = useMemo(() => randomNonce(), []);
     const [request, , promptAsync] = Google.useAuthRequest({
         webClientId: webClientId!,
         iosClientId,
         androidClientId,
         responseType: 'id_token',
         selectAccount: true,
+        extraParams: { nonce: googleNonce },
     });
 
     const refresh = useCallback(async () => {
@@ -73,7 +79,7 @@ function OwnerSignInSettingsInner({ theme }: Props) {
             if (!idToken) {
                 throw new Error('Google did not return an ID token.');
             }
-            await exchangeGoogleIdToken(idToken);
+            await exchangeGoogleIdToken(idToken, googleNonce);
             await refresh();
         } catch (error) {
             Alert.alert('Sign-in failed', error instanceof Error ? error.message : 'Try again.');
@@ -84,20 +90,20 @@ function OwnerSignInSettingsInner({ theme }: Props) {
 
     useEffect(() => {
         if (Platform.OS !== 'web') return;
-        const pending = takePendingGoogleIdToken();
+        const pending = takePendingGoogleSignIn();
         if (!pending) return;
         setBusy(true);
-        exchangeGoogleIdToken(pending)
+        exchangeGoogleIdToken(pending.idToken, pending.nonce)
             .then(refresh)
             .catch((error) => Alert.alert('Sign-in failed', error instanceof Error ? error.message : 'Try again.'))
             .finally(() => setBusy(false));
     }, [refresh]);
 
-    const finishWebSignIn = async (getIdToken: () => Promise<string>) => {
+    const finishWebSignIn = async (getPayload: () => Promise<GoogleSignInPayload>) => {
         setBusy(true);
         try {
-            const idToken = await getIdToken();
-            await exchangeGoogleIdToken(idToken);
+            const { idToken, nonce } = await getPayload();
+            await exchangeGoogleIdToken(idToken, nonce);
             await refresh();
         } catch (error) {
             if (error instanceof Error && error.message === 'not-displayed') {
@@ -122,7 +128,7 @@ function OwnerSignInSettingsInner({ theme }: Props) {
             finishWebSignIn(() => pending);
             return;
         }
-        finishWebSignIn(() => promptGoogleIdTokenWeb(webClientId));
+        finishWebSignIn(() => promptGoogleIdTokenWeb(webClientId, randomNonce()));
     };
 
     const runTest = async () => {
@@ -223,7 +229,13 @@ function loadGisScript(): Promise<void> {
     });
 }
 
-function promptGoogleIdTokenWeb(clientId: string): Promise<string> {
+function randomNonce(): string {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function promptGoogleIdTokenWeb(clientId: string, nonce: string): Promise<GoogleSignInPayload> {
     return loadGisScript().then(
         () =>
             new Promise((resolve, reject) => {
@@ -234,8 +246,9 @@ function promptGoogleIdTokenWeb(clientId: string): Promise<string> {
                 }
                 google.accounts.id.initialize({
                     client_id: clientId,
+                    nonce,
                     callback: (response: { credential?: string }) => {
-                        if (response?.credential) resolve(response.credential);
+                        if (response?.credential) resolve({ idToken: response.credential, nonce });
                         else reject(new Error('No credential returned'));
                     },
                     auto_select: false,

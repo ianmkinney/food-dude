@@ -5,6 +5,7 @@
 
 const RESULT_KEY = 'amplifood.auth.google.result';
 const STATE_KEY = 'amplifood.auth.google.state';
+const NONCE_KEY = 'amplifood.auth.google.nonce';
 const MODE_KEY = 'amplifood.auth.google.mode';
 const RESULT_MAX_AGE_MS = 10 * 60 * 1000;
 
@@ -16,13 +17,13 @@ const randomString = () => {
     return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 };
 
-function buildAuthUrl(clientId: string, state: string) {
+function buildAuthUrl(clientId: string, state: string, nonce: string) {
     const params = new URLSearchParams({
         client_id: clientId,
         redirect_uri: `${window.location.origin}/auth/google-callback`,
         response_type: 'id_token',
         scope: 'openid email profile',
-        nonce: randomString(),
+        nonce,
         state,
         prompt: 'select_account',
     });
@@ -38,29 +39,34 @@ function readStoredResult(): CallbackResult | null {
     }
 }
 
-function settle(result: CallbackResult, expectedState: string | null): string {
+export type GoogleSignInPayload = { idToken: string; nonce: string };
+
+function settle(result: CallbackResult, expectedState: string | null, expectedNonce: string | null): GoogleSignInPayload {
     if (!expectedState || result.state !== expectedState) throw new Error('Sign-in response did not match this session.');
     if (result.error) throw new Error(result.error === 'access_denied' ? 'cancelled' : result.error);
     if (!result.idToken) throw new Error('Google did not return an ID token.');
-    return result.idToken;
+    if (!expectedNonce) throw new Error('Sign-in response did not match this session.');
+    return { idToken: result.idToken, nonce: expectedNonce };
 }
 
 /**
  * Must run synchronously inside the tap handler, or Safari blocks the popup.
  * If the popup can't open, the current tab redirects to Google and comes back
- * to /account, where takePendingGoogleIdToken() picks the token up.
+ * to /account, where takePendingGoogleSignIn() picks the token up.
  */
-export function signInWithGooglePopup(clientId: string): Promise<string> {
+export function signInWithGooglePopup(clientId: string): Promise<GoogleSignInPayload> {
     const state = randomString();
+    const nonce = randomString();
     try {
         sessionStorage.setItem(STATE_KEY, state);
+        sessionStorage.setItem(NONCE_KEY, nonce);
         sessionStorage.setItem(MODE_KEY, 'popup');
         localStorage.removeItem(RESULT_KEY);
     } catch {
         // Private mode without storage: BroadcastChannel still carries the result.
     }
 
-    const url = buildAuthUrl(clientId, state);
+    const url = buildAuthUrl(clientId, state, nonce);
     const popup = window.open(url, 'amplifood-google', 'popup,width=480,height=640');
     if (!popup) {
         try {
@@ -91,7 +97,7 @@ export function signInWithGooglePopup(clientId: string): Promise<string> {
             if (done) return;
             cleanup();
             try {
-                resolve(settle(result, state));
+                resolve(settle(result, state, nonce));
             } catch (error) {
                 reject(error);
             }
@@ -133,13 +139,15 @@ export function signInWithGooglePopup(clientId: string): Promise<string> {
 }
 
 /** After a full-page redirect sign-in, return the ID token waiting for this tab (once). */
-export function takePendingGoogleIdToken(): string | null {
+export function takePendingGoogleSignIn(): GoogleSignInPayload | null {
     if (typeof window === 'undefined') return null;
     let mode: string | null = null;
     let state: string | null = null;
+    let nonce: string | null = null;
     try {
         mode = sessionStorage.getItem(MODE_KEY);
         state = sessionStorage.getItem(STATE_KEY);
+        nonce = sessionStorage.getItem(NONCE_KEY);
     } catch {
         return null;
     }
@@ -148,11 +156,12 @@ export function takePendingGoogleIdToken(): string | null {
     try {
         sessionStorage.removeItem(MODE_KEY);
         sessionStorage.removeItem(STATE_KEY);
+        sessionStorage.removeItem(NONCE_KEY);
         localStorage.removeItem(RESULT_KEY);
     } catch {}
     if (!result || Date.now() - (result.at ?? 0) > RESULT_MAX_AGE_MS) return null;
     try {
-        return settle(result, state);
+        return settle(result, state, nonce);
     } catch {
         return null;
     }

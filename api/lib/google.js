@@ -1,27 +1,44 @@
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { getGoogleClientIds } from './env.js';
 
-export async function verifyGoogleIdToken(idToken) {
+const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
+
+export async function verifyGoogleIdToken(idToken, expectedNonce) {
     const clientIds = getGoogleClientIds();
     if (!clientIds.length) {
         throw new Error('GOOGLE_CLIENT_IDS is not set');
     }
+    if (!expectedNonce || typeof expectedNonce !== 'string') {
+        throw new Error('Missing nonce');
+    }
 
-    const url = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`;
-    const response = await fetch(url);
-    if (!response.ok) {
+    let payload;
+    try {
+        const result = await jwtVerify(idToken, GOOGLE_JWKS, {
+            issuer: ['https://accounts.google.com', 'accounts.google.com'],
+            audience: clientIds,
+        });
+        payload = result.payload;
+    } catch (error) {
+        console.error('[google] id_token verify failed:', error?.message || error);
         throw new Error('Invalid Google sign-in');
     }
-    const data = await response.json();
-    const aud = data.aud;
-    if (!clientIds.includes(aud)) {
-        throw new Error('Google client ID mismatch');
+
+    if (payload.nonce !== expectedNonce) {
+        throw new Error('Invalid Google sign-in nonce');
     }
-    if (data.email_verified !== 'true' && data.email_verified !== true) {
+    if (payload.email_verified !== true) {
         throw new Error('Google email not verified');
     }
+    const email = payload.email;
+    const sub = payload.sub;
+    if (!email || !sub) {
+        throw new Error('Invalid Google sign-in');
+    }
+
     return {
-        sub: data.sub,
-        email: data.email,
-        name: data.name || data.given_name || '',
+        sub: String(sub),
+        email: String(email),
+        name: payload.name ? String(payload.name) : payload.given_name ? String(payload.given_name) : '',
     };
 }

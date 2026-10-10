@@ -95,11 +95,11 @@ export async function clearOwnerSession(): Promise<void> {
     await writeRaw(null);
 }
 
-export async function exchangeGoogleIdToken(idToken: string): Promise<OwnerSession> {
+export async function exchangeGoogleIdToken(idToken: string, nonce: string): Promise<OwnerSession> {
     const response = await fetch(`${getApiBaseUrl()}/auth/google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ idToken, nonce }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -132,5 +132,6 @@ export async function fetchOwnerUsage(): Promise<OwnerUsage | null> {
     }
     if (!response.ok) return null;
     const body = await response.json();
-    return body.usage as OwnerUsage;
+    const usage = body.usage as OwnerUsage | undefined;
+    return usage?.requestLimit != null ? usage : null;
 }

@@ -30,13 +30,31 @@ for (const rel of modules) {
     console.log('ok', rel);
 }
 
-// Exercise in-memory usage store (no KV env).
-process.env.ALLOWED_EMAILS = 'test@example.com';
-const { getUsage, recordUsage } = await import(pathToFileURL(join(apiRoot, 'lib/store.js')).href);
-const usage = await recordUsage('verify-user', { requestDelta: 1, tokenDelta: 10 });
-if (usage.requests !== 1 || usage.tokens !== 10) {
-    throw new Error('in-memory store counter mismatch');
+const { checkMinuteRateLimit } = await import(pathToFileURL(join(apiRoot, 'lib/store.js')).href);
+for (let i = 0; i < 10; i++) {
+    if (!checkMinuteRateLimit('verify-user')) {
+        throw new Error('rate limit should allow 10 per minute');
+    }
 }
-console.log('ok in-memory store');
+if (checkMinuteRateLimit('verify-user')) {
+    throw new Error('rate limit should block 11th request');
+}
+console.log('ok in-memory rate limit');
+
+process.env.ALLOWED_EMAILS = 'owner@example.com,tester@example.com';
+process.env.OWNER_EMAIL = 'owner@example.com';
+process.env.OPENROUTER_API_KEY = 'sk-or-owner';
+process.env.OPENROUTER_KEYS_JSON = JSON.stringify({ 'tester@example.com': 'sk-or-tester' });
+const { resolveOpenRouterApiKey } = await import(pathToFileURL(join(apiRoot, 'lib/env.js')).href);
+if (resolveOpenRouterApiKey('tester@example.com') !== 'sk-or-tester') {
+    throw new Error('per-tester key mismatch');
+}
+if (resolveOpenRouterApiKey('owner@example.com') !== 'sk-or-owner') {
+    throw new Error('owner fallback key mismatch');
+}
+if (resolveOpenRouterApiKey('other@example.com') !== null) {
+    throw new Error('unexpected key for unknown email');
+}
+console.log('ok openrouter key resolution');
 
 console.log('All API modules loaded.');
