@@ -1,7 +1,9 @@
+import { Platform } from 'react-native';
 import { generateMultimodal, generateText, stripCodeFences } from './aiClient';
 import { isAiConfigured, requireAiConfigured } from './aiSettings';
 import { prepareImagesForAi, toPersistentImageUri } from './mediaPrep';
 import { friendlyMediaErrorMessage } from './mediaTypes';
+import { fetchRecipeImportViaApi } from './recipeUrlImport';
 
 /**
  * Extract recipe from images (screenshots).
@@ -227,10 +229,37 @@ ${input}`;
  * Extract recipe from a URL (web scraping via AI)
  */
 export const parseRecipeFromUrl = async (url) => {
-    await requireAiConfigured();
-
     try {
-        // Fetch the webpage content
+        if (Platform.OS === 'web') {
+            const viaApi = await fetchRecipeImportViaApi(url);
+            if (viaApi.kind === 'structured') {
+                return { success: true, recipe: viaApi.recipe };
+            }
+            if (viaApi.kind === 'text') {
+                await requireAiConfigured();
+                const parsed = await parseRecipe(viaApi.text);
+                if (!parsed.success) {
+                    return parsed;
+                }
+                return {
+                    success: true,
+                    recipe: {
+                        ...parsed.recipe,
+                        imageUri: null,
+                        sourceUrl: viaApi.sourceUrl || url,
+                        sourcePlatform: new URL(viaApi.sourceUrl || url).hostname.replace(/^www\./, ''),
+                    },
+                };
+            }
+            return {
+                success: false,
+                error: viaApi.message || "Couldn't import that link.",
+            };
+        }
+
+        await requireAiConfigured();
+
+        // Native: fetch the webpage on-device (no CORS restriction).
         const fetchResponse = await fetch(url);
         const html = await fetchResponse.text();
 

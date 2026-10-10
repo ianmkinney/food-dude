@@ -17,12 +17,15 @@ const modules = [
     'auth/google.js',
     'auth/session.js',
     'ai/chat.js',
+    'lib/ssrf.js',
+    'lib/recipeExtract.js',
+    'recipes/import.js',
 ];
 
 for (const rel of modules) {
     const url = pathToFileURL(join(apiRoot, rel)).href;
     const mod = await import(url);
-    if (rel.startsWith('auth/') || rel.startsWith('ai/')) {
+    if (rel.startsWith('auth/') || rel.startsWith('ai/') || rel.startsWith('recipes/')) {
         if (typeof mod.default !== 'function') {
             throw new Error(`${rel}: missing default export handler`);
         }
