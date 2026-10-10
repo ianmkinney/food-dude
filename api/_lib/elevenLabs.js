@@ -14,17 +14,24 @@ export const ELEVENLABS_MSG = {
     upstream_failed: 'Voice request failed. Try again later.',
 };
 
+/** Empty or placeholder values mean owner voice is off (e.g. Vercel env not rotated yet). */
+export function resolveElevenLabsApiKey(raw = process.env.ELEVENLABS_API_KEY) {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return null;
+    if (trimmed.toLowerCase() === 'replace_me') return null;
+    return trimmed;
+}
+
 export function isElevenLabsConfigured() {
-    const key = process.env.ELEVENLABS_API_KEY;
-    return Boolean(key && String(key).trim());
+    return resolveElevenLabsApiKey() !== null;
 }
 
 function getElevenLabsApiKey() {
-    const key = process.env.ELEVENLABS_API_KEY;
-    if (!key || !String(key).trim()) {
+    const key = resolveElevenLabsApiKey();
+    if (!key) {
         throw new Error('ELEVENLABS_API_KEY is not set');
     }
-    return String(key).trim();
+    return key;
 }
 
 export function validateTtsText(text) {

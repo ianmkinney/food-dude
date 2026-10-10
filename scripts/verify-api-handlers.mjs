@@ -92,6 +92,29 @@ if (resolveOpenRouterApiKey('other@example.com') !== null) {
 }
 console.log('ok openrouter key resolution');
 
+const { isElevenLabsConfigured, resolveElevenLabsApiKey } = await import(
+    pathToFileURL(join(apiRoot, '_lib/elevenLabs.js')).href
+);
+if (resolveElevenLabsApiKey('') !== null || resolveElevenLabsApiKey('  ') !== null) {
+    throw new Error('elevenlabs key should reject empty');
+}
+if (resolveElevenLabsApiKey('REPLACE_ME') !== null || resolveElevenLabsApiKey('replace_me') !== null) {
+    throw new Error('elevenlabs key should reject placeholder');
+}
+if (resolveElevenLabsApiKey('sk-real-key') !== 'sk-real-key') {
+    throw new Error('elevenlabs key should accept real key');
+}
+process.env.ELEVENLABS_API_KEY = 'REPLACE_ME';
+if (isElevenLabsConfigured()) {
+    throw new Error('elevenlabs should be unconfigured for REPLACE_ME');
+}
+process.env.ELEVENLABS_API_KEY = 'xi-test-key';
+if (!isElevenLabsConfigured()) {
+    throw new Error('elevenlabs should be configured for real key');
+}
+delete process.env.ELEVENLABS_API_KEY;
+console.log('ok elevenlabs key resolution');
+
 const onDisk = listApiJsFiles(apiRoot);
 const missing = onDisk.filter((rel) => !modules.includes(rel));
 if (missing.length) {
