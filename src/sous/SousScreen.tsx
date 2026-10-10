@@ -382,6 +382,7 @@ export default function SousScreen() {
                     accessibilityRole="switch"
                     accessibilityLabel={`Read ${ASSISTANT_NAME} replies aloud`}
                     accessibilityState={{ checked: autoSpeak }}
+                    aria-checked={autoSpeak}
                 >
                     <Ionicons name={autoSpeak ? 'volume-high' : 'volume-mute-outline'} size={20} color={autoSpeak ? theme.primary[500] : c.text.secondary} />
                 </Pressable>

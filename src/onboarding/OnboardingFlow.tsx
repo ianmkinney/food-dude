@@ -468,7 +468,7 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
                         </View>
                     )}
                 </View>
-                <Pressable onPress={toggleMute} style={[styles.mute, { borderColor: c.border }]} accessibilityRole="switch" accessibilityState={{ checked: !muted }} accessibilityLabel="AI voice">
+                <Pressable onPress={toggleMute} style={[styles.mute, { borderColor: c.border }]} accessibilityRole="switch" accessibilityState={{ checked: !muted }} aria-checked={!muted} accessibilityLabel="AI voice">
                     <Ionicons name={muted ? 'volume-mute-outline' : 'volume-high-outline'} size={20} color={c.text.secondary} />
                 </Pressable>
             </View>
