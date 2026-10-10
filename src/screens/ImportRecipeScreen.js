@@ -112,7 +112,13 @@ const ImportRecipeScreen = () => {
                 setParsedRecipe(result.recipe);
             } else {
                 console.error('[Import Recipe] Import failed:', result.error);
-                setError(friendlyMediaErrorMessage(result.error) || 'Failed to parse recipe');
+                const friendly = friendlyMediaErrorMessage(result.error) || result.error || 'Failed to parse recipe';
+                const isUrlImport = !images.length && /^(http|https):\/\//i.test(input.trim());
+                const hint =
+                    Platform.OS === 'web' && isUrlImport
+                        ? ' Try pasting the recipe text below, or use Import with a screenshot or PDF.'
+                        : '';
+                setError(`${friendly}${hint}`);
             }
         } catch (e) {
             console.error('[Import Recipe] Import threw:', e);
