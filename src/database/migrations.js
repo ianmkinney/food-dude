@@ -350,15 +350,8 @@ export const MIGRATIONS = [
               DROP TABLE IF EXISTS lab_markers;
               DROP TABLE IF EXISTS lab_panels;
             `);
-            await db.runAsync(
-                `DELETE FROM domain_tables WHERE planet_id IN (?, ?, ?)`,
-                [PLANET_IDS.ATLAS, PLANET_IDS.LUMEN, PLANET_IDS.OBSERVATORY]
-            );
-            await db.runAsync(`DELETE FROM planets WHERE id IN (?, ?, ?)`, [
-                PLANET_IDS.ATLAS,
-                PLANET_IDS.LUMEN,
-                PLANET_IDS.OBSERVATORY,
-            ]);
+            await db.runAsync(`DELETE FROM domain_tables WHERE planet_id IN ('atlas', 'lumen', 'observatory')`);
+            await db.runAsync(`DELETE FROM planets WHERE id IN ('atlas', 'lumen', 'observatory')`);
         },
     },
 ];
