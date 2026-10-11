@@ -19,6 +19,8 @@ import { useTheme } from '../context/ThemeContext';
 import { pantryOperations } from '../database/operations';
 import { lookupBarcode } from '../services/barcodeService';
 import { goBackOr } from '../navigation/goBackOr';
+import PantryExpirationDateField from '../components/PantryExpirationDateField';
+import { pantryExpirationFromStorage, pantryExpirationToStorage } from '../utils/pantryExpiration';
 
 const EditPantryItemScreen = () => {
     const navigation = useNavigation();
@@ -38,9 +40,7 @@ const EditPantryItemScreen = () => {
     const [unit, setUnit] = useState(item.unit || '');
     const [category, setCategory] = useState(item.category || '');
     const [barcode, setBarcode] = useState(item.barcode || '');
-    const [expirationDate, setExpirationDate] = useState(
-        item.expiration_date ? new Date(item.expiration_date).toISOString().split('T')[0] : ''
-    );
+    const [expirationDate, setExpirationDate] = useState(pantryExpirationFromStorage(item.expiration_date));
     const [location, setLocation] = useState(item.location || '');
     const [notes, setNotes] = useState(item.notes || '');
     const [imageUri, setImageUri] = useState(item.image_uri || null);
@@ -53,9 +53,7 @@ const EditPantryItemScreen = () => {
             setUnit(item.unit || '');
             setCategory(item.category || '');
             setBarcode(item.barcode || '');
-            setExpirationDate(
-                item.expiration_date ? new Date(item.expiration_date).toISOString().split('T')[0] : ''
-            );
+            setExpirationDate(pantryExpirationFromStorage(item.expiration_date));
             setLocation(item.location || '');
             setNotes(item.notes || '');
             setImageUri(item.image_uri || null);
@@ -139,7 +137,7 @@ const EditPantryItemScreen = () => {
                 category,
                 barcode,
                 imageUri,
-                expirationDate: expirationDate ? new Date(expirationDate).toISOString() : null,
+                expirationDate: pantryExpirationToStorage(expirationDate),
                 location,
                 notes,
             });
@@ -245,17 +243,10 @@ const EditPantryItemScreen = () => {
                             keyboardType="numeric"
                         />
 
-                        <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Expiration Date</Text>
-                        <TextInput accessibilityLabel="Expiration Date"
-                            style={[styles.input, {
-                                backgroundColor: theme.colors.surface,
-                                color: theme.colors.text.primary,
-                                borderColor: theme.colors.border
-                            }]}
+                        <PantryExpirationDateField
+                            theme={theme}
                             value={expirationDate}
-                            onChangeText={setExpirationDate}
-                            placeholder="YYYY-MM-DD"
-                            placeholderTextColor={theme.colors.text.tertiary}
+                            onChange={setExpirationDate}
                         />
 
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Location</Text>
