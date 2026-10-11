@@ -1,5 +1,6 @@
 import { neon, Pool } from '@neondatabase/serverless';
 import { PARTY_SCHEMA_ADVISORY_LOCK_KEY, PARTY_SCHEMA_STATEMENTS } from './partySchema.js';
+import { mergeDuplicatePartyMembers } from './partyMembers.js';
 
 let sqlClient = null;
 let schemaReadyPromise = null;
@@ -26,6 +27,7 @@ async function applyPartySchemaOnce() {
         for (const statement of PARTY_SCHEMA_STATEMENTS) {
             await client.query(statement);
         }
+        await mergeDuplicatePartyMembers(client);
         await client.query('COMMIT');
     } catch (error) {
         try {

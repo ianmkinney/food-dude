@@ -18,6 +18,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { partyOperations, partyMealOperations, partyMemberOperations, recipeOperations, userOperations, partyMealIngredientClaimOperations, pantryOperations } from '../database/operations';
+import { normalizePartyMembersForDisplay } from '../utils/partyMemberList';
 import aiChefService from '../services/aiChefService';
 import PartyInviteModal from '../components/PartyInviteModal';
 import PartySwitcher from '../components/party/PartySwitcher';
@@ -133,9 +134,15 @@ const PartyScreen = ({ navigation }) => {
 
     const loadPartyMembers = async (partyId) => {
         try {
-            const members = await partyMemberOperations.getByPartyId(partyId);
+            const raw = await partyMemberOperations.getByPartyId(partyId);
+            const party = await partyOperations.getById(partyId);
+            const user = currentUser || (await userOperations.getCurrent());
+            const members = normalizePartyMembersForDisplay(raw, {
+                ownerEmail: party?.owner_email,
+                partyOwnerUserId: user?.user_id,
+            });
             setPartyMembers(members);
-            
+
             // Assign random colors to users
             const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
             const colorMap = {};

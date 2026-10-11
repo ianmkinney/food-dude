@@ -18,6 +18,8 @@ export function normalizeMealsInput(meals) {
  * @param {{ party: object, members?: object[], meals?: object[], claims?: object[], inviteToken?: string | null }} bundle
  * @param {{ isOwner?: boolean }} [options]
  */
+import { dedupeServerMemberRows, isHumanPartyMember } from './partyMembers.js';
+
 export function rowToPartySnapshot(bundle, options = {}) {
     const { party, members, meals, claims, inviteToken } = bundle;
     const isOwner = Boolean(options.isOwner);
@@ -29,7 +31,9 @@ export function rowToPartySnapshot(bundle, options = {}) {
         version: party.version,
         updatedAt: new Date(party.updated_at).getTime(),
         inviteToken: isOwner ? inviteToken || null : null,
-        members: (members || []).map((m) => ({
+        members: dedupeServerMemberRows(members || [], { ownerEmail: party.owner_email })
+            .filter((m) => isHumanPartyMember(m))
+            .map((m) => ({
             memberId: m.member_id,
             displayName: m.display_name,
             email: isOwner ? m.email : null,

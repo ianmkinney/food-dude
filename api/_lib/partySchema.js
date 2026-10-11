@@ -25,6 +25,11 @@ export const PARTY_SCHEMA_STATEMENTS = [
     removed_at TIMESTAMPTZ
 )`,
     'CREATE INDEX IF NOT EXISTS idx_party_members_party_id ON party_members(party_id)',
+    'ALTER TABLE party_members ADD COLUMN IF NOT EXISTS google_sub TEXT',
+    'ALTER TABLE party_members ADD COLUMN IF NOT EXISTS identity_key TEXT',
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_party_members_party_identity
+        ON party_members(party_id, identity_key)
+        WHERE status = 'active' AND identity_key IS NOT NULL`,
     `CREATE TABLE IF NOT EXISTS party_meals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     party_id UUID NOT NULL REFERENCES parties(id) ON DELETE CASCADE,

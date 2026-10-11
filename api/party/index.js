@@ -16,6 +16,7 @@ import {
     MAX_EMAIL_LEN,
     MAX_MIGRATE_MEMBERS,
 } from '../_lib/partyConstants.js';
+import { dedupeServerMemberRows, upsertActivePartyMember, isHumanPartyMember } from '../_lib/partyMembers.js';
 
 const MAX_NAME = 200;
 const MAX_DISPLAY = 120;
@@ -96,7 +97,7 @@ async function loadPartyBundle(sql, partyId) {
     const inviteRow = invites[0];
     return {
         party,
-        members,
+        members: dedupeServerMemberRows(members, { ownerEmail: party.owner_email }),
         meals,
         claims,
         inviteToken: inviteRow && isInviteRowValid(inviteRow) ? inviteRow.token : null,
@@ -349,16 +350,13 @@ async function handleCreate(req, res, session) {
         const party = partyRes.rows[0];
         await insertInviteToken(client, party.id, inviteToken);
         const ownerMemberToken = generateToken(32);
-        await client.query(
-            `INSERT INTO party_members (party_id, display_name, email, status, member_token_hash)
-             VALUES ($1::uuid, $2, $3, 'active', $4)`,
-            [
-                party.id,
-                session.name || session.email.split('@')[0] || 'Owner',
-                session.email.toLowerCase(),
-                hashToken(ownerMemberToken),
-            ]
-        );
+        await upsertActivePartyMember(client, {
+            partyId: party.id,
+            displayName: session.name || session.email.split('@')[0] || 'Owner',
+            email: session.email.toLowerCase(),
+            googleSub: session.sub,
+            memberTokenHash: hashToken(ownerMemberToken),
+        });
         return { party, inviteToken, ownerMemberToken };
     });
 
@@ -429,17 +427,18 @@ async function handleJoin(req, res, session) {
             return { cap: true };
         }
         const memberToken = generateToken(32);
-        const inserted = await client.query(
-            `INSERT INTO party_members (party_id, display_name, email, status, member_token_hash)
-             VALUES ($1::uuid, $2, $3, 'active', $4)
-             RETURNING member_id`,
-            [invite.party_id, displayName, email, hashToken(memberToken)]
-        );
+        const memberId = await upsertActivePartyMember(client, {
+            partyId: invite.party_id,
+            displayName,
+            email,
+            googleSub: session?.sub || null,
+            memberTokenHash: hashToken(memberToken),
+        });
         await client.query(
             `UPDATE parties SET version = version + 1, updated_at = now() WHERE id = $1::uuid`,
             [invite.party_id]
         );
-        return { memberId: inserted.rows[0].member_id, memberToken, partyId: invite.party_id };
+        return { memberId, memberToken, partyId: invite.party_id };
     });
 
     if (result.cap) {
@@ -686,22 +685,27 @@ async function handleMigrate(req, res, session) {
         const partyId = partyRes.rows[0].id;
         await insertInviteToken(client, partyId, inviteToken);
         const ownerMemberToken = generateToken(32);
-        await client.query(
-            `INSERT INTO party_members (party_id, display_name, email, status, member_token_hash)
-             VALUES ($1::uuid, $2, $3, 'active', $4)`,
-            [partyId, session.name || 'Owner', session.email.toLowerCase(), hashToken(ownerMemberToken)]
-        );
+        await upsertActivePartyMember(client, {
+            partyId,
+            displayName: session.name || 'Owner',
+            email: session.email.toLowerCase(),
+            googleSub: session.sub,
+            memberTokenHash: hashToken(ownerMemberToken),
+        });
         let added = 1;
         for (const m of membersInput) {
             const displayName = String(m.displayName || m.name || '').trim().slice(0, MAX_DISPLAY);
             if (!displayName || displayName.toLowerCase() === 'owner') continue;
+            if (!isHumanPartyMember({ displayName })) continue;
             if (added >= MAX_ACTIVE_MEMBERS) break;
             const email = m.email ? String(m.email).trim().toLowerCase().slice(0, MAX_EMAIL_LEN) : null;
-            await client.query(
-                `INSERT INTO party_members (party_id, display_name, email, status)
-                 VALUES ($1::uuid, $2, $3, 'active')`,
-                [partyId, displayName, email]
-            );
+            await upsertActivePartyMember(client, {
+                partyId,
+                displayName,
+                email,
+                googleSub: null,
+                memberTokenHash: null,
+            });
             added += 1;
         }
         await replaceMealsOnClient(client, partyId, body.meals);

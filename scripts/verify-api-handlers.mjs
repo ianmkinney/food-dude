@@ -62,6 +62,7 @@ const modules = [
     '_lib/syncMerge.js',
     '_lib/syncConstants.js',
     '_lib/syncStore.js',
+    '_lib/partyMembers.js',
     'p.js',
     'p-og.js',
 ];

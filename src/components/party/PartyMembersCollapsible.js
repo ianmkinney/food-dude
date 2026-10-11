@@ -6,6 +6,7 @@ import AnimatedPressable from '../AnimatedPressable';
 import PartyAvatar from './PartyAvatar';
 import { removeLiveMember } from '../../services/partyLiveSync';
 import { partyOperations } from '../../database/operations';
+import { isHumanPartyMemberRow } from '../../utils/partyMemberList';
 
 const STORAGE_KEY = 'amplifood.party.membersCollapsed';
 
@@ -35,7 +36,9 @@ export default function PartyMembersCollapsible({
         });
     }, []);
 
-    const active = (members || []).filter((m) => (m.member_status || 'confirmed') !== 'pending');
+    const active = (members || []).filter(
+        (m) => (m.member_status || 'confirmed') !== 'pending' && isHumanPartyMemberRow(m)
+    );
     if (!active.length) return null;
 
     const stack = active.slice(0, 4);

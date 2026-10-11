@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 17;
+export const CURRENT_SCHEMA_VERSION = 18;
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
@@ -483,6 +483,31 @@ export const MIGRATIONS = [
         up: async (db) => {
             const { applySyncV17 } = await import('./syncV17.js');
             await applySyncV17(db);
+        },
+    },
+    {
+        version: 18,
+        name: 'party_members_dedupe_local',
+        up: async (db) => {
+            const { normalizePartyMembersForDisplay } = await import('../utils/partyMemberList.js');
+            await db.execAsync(
+                `CREATE UNIQUE INDEX IF NOT EXISTS idx_party_members_party_sync
+                 ON party_members(party_id, sync_member_id)
+                 WHERE sync_member_id IS NOT NULL AND sync_member_id != ''`
+            );
+            const parties = await db.getAllAsync('SELECT DISTINCT party_id FROM party_members');
+            for (const row of parties) {
+                const members = await db.getAllAsync('SELECT * FROM party_members WHERE party_id = ?', [
+                    row.party_id,
+                ]);
+                const keep = normalizePartyMembersForDisplay(members);
+                const keepIds = new Set(keep.map((m) => m.id));
+                for (const m of members) {
+                    if (!keepIds.has(m.id)) {
+                        await db.runAsync('DELETE FROM party_members WHERE id = ?', [m.id]);
+                    }
+                }
+            }
         },
     },
 ];
