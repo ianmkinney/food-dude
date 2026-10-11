@@ -19,6 +19,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useViewTransitionTarget } from '../motion/viewTransition';
 import { pantryOperations } from '../database/operations';
 import { lookupBarcode } from '../services/barcodeService';
+import { goBackOr } from '../navigation/goBackOr';
 
 const AddPantryItemScreen = () => {
     const navigation = useNavigation();
@@ -121,7 +122,7 @@ const AddPantryItemScreen = () => {
                 expirationDate: expirationDate ? new Date(expirationDate).toISOString() : null,
             });
             Alert.alert('Success', 'Item added to pantry', [
-                { text: 'OK', onPress: () => navigation.goBack() }
+                { text: 'OK', onPress: () => goBackOr(navigation, 'Pantry') }
             ]);
         } catch (error) {
             console.error('Error saving pantry item:', error);
