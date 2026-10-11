@@ -72,8 +72,9 @@ type Message = {
 
 const INPUT_LINE_HEIGHT = 20;
 const INPUT_MAX_LINES = 6;
-const INPUT_MIN_HEIGHT = 44;
-const INPUT_MAX_HEIGHT = INPUT_LINE_HEIGHT * INPUT_MAX_LINES + 22;
+const INPUT_MIN_HEIGHT = 40;
+const INPUT_MAX_HEIGHT = INPUT_LINE_HEIGHT * INPUT_MAX_LINES + 16;
+const INPUT_V_PAD = 8;
 
 function splitImportAssist(cards?: SousCard[]): {
     cards: SousCard[] | undefined;
@@ -169,7 +170,10 @@ export default function SousScreen() {
     const scrollToLatest = useCallback(() => {
         if (atBottom.current) listRef.current?.scrollToEnd({ animated: false });
     }, []);
-    const { keyboardOpen } = useKeyboardViewport(composerFocused, scrollToLatest);
+    const c = theme.colors;
+    const { keyboardOpen } = useKeyboardViewport(composerFocused, scrollToLatest, {
+        pageBackground: c.background,
+    });
 
     useEffect(() => {
         getVoiceSettings().then((s) => setAutoSpeakState(s.autoSpeak));
@@ -424,7 +428,6 @@ export default function SousScreen() {
         if (!next) engineRef.current?.stop();
     };
 
-    const c = theme.colors;
     const display = { fontFamily: theme.typography.fonts.display };
 
     const renderCard = (card: SousCard, index: number) => {
@@ -842,7 +845,14 @@ export default function SousScreen() {
                         backgroundColor: c.background,
                         // The tab bar normally covers the home indicator; while it's hidden for
                         // typing (and no keyboard is up, e.g. a hardware keyboard) the composer must.
-                        paddingBottom: composerFocused && !keyboardOpen && Platform.OS === 'web' ? Math.max(insets.bottom, 8) : 8,
+                        paddingBottom:
+                            Platform.OS === 'web' && composerFocused
+                                ? keyboardOpen
+                                    ? 4
+                                    : Math.max(insets.bottom, 8)
+                                : composerFocused && !keyboardOpen
+                                  ? Math.max(insets.bottom, 8)
+                                  : 8,
                     },
                 ]}
             >
@@ -880,16 +890,20 @@ export default function SousScreen() {
                                 color: c.text.primary,
                                 backgroundColor: c.surface,
                                 borderColor: c.border,
-                                height: Math.max(INPUT_MIN_HEIGHT, inputHeight),
+                                ...(Platform.OS === 'web' && !draft.trim()
+                                    ? { minHeight: INPUT_MIN_HEIGHT, maxHeight: INPUT_MAX_HEIGHT }
+                                    : { height: Math.max(INPUT_MIN_HEIGHT, inputHeight) }),
                             },
                         ]}
                         multiline
                         scrollEnabled={inputHeight >= INPUT_MAX_HEIGHT}
                         onContentSizeChange={(e) => {
-                            const next = Math.min(
-                                INPUT_MAX_HEIGHT,
-                                Math.max(INPUT_MIN_HEIGHT, e.nativeEvent.contentSize.height + 12)
-                            );
+                            if (Platform.OS === 'web' && !draft.trim()) {
+                                setInputHeight(INPUT_MIN_HEIGHT);
+                                return;
+                            }
+                            const measured = e.nativeEvent.contentSize.height + INPUT_V_PAD * 2;
+                            const next = Math.min(INPUT_MAX_HEIGHT, Math.max(INPUT_MIN_HEIGHT, measured));
                             setInputHeight(next);
                         }}
                         editable={!listening}
@@ -1059,13 +1073,13 @@ const styles = StyleSheet.create({
     composerToolsRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, paddingLeft: 2 },
     input: {
         flex: 1,
-        minHeight: 44,
+        minHeight: INPUT_MIN_HEIGHT,
         maxHeight: INPUT_MAX_HEIGHT,
         borderWidth: 1,
-        borderRadius: 22,
+        borderRadius: 20,
         paddingHorizontal: 14,
-        paddingTop: 11,
-        paddingBottom: 11,
+        paddingTop: INPUT_V_PAD,
+        paddingBottom: INPUT_V_PAD,
         fontSize: 16,
         lineHeight: INPUT_LINE_HEIGHT,
     },

@@ -1,51 +1,123 @@
 import { useEffect, useRef, useState } from 'react';
 
-// iOS Safari doesn't resize the page for the on-screen keyboard: it shrinks
-// and pans the *visual* viewport over the full-height app, which left the
-// composer floating mid-screen with the tab bar and a gap below it. While the
-// composer is focused, #root is pinned to the visual viewport (its top follows
-// the pan, its height is what's left above the keyboard), so the composer sits
-// directly on the keyboard and nothing scrolls behind it.
+// iOS Safari keeps the layout viewport at full screen height and pans the visual
+// viewport over it when the keyboard opens. Pin #root to visualViewport (top +
+// height, not 100vh/dvh) while the composer is focused so the composer sits on
+// the form accessory bar with no gap or black strip below.
 
-const KEYBOARD_MIN_PX = 120;
+const KEYBOARD_MIN_PX = 80;
 
-export function useKeyboardViewport(active: boolean, onChange?: () => void): { keyboardOpen: boolean } {
+type Options = {
+    /** App background — applied to html/body while pinned so nothing black shows through. */
+    pageBackground?: string;
+};
+
+export function useKeyboardViewport(
+    active: boolean,
+    onChange?: () => void,
+    options: Options = {}
+): { keyboardOpen: boolean } {
     const [keyboardOpen, setKeyboardOpen] = useState(false);
     const onChangeRef = useRef(onChange);
+    const pageBackgroundRef = useRef(options.pageBackground);
     onChangeRef.current = onChange;
+    pageBackgroundRef.current = options.pageBackground;
 
     useEffect(() => {
         const vv = typeof window !== 'undefined' ? window.visualViewport : null;
         const root = typeof document !== 'undefined' ? document.getElementById('root') : null;
-        if (!active || !vv || !root) {
+        const html = typeof document !== 'undefined' ? document.documentElement : null;
+        const body = typeof document !== 'undefined' ? document.body : null;
+        if (!active || !vv || !root || !html || !body) {
             setKeyboardOpen(false);
             return undefined;
         }
+
+        const prevRoot = {
+            position: root.style.position,
+            top: root.style.top,
+            left: root.style.left,
+            right: root.style.right,
+            width: root.style.width,
+            bottom: root.style.bottom,
+            height: root.style.height,
+            maxHeight: root.style.maxHeight,
+            overflow: root.style.overflow,
+            transform: root.style.transform,
+        };
+        const prevHtmlOverflow = html.style.overflow;
+        const prevBodyOverflow = body.style.overflow;
+        const prevHtmlBg = html.style.backgroundColor;
+        const prevBodyBg = body.style.backgroundColor;
+
         let frame = 0;
+        const pinScroll = () => {
+            if (window.scrollY !== 0 || window.scrollX !== 0) {
+                window.scrollTo(0, 0);
+            }
+        };
+
         const update = () => {
             cancelAnimationFrame(frame);
             frame = requestAnimationFrame(() => {
-                const layoutHeight = document.documentElement.clientHeight || window.innerHeight;
-                const open = layoutHeight - vv.height > KEYBOARD_MIN_PX;
-                root.style.top = `${Math.max(0, vv.offsetTop)}px`;
+                pinScroll();
+                const top = Math.max(0, vv.offsetTop);
+                const height = vv.height;
+                const layoutHeight = window.innerHeight || document.documentElement.clientHeight;
+                const open = layoutHeight - height > KEYBOARD_MIN_PX;
+
+                const bg = pageBackgroundRef.current;
+                if (bg) {
+                    html.style.backgroundColor = bg;
+                    body.style.backgroundColor = bg;
+                }
+                html.style.overflow = 'hidden';
+                body.style.overflow = 'hidden';
+
+                root.style.position = 'fixed';
+                root.style.left = '0';
+                root.style.right = '0';
+                root.style.width = '100%';
+                root.style.top = `${top}px`;
                 root.style.bottom = 'auto';
-                root.style.height = `${vv.height}px`;
-                document.documentElement.classList.toggle('af-keyboard-open', open);
+                root.style.height = `${height}px`;
+                root.style.maxHeight = `${height}px`;
+                root.style.overflow = 'hidden';
+                root.style.transform = 'translateZ(0)';
+
+                html.classList.toggle('af-keyboard-open', open);
                 setKeyboardOpen(open);
                 onChangeRef.current?.();
             });
         };
+
         update();
         vv.addEventListener('resize', update);
         vv.addEventListener('scroll', update);
+        window.addEventListener('scroll', pinScroll, { passive: true });
+
         return () => {
             cancelAnimationFrame(frame);
             vv.removeEventListener('resize', update);
             vv.removeEventListener('scroll', update);
-            root.style.top = '';
-            root.style.bottom = '';
-            root.style.height = '';
+            window.removeEventListener('scroll', pinScroll);
+            html.classList.remove('af-keyboard-open');
             document.documentElement.classList.remove('af-keyboard-open');
+            root.style.position = prevRoot.position;
+            root.style.top = prevRoot.top;
+            root.style.left = prevRoot.left;
+            root.style.right = prevRoot.right;
+            root.style.width = prevRoot.width;
+            root.style.bottom = prevRoot.bottom;
+            root.style.height = prevRoot.height;
+            root.style.maxHeight = prevRoot.maxHeight;
+            root.style.overflow = prevRoot.overflow;
+            root.style.transform = prevRoot.transform;
+            html.style.overflow = prevHtmlOverflow;
+            body.style.overflow = prevBodyOverflow;
+            html.style.backgroundColor = prevHtmlBg;
+            body.style.backgroundColor = prevBodyBg;
+            setKeyboardOpen(false);
         };
     }, [active]);
 
