@@ -1084,15 +1084,28 @@ export const partyMemberOperations = {
 
     async syncFromDocument(partyId, members, ownerEmail) {
         const db = getDatabase();
+        const { isHumanPartyMemberRow } = await import('../utils/partyMemberList');
         const existing = await db.getAllAsync('SELECT * FROM party_members WHERE party_id = ?', [partyId]);
         const bySyncId = new Map(
             existing.filter((m) => m.sync_member_id).map((m) => [m.sync_member_id, m])
         );
+        const byEmail = new Map(
+            existing
+                .filter((m) => m.member_email)
+                .map((m) => [String(m.member_email).toLowerCase(), m])
+        );
         const incomingIds = new Set();
+        const seenIncoming = new Set();
         for (const m of members) {
             if (!m?.id) continue;
+            const displayName = m.name || m.displayName || '';
+            if (!isHumanPartyMemberRow({ user_name: displayName, member_email: m.email })) continue;
+            const emailKey = m.email ? String(m.email).toLowerCase() : '';
+            const dedupeKey = m.id || emailKey;
+            if (seenIncoming.has(dedupeKey)) continue;
+            seenIncoming.add(dedupeKey);
             incomingIds.add(m.id);
-            const prior = bySyncId.get(m.id);
+            const prior = bySyncId.get(m.id) || (emailKey ? byEmail.get(emailKey) : null);
             const role =
                 m.role ||
                 (m.email && ownerEmail && m.email.toLowerCase() === ownerEmail.toLowerCase()

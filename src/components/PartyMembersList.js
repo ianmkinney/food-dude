@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { partyOperations } from '../database/operations';
+import { isHumanPartyMemberRow } from '../utils/partyMemberList';
 import { removeLiveMember } from '../services/partyLiveSync';
 
 export default function PartyMembersList({
@@ -14,7 +15,8 @@ export default function PartyMembersList({
     syncMode,
     onInviteRotated,
 }) {
-    if (!members?.length) return null;
+    const visible = (members || []).filter(isHumanPartyMemberRow);
+    if (!visible.length) return null;
 
     const handleRemove = (member) => {
         if (!member.sync_member_id || member.role === 'owner') return;
@@ -46,7 +48,7 @@ export default function PartyMembersList({
     return (
         <View style={[styles.wrap, { borderColor: theme.colors.border }]}>
             <Text style={[styles.heading, { color: theme.colors.text.primary }]}>Members</Text>
-            {members.map((member) => {
+            {visible.map((member) => {
                 const status = member.member_status || 'confirmed';
                 const joined = member.joined_at
                     ? new Date(member.joined_at).toLocaleDateString()
