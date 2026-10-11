@@ -251,6 +251,10 @@ function AppContent() {
         const { runPartyScreenshotSeed } = await import('./src/demo/runPartyScreenshotSeed');
         await runPartyScreenshotSeed();
       }
+      if (Platform.OS === 'web' && globalThis.__DESKTOP_SCREENSHOT_SEED__) {
+        const { runDesktopScreenshotSeed } = await import('./src/demo/runDesktopScreenshotSeed');
+        await runDesktopScreenshotSeed();
+      }
       console.log('✅ AmpliFood app initialized successfully');
       setDbMode(getDatabaseMode());
       setError(null);
@@ -318,6 +322,19 @@ function AppContent() {
   }, [appReady, error]);
 
   useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const syncDesktopNav = () => {
+      if (navigationRef.isReady()) {
+        setDesktopNavRoute(desktopNavFromState(navigationRef.getRootState()));
+      } else {
+        setDesktopNavRoute(desktopNavFromState(undefined));
+      }
+    };
+    window.addEventListener('popstate', syncDesktopNav);
+    return () => window.removeEventListener('popstate', syncDesktopNav);
+  }, [appReady]);
+
+  useEffect(() => {
     if (Platform.OS !== 'web' || !appReady || typeof window === 'undefined') return;
     const hash = window.location.hash || '';
     if (!hash.includes('p=') || !hash.includes('sig=')) return;
@@ -347,7 +364,11 @@ function AppContent() {
                   setDesktopNavRoute(desktopNavFromState(navigationRef.getRootState()));
                 }
               }}
-              onStateChange={(state) => setDesktopNavRoute(desktopNavFromState(state))}
+              onStateChange={() => {
+                if (navigationRef.isReady()) {
+                  setDesktopNavRoute(desktopNavFromState(navigationRef.getRootState()));
+                }
+              }}
             >
               <DesktopNavigationFrame navRoute={desktopNavRoute}>
                 <ScreenErrorBoundary

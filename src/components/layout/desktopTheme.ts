@@ -47,6 +47,7 @@ export const desktopShellStyles = StyleSheet.create({
         width: '100%',
         maxWidth: DESKTOP_MAX_CONTENT,
         alignSelf: 'center',
+        paddingHorizontal: spacing.lg,
     },
     navItem: {
         flexDirection: 'row',
@@ -113,6 +114,74 @@ export const desktopListStyles = StyleSheet.create({
     gridItem: {
         width: '48%',
         flexGrow: 1,
+    },
+});
+
+export const desktopPageStyles = StyleSheet.create({
+    pageHeader: {
+        paddingTop: spacing.lg,
+        paddingBottom: spacing.md,
+        gap: spacing.sm,
+    },
+    pageHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+        gap: spacing.md,
+        flexWrap: 'wrap',
+    },
+    pageHeaderText: {
+        flex: 1,
+        minWidth: 200,
+        gap: spacing.xs,
+    },
+    pageTitle: {
+        fontSize: 28,
+        fontWeight: '700',
+        lineHeight: 34,
+    },
+    pageSubtitle: {
+        fontSize: 15,
+        lineHeight: 22,
+    },
+    pageHeaderActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        flexWrap: 'wrap',
+    },
+    searchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        minWidth: 280,
+        flex: 1,
+        maxWidth: 420,
+    },
+    searchField: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        borderRadius: borderRadius.lg,
+        borderWidth: StyleSheet.hairlineWidth,
+        minHeight: minTapTarget,
+    },
+    primaryBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        borderRadius: borderRadius.pill,
+        minHeight: minTapTarget,
+    },
+    primaryBtnText: {
+        color: '#FFFFFF',
+        fontWeight: '700',
+        fontSize: 15,
     },
 });
 

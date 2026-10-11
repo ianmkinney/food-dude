@@ -35,6 +35,7 @@ import { useMonetization } from '../monetization/MonetizationContext';
 import { USER_SAFETY_SUMMARY, USER_SAFETY_TITLE } from '../constants/userSafety';
 import { useLayoutMode } from '../layout/useLayoutMode';
 import AccountDesktopShell from '../components/layout/AccountDesktopShell';
+import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 
 const DEFAULT_USER_NAME = 'AmpliFood Cook';
 // Untouched placeholder from before the rebrand; real names are left alone.
@@ -186,6 +187,7 @@ const AccountScreen = ({ navigation, route }) => {
 
     const body = (
         <>
+            {isDesktop ? <DesktopPageHeader title="Account" subtitle="Profile, AI, privacy, and sync" /> : null}
             <View onLayout={markSection('profile')}>
             <ElevatedCard theme={theme} variant="glass" style={styles.profileHeader}>
                 <View style={[styles.avatarContainer, { backgroundColor: theme.primary[100] }, theme.shadows.md]}>

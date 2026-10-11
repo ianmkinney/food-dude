@@ -20,7 +20,8 @@ import EmptyState from '../components/EmptyState';
 import { navigateWithTransition } from '../motion/viewTransition';
 import { ASSISTANT_NAME } from '../config/assistant';
 import { useLayoutMode } from '../layout/useLayoutMode';
-import { desktopRecipeStyles } from '../components/layout/desktopTheme';
+import { desktopPageStyles, desktopRecipeStyles } from '../components/layout/desktopTheme';
+import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 import { useWindowDimensions } from 'react-native';
 
 const RecipeCard = ({ item, index, theme, navigation, gridColumns = 1 }) => {
@@ -190,8 +191,57 @@ const RecipeBookScreen = ({ navigation }) => {
         />
     );
 
+    const recipeCountLabel = loading ? 'Loading…' : `${recipes.length} saved`;
+
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            {isDesktop ? (
+                <DesktopPageHeader title="Recipe Book" subtitle={recipeCountLabel}>
+                    <View style={desktopPageStyles.searchRow}>
+                        <View
+                            style={[
+                                desktopPageStyles.searchField,
+                                { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceElevated },
+                            ]}
+                        >
+                            <Ionicons name="search" size={20} color={theme.colors.text.tertiary} />
+                            <TextInput
+                                accessibilityLabel="Search recipes"
+                                style={[styles.searchInput, { color: theme.colors.text.primary, marginLeft: 0 }]}
+                                placeholder="Search recipes…"
+                                placeholderTextColor={theme.colors.text.tertiary}
+                                value={searchQuery}
+                                onChangeText={handleSearch}
+                            />
+                        </View>
+                        <AnimatedPressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Add recipe"
+                            onPress={() => navigation.navigate('AddRecipe')}
+                            style={[desktopPageStyles.primaryBtn, { backgroundColor: theme.primary[500] }, theme.shadows.glow]}
+                        >
+                            <Ionicons name="add" size={20} color="#FFFFFF" />
+                            <Text style={desktopPageStyles.primaryBtnText}>Add recipe</Text>
+                        </AnimatedPressable>
+                        {isEmptyLibrary ? (
+                            <AnimatedPressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Add sample recipes"
+                                onPress={addSampleRecipes}
+                                style={[
+                                    desktopPageStyles.primaryBtn,
+                                    { backgroundColor: theme.colors.surfaceElevated, borderWidth: 1, borderColor: theme.colors.border },
+                                ]}
+                            >
+                                <Text style={[desktopPageStyles.primaryBtnText, { color: theme.colors.text.primary }]}>
+                                    Add samples
+                                </Text>
+                            </AnimatedPressable>
+                        ) : null}
+                    </View>
+                </DesktopPageHeader>
+            ) : null}
+
             {!isEmptyLibrary && (
             <View style={[styles.filterContainer, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
                 <AnimatedPressable
@@ -252,7 +302,7 @@ const RecipeBookScreen = ({ navigation }) => {
             </View>
             )}
 
-            {!isEmptyLibrary && (
+            {!isEmptyLibrary && !isDesktop && (
             <View style={[styles.searchContainer, { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border }, theme.shadows.sm]}>
                 <Ionicons name="search" size={20} color={theme.colors.text.tertiary} />
                 <TextInput accessibilityLabel="Search recipes"
@@ -282,15 +332,17 @@ const RecipeBookScreen = ({ navigation }) => {
                 onRefresh={loadRecipes}
             />
 
-            <FloatingActionButton
-                theme={theme}
-                style={styles.fab}
-                accessibilityLabel="Add recipe"
-                onPress={() => navigation.navigate('AddRecipe')}
-                morphTo="af-sheet"
-            >
-                <Ionicons name="add" size={28} color="#FFFFFF" />
-            </FloatingActionButton>
+            {!isDesktop ? (
+                <FloatingActionButton
+                    theme={theme}
+                    style={styles.fab}
+                    accessibilityLabel="Add recipe"
+                    onPress={() => navigation.navigate('AddRecipe')}
+                    morphTo="af-sheet"
+                >
+                    <Ionicons name="add" size={28} color="#FFFFFF" />
+                </FloatingActionButton>
+            ) : null}
         </View>
     );
 };

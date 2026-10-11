@@ -59,6 +59,7 @@ import type { SousCard, ToolCall } from './tools';
 import { useLayoutMode } from '../layout/useLayoutMode';
 import DesktopChatSidePanel from '../components/layout/DesktopChatSidePanel';
 import { desktopAmpiStyles } from '../components/layout/desktopTheme';
+import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 
 type Message = {
     id: string;
@@ -1012,9 +1013,12 @@ export default function SousScreen() {
     if (!isDesktop) return chat;
 
     return (
-        <View style={[desktopAmpiStyles.shell, { backgroundColor: c.background }]}>
-            <View style={desktopAmpiStyles.chatColumn}>{chat}</View>
-            <DesktopChatSidePanel card={desktopPanelCard} navigation={navigation} />
+        <View style={{ flex: 1, backgroundColor: c.background }}>
+            <DesktopPageHeader title={ASSISTANT_NAME} subtitle={ASSISTANT_TAGLINE} />
+            <View style={[desktopAmpiStyles.shell, { flex: 1 }]}>
+                <View style={desktopAmpiStyles.chatColumn}>{chat}</View>
+                <DesktopChatSidePanel card={desktopPanelCard} navigation={navigation} />
+            </View>
         </View>
     );
 }

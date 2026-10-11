@@ -1,11 +1,11 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useNavigation, type NavigationProp } from '@react-navigation/native';
 import { useDesktopNavRoute } from '../../navigation/DesktopNavRouteContext';
 import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../../theme';
 import { useTheme } from '../../context/ThemeContext';
-import DesktopGoogleSignIn from './DesktopGoogleSignIn';
+import HeaderGoogleAccount from '../HeaderGoogleAccount';
 import { desktopShellStyles } from './desktopTheme';
 
 export default function DesktopHeader() {
@@ -17,33 +17,21 @@ export default function DesktopHeader() {
 
     return (
         <View style={[desktopShellStyles.header, { borderBottomColor: c.borderSoft, backgroundColor: c.background }]}>
-            <Text style={[desktopShellStyles.headerTitle, { color: c.text.primary, fontFamily: theme.typography.fonts.display }]}>
-                {title}
-            </Text>
-            <DesktopGoogleSignIn theme={theme} />
+            <View style={styles.spacer} />
+            <HeaderGoogleAccount tintColor={c.text.primary} />
             <Pressable
                 onPress={toggleTheme}
                 accessibilityRole="button"
                 accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-                style={({ pressed }) => [
-                    styles.iconBtn,
-                    {
-                        backgroundColor: pressed ? c.surfaceMuted : 'transparent',
-                    },
-                ]}
+                style={({ pressed }) => [styles.iconBtn, { backgroundColor: pressed ? c.surfaceMuted : 'transparent' }]}
             >
                 <Ionicons name={isDark ? 'sunny' : 'moon'} size={22} color={c.text.primary} />
             </Pressable>
             <Pressable
                 onPress={() => navigation.navigate('Account')}
                 accessibilityRole="button"
-                accessibilityLabel="Open account settings"
-                style={({ pressed }) => [
-                    styles.iconBtn,
-                    {
-                        backgroundColor: pressed ? c.surfaceMuted : 'transparent',
-                    },
-                ]}
+                accessibilityLabel={`Open account settings. Current section: ${title}`}
+                style={({ pressed }) => [styles.iconBtn, { backgroundColor: pressed ? c.surfaceMuted : 'transparent' }]}
             >
                 <Ionicons name="person-circle-outline" size={26} color={c.text.primary} />
             </Pressable>
@@ -52,6 +40,7 @@ export default function DesktopHeader() {
 }
 
 const styles = StyleSheet.create({
+    spacer: { flex: 1 },
     iconBtn: {
         width: 44,
         height: 44,

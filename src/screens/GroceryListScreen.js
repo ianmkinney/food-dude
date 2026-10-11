@@ -27,6 +27,8 @@ import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
 import { useLayoutMode } from '../layout/useLayoutMode';
 import GroceryListDesktopBody from './desktop/GroceryListDesktopBody';
+import DesktopPageHeader from '../components/layout/DesktopPageHeader';
+import { desktopPageStyles } from '../components/layout/desktopTheme';
 
 const GroceryListScreen = () => {
     const navigation = useNavigation();
@@ -290,8 +292,21 @@ const GroceryListScreen = () => {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            {isDesktop ? (
+                <DesktopPageHeader title="Grocery List" subtitle={`${uncheckedCount} items to buy`}>
+                    <AnimatedPressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Add grocery item"
+                        onPress={() => navigation.navigate('AddGroceryItem')}
+                        style={[desktopPageStyles.primaryBtn, { backgroundColor: theme.primary[500] }, theme.shadows.glow]}
+                    >
+                        <Ionicons name="add" size={20} color="#FFFFFF" />
+                        <Text style={desktopPageStyles.primaryBtnText}>Add item</Text>
+                    </AnimatedPressable>
+                </DesktopPageHeader>
+            ) : null}
             {/* Header Stats */}
-            {groceryItems.length > 0 && (
+            {groceryItems.length > 0 && !isDesktop && (
                 <View style={[styles.header, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
                     <View style={styles.statItem}>
                         <Text style={[styles.statNumber, { color: theme.primary[500] }]}>
@@ -359,7 +374,7 @@ const GroceryListScreen = () => {
             )}
 
             {/* Floating Action Buttons */}
-            <View style={styles.fabContainer}>
+            {!isDesktop ? <View style={styles.fabContainer}>
                 {groceryItems.length > 0 && (
                 <FloatingActionButton
                     theme={theme}
@@ -384,7 +399,7 @@ const GroceryListScreen = () => {
                 >
                     <Ionicons name="add" size={28} color="#FFFFFF" />
                 </FloatingActionButton>
-            </View>
+            </View> : null}
 
             {/* Store Info Modal */}
             <Modal

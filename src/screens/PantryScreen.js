@@ -19,7 +19,8 @@ import FloatingActionButton from '../components/FloatingActionButton';
 import EmptyState from '../components/EmptyState';
 import ScreenSkeleton from '../components/Skeleton';
 import { useLayoutMode } from '../layout/useLayoutMode';
-import { desktopListStyles } from '../components/layout/desktopTheme';
+import { desktopListStyles, desktopPageStyles } from '../components/layout/desktopTheme';
+import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 
 const PantryScreen = () => {
     const navigation = useNavigation();
@@ -123,6 +124,19 @@ const PantryScreen = () => {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            {isDesktop ? (
+                <DesktopPageHeader title="My Pantry" subtitle={`${pantryItems.length} items on hand`}>
+                    <AnimatedPressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Add pantry item"
+                        onPress={() => navigation.navigate('AddPantryItem')}
+                        style={[desktopPageStyles.primaryBtn, { backgroundColor: theme.primary[500] }, theme.shadows.glow]}
+                    >
+                        <Ionicons name="add" size={20} color="#FFFFFF" />
+                        <Text style={desktopPageStyles.primaryBtnText}>Add item</Text>
+                    </AnimatedPressable>
+                </DesktopPageHeader>
+            ) : null}
             {data === undefined ? (
                 showSkeleton ? <ScreenSkeleton /> : null
             ) : (
@@ -140,15 +154,17 @@ const PantryScreen = () => {
                 />
             )}
 
-            <FloatingActionButton
-                theme={theme}
-                style={styles.fab}
-                accessibilityLabel="Add pantry item"
-                onPress={() => navigation.navigate('AddPantryItem')}
-                morphTo="af-sheet"
-            >
-                <Ionicons name="add" size={28} color="#FFFFFF" />
-            </FloatingActionButton>
+            {!isDesktop ? (
+                <FloatingActionButton
+                    theme={theme}
+                    style={styles.fab}
+                    accessibilityLabel="Add pantry item"
+                    onPress={() => navigation.navigate('AddPantryItem')}
+                    morphTo="af-sheet"
+                >
+                    <Ionicons name="add" size={28} color="#FFFFFF" />
+                </FloatingActionButton>
+            ) : null}
         </View >
     );
 };
