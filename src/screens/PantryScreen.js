@@ -18,11 +18,14 @@ import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
 import EmptyState from '../components/EmptyState';
 import ScreenSkeleton from '../components/Skeleton';
+import { useLayoutMode } from '../layout/useLayoutMode';
+import { desktopListStyles } from '../components/layout/desktopTheme';
 
 const PantryScreen = () => {
     const navigation = useNavigation();
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const { isDesktop } = useLayoutMode();
     const { data, showSkeleton, refresh } = useQuery(pantryQuery.key, pantryQuery.fetch);
     const pantryItems = data || [];
 
@@ -124,9 +127,12 @@ const PantryScreen = () => {
                 showSkeleton ? <ScreenSkeleton /> : null
             ) : (
                 <FlatList
+                    key={isDesktop ? 'pantry-grid' : 'pantry-list'}
                     data={pantryItems}
                     renderItem={renderPantryItem}
                     keyExtractor={(item) => item.id.toString()}
+                    numColumns={isDesktop ? 2 : 1}
+                    columnWrapperStyle={isDesktop ? desktopListStyles.columnWrapper : undefined}
                     contentContainerStyle={styles.listContent}
                     ListEmptyComponent={renderEmptyState}
                     refreshing={false}

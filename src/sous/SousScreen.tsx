@@ -56,6 +56,9 @@ import { CHAT_THREAD_AMPI } from '../chat/chatThreads';
 import { chatOperations } from '../database/operations';
 import { askSous, confirmSousActions, type SousTurn } from './agent';
 import type { SousCard, ToolCall } from './tools';
+import { useLayoutMode } from '../layout/useLayoutMode';
+import DesktopChatSidePanel from '../components/layout/DesktopChatSidePanel';
+import { desktopAmpiStyles } from '../components/layout/desktopTheme';
 
 type Message = {
     id: string;
@@ -121,6 +124,7 @@ type Nav = { navigate: (name: string, params?: object) => void };
 export default function SousScreen() {
     const { isDark, textScale } = useTheme();
     const { height: windowHeight } = useWindowDimensions();
+    const { isDesktop } = useLayoutMode();
     const insets = useSafeAreaInsets();
     const theme = getTheme(isDark, undefined, undefined);
     const navigation = useNavigation() as unknown as Nav;
@@ -703,6 +707,19 @@ export default function SousScreen() {
 
     const started = messages.length > 0;
 
+    const desktopPanelCard = useMemo((): SousCard | null => {
+        if (!isDesktop) return null;
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const m = messages[i];
+            if (m.role !== 'sous' || !m.cards?.length) continue;
+            const recipe = m.cards.find((c) => c.type === 'recipe');
+            if (recipe) return recipe;
+            const list = m.cards.find((c) => c.type === 'grocery' || c.type === 'pantry');
+            if (list) return list;
+        }
+        return null;
+    }, [messages, isDesktop]);
+
     const hero = (
         <View style={styles.hero}>
             <GuitarMark size={textScale > 1.1 || windowHeight < 760 ? 72 : 112} waves={thinking ? 'thinking' : 'idle'} />
@@ -749,7 +766,7 @@ export default function SousScreen() {
         </ScrollView>
     );
 
-    return (
+    const chat = (
         <KeyboardAvoidingView style={[styles.root, { backgroundColor: c.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
             <View style={styles.iconRow}>
                 {started ? (
@@ -990,6 +1007,15 @@ export default function SousScreen() {
                 </View>
             </View>
         </KeyboardAvoidingView>
+    );
+
+    if (!isDesktop) return chat;
+
+    return (
+        <View style={[desktopAmpiStyles.shell, { backgroundColor: c.background }]}>
+            <View style={desktopAmpiStyles.chatColumn}>{chat}</View>
+            <DesktopChatSidePanel card={desktopPanelCard} navigation={navigation} />
+        </View>
     );
 }
 

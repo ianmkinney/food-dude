@@ -33,6 +33,8 @@ import AnimatedPressable from '../components/AnimatedPressable';
 import { BrandMark } from '../components/Brand';
 import { useMonetization } from '../monetization/MonetizationContext';
 import { USER_SAFETY_SUMMARY, USER_SAFETY_TITLE } from '../constants/userSafety';
+import { useLayoutMode } from '../layout/useLayoutMode';
+import AccountDesktopShell from '../components/layout/AccountDesktopShell';
 
 const DEFAULT_USER_NAME = 'AmpliFood Cook';
 // Untouched placeholder from before the rebrand; real names are left alone.
@@ -56,6 +58,11 @@ const AccountScreen = ({ navigation, route }) => {
     const [aiPrivacySectionY, setAiPrivacySectionY] = useState(0);
     const [googleSectionY, setGoogleSectionY] = useState(0);
     const scrollRef = useRef(null);
+    const { isDesktop } = useLayoutMode();
+    const [sectionOffsets, setSectionOffsets] = useState({});
+    const markSection = (id) => (event) => {
+        setSectionOffsets((prev) => ({ ...prev, [id]: event.nativeEvent.layout.y }));
+    };
 
     const openPrivacy = useCallback(() => {
         Linking.openURL(PRIVACY_URL);
@@ -177,13 +184,9 @@ const AccountScreen = ({ navigation, route }) => {
         setIsEditing(false);
     };
 
-    return (
-        <ScrollView
-            ref={scrollRef}
-            style={[styles.container, { backgroundColor: theme.colors.background }]}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-        >
+    const body = (
+        <>
+            <View onLayout={markSection('profile')}>
             <ElevatedCard theme={theme} variant="glass" style={styles.profileHeader}>
                 <View style={[styles.avatarContainer, { backgroundColor: theme.primary[100] }, theme.shadows.md]}>
                     {user?.avatar_uri ? (
@@ -348,6 +351,9 @@ const AccountScreen = ({ navigation, route }) => {
                 )}
             </View>
 
+            </View>
+
+            <View onLayout={markSection('safety')}>
             <ElevatedCard theme={theme} variant="card" style={styles.safetyCard}>
                 <View style={styles.safetyHeader}>
                     <Ionicons name="shield-checkmark-outline" size={22} color={theme.primary[500]} />
@@ -364,7 +370,9 @@ const AccountScreen = ({ navigation, route }) => {
                     use platform AI after signing in with Google (allowlisted accounts get platform AI automatically).
                 </Text>
             </ElevatedCard>
+            </View>
 
+            <View onLayout={markSection('signin')}>
             {isGoogleSignInConfigured() ? (
                 <View onLayout={(e) => setGoogleSectionY(e.nativeEvent.layout.y)}>
                     <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
@@ -374,7 +382,9 @@ const AccountScreen = ({ navigation, route }) => {
                     </ElevatedCard>
                 </View>
             ) : null}
+            </View>
 
+            <View onLayout={markSection('ai')}>
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                 <AiProviderSettings theme={theme} />
             </ElevatedCard>
@@ -390,7 +400,9 @@ const AccountScreen = ({ navigation, route }) => {
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                 <MemorySettings theme={theme} />
             </ElevatedCard>
+            </View>
 
+            <View onLayout={markSection('privacy')}>
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                 <PrivacyDataExplainer theme={theme} />
             </ElevatedCard>
@@ -400,9 +412,10 @@ const AccountScreen = ({ navigation, route }) => {
                     <DataSharingSettings theme={theme} />
                 </ElevatedCard>
             </View>
+            </View>
 
             {/* Settings Section */}
-            <View style={styles.settingsContainer}>
+            <View style={styles.settingsContainer} onLayout={markSection('settings')}>
                 <Text style={[styles.settingsTitle, { color: theme.colors.text.primary }]}>Settings</Text>
 
                 <ElevatedCard
@@ -452,6 +465,25 @@ const AccountScreen = ({ navigation, route }) => {
                     AmpliFood v1.0.0 · cooking, turned up
                 </Text>
             </View>
+        </>
+    );
+
+    if (isDesktop) {
+        return (
+            <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+                <AccountDesktopShell sectionOffsets={sectionOffsets}>{body}</AccountDesktopShell>
+            </View>
+        );
+    }
+
+    return (
+        <ScrollView
+            ref={scrollRef}
+            style={[styles.container, { backgroundColor: theme.colors.background }]}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+        >
+            {body}
         </ScrollView>
     );
 };

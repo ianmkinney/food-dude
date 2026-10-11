@@ -31,6 +31,7 @@ const PartyScreen = lazyScreen(() => import('../screens/PartyScreen'));
 const AccountScreen = lazyScreen(() => import('../screens/AccountScreen'));
 const PaywallScreen = lazyScreen(() => import('../screens/PaywallScreen'));
 import HeaderTitle, { HeaderAccountActions, HeaderPartyButton } from '../components/HeaderTitle';
+import { useLayoutMode } from '../layout/useLayoutMode';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -85,12 +86,14 @@ const TabNavigator = () => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
     const reduceMotion = useReducedMotion();
+    const { isDesktop } = useLayoutMode();
     usePrefetchTabs();
 
     return (
         <Tab.Navigator
             tabBar={renderTabBar}
             screenOptions={({ route }) => ({
+                headerShown: !isDesktop,
                 headerTitle: () => <HeaderTitle />,
                 headerTitleAlign: 'center',
                 headerLeft: (props) => <HeaderPartyButton {...props} />,
@@ -148,6 +151,7 @@ const AppNavigator = () => {
     const navigation = useNavigation();
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const { isDesktop } = useLayoutMode();
 
     useEffect(() => {
         if (hasShareIntent) {
@@ -388,7 +392,8 @@ const AppNavigator = () => {
             <Stack.Screen
                 name="Party"
                 component={PartyScreen}
-                options={({ navigation }) => ({ 
+                options={({ navigation }) => ({
+                    headerShown: !isDesktop,
                     title: 'Party',
                     headerBackTitle: 'Recipe Book',
                     headerStyle: {
@@ -413,7 +418,8 @@ const AppNavigator = () => {
             <Stack.Screen
                 name="Account"
                 component={AccountScreen}
-                options={({ navigation }) => ({ 
+                options={({ navigation }) => ({
+                    headerShown: !isDesktop,
                     title: 'Account',
                     headerBackTitle: 'Recipe Book',
                     headerStyle: {

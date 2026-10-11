@@ -25,11 +25,14 @@ import EmptyState from '../components/EmptyState';
 import ScreenSkeleton from '../components/Skeleton';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
+import { useLayoutMode } from '../layout/useLayoutMode';
+import GroceryListDesktopBody from './desktop/GroceryListDesktopBody';
 
 const GroceryListScreen = () => {
     const navigation = useNavigation();
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const { isDesktop } = useLayoutMode();
     const {
         data: cachedItems,
         showSkeleton,
@@ -331,6 +334,18 @@ const GroceryListScreen = () => {
 
             {cachedItems === undefined ? (
                 showSkeleton ? <ScreenSkeleton /> : null
+            ) : isDesktop ? (
+                groceryItems.length === 0 ? (
+                    renderEmptyState()
+                ) : (
+                    <GroceryListDesktopBody
+                        items={groceryItems}
+                        theme={theme}
+                        pendingChecked={pendingChecked}
+                        toggleItem={toggleItem}
+                        deleteItem={deleteItem}
+                    />
+                )
             ) : (
                 <FlatList
                     data={rows}

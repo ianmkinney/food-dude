@@ -441,6 +441,28 @@
          src/platform/desktopScroll.web.js draws one at the window edge. */
       html.af-desktop #root * { scrollbar-width: none; }
       html.af-desktop #root *::-webkit-scrollbar { display: none; }
+
+      /* Laptop layout: native scrollbars, pointer hover, and visible focus rings (WCAG). */
+      html.af-layout-wide body {
+        position: static;
+        overflow: auto;
+      }
+      html.af-layout-wide #root {
+        position: relative;
+        height: auto;
+        min-height: 100vh;
+        min-height: 100dvh;
+      }
+      html.af-layout-wide [role='button'],
+      html.af-layout-wide [role='link'],
+      html.af-layout-wide [role='tab'],
+      html.af-layout-wide button {
+        cursor: pointer;
+      }
+      html.af-layout-wide :focus-visible {
+        outline: 2px solid #eb6a1c;
+        outline-offset: 2px;
+      }
       .af-pagebar { position: fixed; top: 0; right: 0; bottom: 0; width: 14px; z-index: 1000; }
       .af-pagebar[hidden] { display: none; }
       .af-pagebar > div { position: absolute; top: 0; right: 3px; width: 8px; border-radius: 4px; background: rgba(115, 100, 106, 0.45); transition: background-color 120ms, width 120ms; }

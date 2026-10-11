@@ -19,15 +19,18 @@ import FloatingActionButton from '../components/FloatingActionButton';
 import EmptyState from '../components/EmptyState';
 import { navigateWithTransition } from '../motion/viewTransition';
 import { ASSISTANT_NAME } from '../config/assistant';
+import { useLayoutMode } from '../layout/useLayoutMode';
+import { desktopRecipeStyles } from '../components/layout/desktopTheme';
+import { useWindowDimensions } from 'react-native';
 
-const RecipeCard = ({ item, index, theme, navigation }) => {
+const RecipeCard = ({ item, index, theme, navigation, gridColumns = 1 }) => {
     const thumbRef = useRef(null);
     const cooked = item.is_cooked === 1 || item.is_cooked === true;
     return (
         <ElevatedCard
             theme={theme}
             index={index}
-            style={[styles.recipeCard, cooked && { opacity: 0.72 }]}
+            style={[styles.recipeCard, gridColumns > 1 && desktopRecipeStyles.gridCard, cooked && { opacity: 0.72 }]}
             onPress={() => navigateWithTransition(
                 () => navigation.navigate('RecipeDetail', { recipeId: item.id }),
                 { sourceRef: thumbRef, name: 'recipe-hero' },
@@ -82,6 +85,9 @@ const RecipeCard = ({ item, index, theme, navigation }) => {
 const RecipeBookScreen = ({ navigation }) => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const { isDesktop } = useLayoutMode();
+    const { width } = useWindowDimensions();
+    const gridColumns = isDesktop ? (width >= 1200 ? 4 : 3) : 1;
     const [recipes, setRecipes] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
@@ -170,8 +176,8 @@ const RecipeBookScreen = ({ navigation }) => {
     const recipeKey = useCallback((item) => item.id.toString(), []);
 
     const renderRecipeCard = useCallback(({ item, index }) => (
-        <RecipeCard item={item} index={index} theme={theme} navigation={navigation} />
-    ), [navigation, theme]);
+        <RecipeCard item={item} index={index} theme={theme} navigation={navigation} gridColumns={gridColumns} />
+    ), [navigation, theme, gridColumns]);
 
     const renderEmptyState = () => (
         <EmptyState
@@ -261,9 +267,12 @@ const RecipeBookScreen = ({ navigation }) => {
 
             {/* Recipe List */}
             <FlatList
+                key={gridColumns > 1 ? `grid-${gridColumns}` : 'list'}
                 data={recipes}
                 renderItem={renderRecipeCard}
                 keyExtractor={recipeKey}
+                numColumns={gridColumns}
+                columnWrapperStyle={gridColumns > 1 ? desktopRecipeStyles.columnWrapper : undefined}
                 initialNumToRender={8}
                 maxToRenderPerBatch={6}
                 windowSize={7}

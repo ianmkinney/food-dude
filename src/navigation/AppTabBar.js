@@ -14,6 +14,7 @@ import { getTheme, motion } from '../theme';
 import { useTourTarget } from '../onboarding/tourTargets';
 import { useReducedMotion } from '../motion';
 import { useComposerFocused } from '../chat/composerFocus';
+import { useLayoutMode } from '../layout/useLayoutMode';
 
 const PILL_WIDTH = 56;
 const touchWeb =
@@ -78,6 +79,9 @@ export default function AppTabBar({ state, descriptors, navigation, icons }) {
 
     const pillStyle = useAnimatedStyle(() => ({ transform: [{ translateX: pillX.value }] }));
     const composerFocused = useComposerFocused();
+    const { isDesktop } = useLayoutMode();
+
+    if (isDesktop) return null;
 
     // Like Messages: while typing in chat on a phone browser the keyboard takes
     // the tab bar's place (native apps keep their own keyboard handling).
