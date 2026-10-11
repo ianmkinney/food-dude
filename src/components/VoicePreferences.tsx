@@ -29,6 +29,7 @@ import {
     setElevenLabsVoice,
     type ElevenLabsVoice,
 } from '../voice/elevenLabsSettings';
+import { subscribeGoogleAccount } from '../platform/googleAccountAuth';
 import { getOwnerSession } from '../platform/ownerSession';
 import {
     fetchOwnerVoiceSession,
@@ -99,11 +100,13 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
             setPlatformVoiceName(cfg.voiceName);
             platformVoiceIdRef.current = cfg.voiceId;
         });
-        getOwnerSession().then(async (session) => {
+        const loadOwnerVoice = async () => {
+            const session = await getOwnerSession();
             const signedIn = Boolean(session?.token);
             setOwnerSignedIn(signedIn);
             if (!signedIn) {
                 setPlatformAvailable(false);
+                setPlatformUnavailableReason('');
                 return;
             }
             const voiceSession = await fetchOwnerVoiceSession();
@@ -111,11 +114,15 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
             setPlatformUnavailableReason(
                 voiceSession.error ||
                     (!voiceSession.platformAiAllowed
-                        ? "This Google account isn't allowlisted for platform voice."
+                        ? 'Platform voice is only for allowlisted tester accounts.'
                         : !voiceSession.elevenlabsAvailable
                           ? "The server doesn't have an ElevenLabs key for this deployment."
                           : '')
             );
+        };
+        loadOwnerVoice();
+        return subscribeGoogleAccount(() => {
+            loadOwnerVoice();
         });
     }, []);
 

@@ -270,7 +270,7 @@ export async function isAiConfigured() {
 
 /**
  * Resolves who serves an AI request. Your own API key always wins. Only the
- * signed-in owner (Account → Owner sign-in) uses the AmpliFood OpenRouter proxy;
+ * signed-in allowlisted Google accounts use the AmpliFood OpenRouter proxy;
  * everyone else must add a key. Regular users are never prompted to sign in.
  */
 export async function requireAiConfigured() {

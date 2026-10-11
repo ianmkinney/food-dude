@@ -8,6 +8,9 @@ export type OwnerSession = {
     token: string;
     email: string;
     name: string;
+    picture?: string;
+    /** Cached from last /auth/google or /auth/session; server allowlist is authoritative. */
+    platformAiAllowed?: boolean;
     savedAt: number;
 };
 
@@ -110,6 +113,8 @@ export async function exchangeGoogleIdToken(idToken: string, nonce: string): Pro
         token: body.token,
         email: body.email,
         name: body.name || '',
+        picture: body.picture ? String(body.picture) : '',
+        platformAiAllowed: Boolean(body.platformAiAllowed),
         savedAt: Date.now(),
     };
     await saveOwnerSession(session);
@@ -119,6 +124,7 @@ export async function exchangeGoogleIdToken(idToken: string, nonce: string): Pro
 export type AuthSessionProfile = {
     email: string;
     name: string;
+    picture?: string;
     sub?: string;
     platformAiAllowed: boolean;
     elevenlabsAvailable: boolean;
@@ -136,17 +142,33 @@ export async function fetchAuthSessionProfile(): Promise<AuthSessionProfile | nu
     }
     if (!response.ok) return null;
     const body = await response.json();
-    return {
+    const profile: AuthSessionProfile = {
         email: body.email,
         name: body.name || '',
+        picture: body.picture ? String(body.picture) : '',
         sub: body.sub,
         platformAiAllowed: Boolean(body.platformAiAllowed),
         elevenlabsAvailable: Boolean(body.elevenlabsAvailable),
     };
+    const existing = await getOwnerSession();
+    if (existing?.token) {
+        await saveOwnerSession({
+            ...existing,
+            email: profile.email,
+            name: profile.name,
+            picture: profile.picture,
+            platformAiAllowed: profile.platformAiAllowed,
+            savedAt: Date.now(),
+        });
+    }
+    return profile;
 }
 
-/** Google sign-in present; platform OpenRouter proxy only when allowlisted on server. */
+/** Google sign-in with server allowlist (owner / tester). BYOK users do not need this. */
 export async function hasPlatformAiAccess(): Promise<boolean> {
+    const session = await getOwnerSession();
+    if (!session) return false;
+    if (session.platformAiAllowed === true) return true;
     const profile = await fetchAuthSessionProfile();
     return Boolean(profile?.platformAiAllowed);
 }

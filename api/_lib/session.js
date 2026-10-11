@@ -12,8 +12,8 @@ function getSecretKey() {
     return new TextEncoder().encode(secret);
 }
 
-export async function signSession({ sub, email, name }) {
-    return new SignJWT({ email, name })
+export async function signSession({ sub, email, name, picture }) {
+    return new SignJWT({ email, name, picture: picture || '' })
         .setProtectedHeader({ alg: 'HS256' })
         .setSubject(sub)
         .setIssuedAt()
@@ -32,6 +32,7 @@ export async function verifySession(token) {
         sub: String(sub),
         email: String(email),
         name: payload.name ? String(payload.name) : '',
+        picture: payload.picture ? String(payload.picture) : '',
     };
 }
 

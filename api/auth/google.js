@@ -52,6 +52,7 @@ export default async function handler(req, res) {
             token,
             email: profile.email,
             name: profile.name,
+            picture: profile.picture || '',
             sub: profile.sub,
             platformAiAllowed: isEmailAllowed(profile.email),
         });

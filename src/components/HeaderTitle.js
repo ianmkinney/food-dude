@@ -6,6 +6,7 @@ import { getTheme, motion } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import AnimatedPressable from './AnimatedPressable';
 import { Wordmark } from './Brand';
+import HeaderGoogleAccount from './HeaderGoogleAccount';
 
 // public/index.html flies the startup wordmark onto this element by id.
 const HeaderTitle = () => <Wordmark height={24} nativeID="af-header-logo" />;
@@ -46,6 +47,7 @@ export const HeaderAccountActions = ({ tintColor }) => {
     const color = tintColor || theme.colors.text.primary;
     return (
         <View style={[styles.side, styles.rightSide]}>
+            <HeaderGoogleAccount tintColor={color} />
             <HeaderIconButton
                 icon={isDark ? 'sunny' : 'moon'}
                 label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}

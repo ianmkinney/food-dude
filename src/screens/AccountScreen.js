@@ -21,7 +21,7 @@ import PrivacyDataExplainer from '../components/PrivacyDataExplainer';
 import TextSizeSettings from '../components/TextSizeSettings';
 import MemorySettings from '../components/MemorySettings';
 import DataSharingSettings from '../components/DataSharingSettings';
-import OwnerSignInSettings from '../components/OwnerSignInSettings';
+import AccountGoogleSection from '../components/AccountGoogleSection';
 import CloudBackupSettings from '../components/CloudBackupSettings';
 import { isGoogleSignInConfigured } from '../platform/ownerSignInConfig';
 import AccountAboutSheet from '../components/AccountAboutSheet';
@@ -36,7 +36,7 @@ const DEFAULT_USER_NAME = 'AmpliFood Cook';
 // Untouched placeholder from before the rebrand; real names are left alone.
 const LEGACY_DEFAULT_USER_NAME = 'Food Dude User';
 
-const AccountScreen = ({ navigation }) => {
+const AccountScreen = ({ navigation, route }) => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
     const monetization = useMonetization();
@@ -52,6 +52,7 @@ const AccountScreen = ({ navigation }) => {
     const [partyMembersJoined, setPartyMembersJoined] = useState(0);
     const [aboutOpen, setAboutOpen] = useState(false);
     const [aiPrivacySectionY, setAiPrivacySectionY] = useState(0);
+    const [googleSectionY, setGoogleSectionY] = useState(0);
     const scrollRef = useRef(null);
 
     const openPrivacy = useCallback(() => {
@@ -76,6 +77,12 @@ const AccountScreen = ({ navigation }) => {
         loadUser();
         loadStats();
     }, []);
+
+    useEffect(() => {
+        if (!route?.params?.scrollToSync || googleSectionY <= 0 || !scrollRef.current) return;
+        scrollRef.current.scrollTo({ y: Math.max(0, googleSectionY - 12), animated: true });
+        navigation.setParams({ scrollToSync: undefined });
+    }, [route?.params?.scrollToSync, googleSectionY, navigation]);
 
     const loadStats = async () => {
         try {
@@ -351,15 +358,17 @@ const AccountScreen = ({ navigation }) => {
                 <Text style={[styles.safetyBody, { color: theme.colors.text.secondary }]}>
                     Your API keys never go to AmpliFood. Profile and flavor preferences stay in the
                     on-device database. AI calls go to the provider you pick in Account, unless you
-                    use platform AI after allowlisted Google sign-in below.
+                    use platform AI after signing in with Google (allowlisted accounts get platform AI automatically).
                 </Text>
             </ElevatedCard>
 
             {isGoogleSignInConfigured() ? (
-                <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
-                    <OwnerSignInSettings theme={theme} />
-                    <CloudBackupSettings theme={theme} />
-                </ElevatedCard>
+                <View onLayout={(e) => setGoogleSectionY(e.nativeEvent.layout.y)}>
+                    <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
+                        <AccountGoogleSection theme={theme} />
+                        <CloudBackupSettings theme={theme} />
+                    </ElevatedCard>
+                </View>
             ) : null}
 
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
