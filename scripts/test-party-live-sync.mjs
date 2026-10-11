@@ -32,29 +32,36 @@ function createMemoryPartyServer() {
         async query(sql, params) {
             const text = String(sql).trim();
             if (text.includes('INSERT INTO party_members')) {
+                const partyId = params[0];
+                const displayName = params[1];
+                const email = params[2];
+                const googleSub = params[3];
+                const identityKey = params[4];
+                const tokenHash = params[5] ?? params[4];
+                const existing = state.members.find(
+                    (m) =>
+                        m.party_id === partyId &&
+                        m.status === 'active' &&
+                        identityKey &&
+                        m.identity_key === identityKey
+                );
+                if (existing) {
+                    existing.display_name = displayName;
+                    existing.member_token_hash = tokenHash;
+                    return { rows: [{ member_id: existing.member_id }] };
+                }
                 const memberId = `m-${state.members.length + 1}`;
                 state.members.push({
                     member_id: memberId,
-                    party_id: state.party.id,
-                    display_name: params[1],
-                    email: params[2],
-                    google_sub: params[3],
-                    identity_key: params[4],
+                    party_id: partyId,
+                    display_name: displayName,
+                    email,
+                    google_sub: googleSub,
+                    identity_key: identityKey,
                     status: 'active',
                     joined_at: new Date(),
                 });
                 return { rows: [{ member_id: memberId }] };
-            }
-            if (text.includes('SELECT member_id FROM party_members') && text.includes('identity_key')) {
-                const key = params[1];
-                const row = state.members.find((m) => m.identity_key === key && m.status === 'active');
-                return { rows: row ? [{ member_id: row.member_id }] : [] };
-            }
-            if (text.includes('UPDATE party_members')) {
-                const memberId = params[5];
-                const row = state.members.find((m) => m.member_id === memberId);
-                if (row) row.display_name = params[0];
-                return { rows: [] };
             }
             return { rows: [] };
         },

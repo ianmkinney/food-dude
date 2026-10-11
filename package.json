@@ -23,6 +23,7 @@
     "test:web-safari-composer": "node scripts/test-web-safari-composer.mjs",
     "test:sync-merge": "node scripts/test-sync-merge.mjs",
     "test:party-members": "node scripts/test-party-members.mjs",
+    "test:party-schema-dedupe": "node scripts/test-party-schema-dedupe.mjs",
     "test:party-live-sync": "node scripts/test-party-live-sync.mjs",
     "test:desktop-sidebar": "node scripts/test-desktop-sidebar-active.mjs",
     "test:cross-tab-sync": "node scripts/test-cross-tab-cloud-sync.mjs",

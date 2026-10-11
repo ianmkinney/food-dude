@@ -7,6 +7,7 @@ export const PARTY_MSG = {
     forbidden: 'You do not have access to this party.',
     rate_limited: 'Too many requests. Wait a moment and try again.',
     bad_request: 'Invalid request.',
+    server_error: 'Something went wrong on our side. Try again in a moment.',
     not_found: 'Party not found.',
     conflict: 'Request could not be completed.',
     member_cap: 'This party already has the maximum number of members.',
