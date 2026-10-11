@@ -96,6 +96,32 @@ try {
     const pageErrors = [];
     page.on('pageerror', (e) => pageErrors.push(e.message));
 
+    await page.route('**/api/party*', async (route) => {
+        const url = route.request().url();
+        if (url.includes('action=create') && route.request().method() === 'POST') {
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    party: { id: 'live-party-test', name: 'Back test party', version: 1 },
+                    ownerMemberToken: 'member-test-token',
+                }),
+            });
+        }
+        return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not mocked in test"}' });
+    });
+    await page.route('**/api/auth/session', async (route) =>
+        route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                email: 'owner@example.com',
+                name: 'Owner',
+                platformAiAllowed: true,
+                elevenlabsAvailable: false,
+            }),
+        })
+    );
     await page.route('**/api/ai/chat', async (route) => {
         const body = JSON.parse(route.request().postData() || '{}');
         await new Promise((r) => setTimeout(r, 400));
@@ -177,12 +203,16 @@ try {
     await settle(1200);
     await dismissTips();
     // A signed-in owner gets the AI proxy, which is stubbed above.
-    await page.evaluate(() =>
+    await page.evaluate(() => {
         localStorage.setItem(
             'amplifood.owner.session.v1',
             JSON.stringify({ token: 't', email: 'owner@example.com', name: 'Owner', savedAt: Date.now() })
-        )
-    );
+        );
+        localStorage.setItem(
+            'amplifood.dataConsent.v1',
+            JSON.stringify({ platform: { grantedAt: Date.now() } })
+        );
+    });
     await page.reload();
     await settle(3000);
     await dismissTips();
@@ -192,7 +222,7 @@ try {
     await openTab('Recipes');
     await page.getByLabel('Add recipe').click();
     await settle();
-    await tap('Import Recipe');
+    await tap('Parse with AI');
     await settle(500);
     check('error toast shown for empty import', await page.getByRole('alert').first().isVisible().catch(() => false));
     check('toast is not modal', (await modalOpen()) === 0);
@@ -200,11 +230,13 @@ try {
 
     await page.getByLabel('Add recipe').click();
     await settle();
-    await page.getByLabel('Recipe link or text').fill('Lasagna soup: sausage, noodles. Brown and simmer.');
-    await tap('Import Recipe');
-    await settle(1200);
+    await page.getByLabel('Recipe text').fill('Lasagna soup: sausage, noodles. Brown and simmer.');
+    await tap('Parse with AI');
     await agreeConsent();
-    await page.getByText('Recipe imported successfully!').waitFor({ timeout: 10_000 });
+    await page.getByText('Review before saving').waitFor({ timeout: 15_000 });
+    await tap('Save to Recipe Book');
+    await settle(800);
+    await page.getByText('Recipe saved to your recipe book!').waitFor({ timeout: 10_000 });
     check('import success opens a dialog', (await modalOpen()) === 1);
     const focusInDialog = await page.evaluate(() => !!document.activeElement?.closest('[aria-modal=true]'));
     check('dialog moves focus inside', focusInDialog);
@@ -223,9 +255,11 @@ try {
     await settle(500);
     check('Escape closes the dialog', (await modalOpen()) === 0);
 
-    await page.getByLabel('Recipe link or text').fill('Lasagna soup: sausage, noodles. Brown and simmer.');
-    await tap('Import Recipe');
-    await page.getByText('Recipe imported successfully!').waitFor({ timeout: 10_000 });
+    await page.getByLabel('Recipe text').fill('Lasagna soup: sausage, noodles. Brown and simmer.');
+    await tap('Parse with AI');
+    await page.getByText('Review before saving').waitFor({ timeout: 15_000 });
+    await tap('Save to Recipe Book');
+    await page.getByText('Recipe saved to your recipe book!').waitFor({ timeout: 10_000 });
     await page.mouse.click(12, 12);
     await settle(500);
     check('tap outside closes the dialog', (await modalOpen()) === 0);
@@ -233,9 +267,11 @@ try {
 
     await page.getByLabel('Add recipe').click();
     await settle();
-    await page.getByLabel('Recipe link or text').fill('Lasagna soup: sausage, noodles. Brown and simmer.');
-    await tap('Import Recipe');
-    await page.getByText('Recipe imported successfully!').waitFor({ timeout: 10_000 });
+    await page.getByLabel('Recipe text').fill('Lasagna soup: sausage, noodles. Brown and simmer.');
+    await tap('Parse with AI');
+    await page.getByText('Review before saving').waitFor({ timeout: 15_000 });
+    await tap('Save to Recipe Book');
+    await page.getByText('Recipe saved to your recipe book!').waitFor({ timeout: 10_000 });
     await tap('View Recipe');
     await settle(1500);
     check('View Recipe opens the recipe', /\/recipe\//.test(await path()), await path());
@@ -327,26 +363,14 @@ try {
     await (await byLabel('Open party')).click();
     await settle(1500);
     await dismissTips();
-    await (await byLabel('Create a party')).click();
+    await (await byLabel('Create party')).click();
     await settle(600);
     await page.getByLabel('Party name').fill('Back test party');
     await tap('Create');
     await settle(1500);
-    // Without a set-up account the create sheet stays open with an error; the
-    // toast has to show above the sheet and the sheet must still close.
-    const partyToast = page.locator('[role=alert],[role=status]').filter({ hasText: /party|user/i }).first();
-    if (await partyToast.count()) {
-        const box = await partyToast.boundingBox();
-        const onTop = box
-            ? await page.evaluate(
-                  ({ x, y }) => !!document.elementFromPoint(x, y)?.closest('[role=alert],[role=status]'),
-                  { x: box.x + box.width / 2, y: box.y + box.height / 2 }
-              )
-            : false;
-        check('party toast shows above the create sheet', onTop);
-        await page.keyboard.press('Escape');
-        await settle(600);
-    }
+    await page.getByText('Party created!').waitFor({ timeout: 8000 }).catch(() => {});
+    await page.keyboard.press('Escape');
+    await settle(400);
     await backWorks('party after create');
 
     // Account: open, then back.

@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { getOwnerSessionToken } from '../platform/ownerSession';
-import { partyMealOperations, partyMemberOperations, partyOperations } from '../database/operations';
+import {
+    partyMealIngredientClaimOperations,
+    partyMealOperations,
+    partyMemberOperations,
+    partyOperations,
+} from '../database/operations';
 
 const MEMBER_KEY_PREFIX = 'amplifood.party.live.member.';
 const VERSION_KEY_PREFIX = 'amplifood.party.live.version.';
@@ -120,6 +125,43 @@ export async function fetchLiveChanges({ livePartyId, sinceVersion, memberToken,
     return data;
 }
 
+export async function claimLiveIngredient({
+    livePartyId,
+    mealSyncId,
+    recipeId,
+    ingredientName,
+    ingredientKey,
+}) {
+    const memberToken = await getStoredMemberToken(livePartyId);
+    const sessionToken = await getOwnerSessionToken();
+    return partyFetch('/party?action=claim_ingredient', {
+        body: {
+            action: 'claim_ingredient',
+            partyId: livePartyId,
+            mealId: mealSyncId,
+            recipeId: String(recipeId),
+            ingredientName,
+            ingredientKey: ingredientKey || ingredientName,
+        },
+        memberToken,
+        sessionToken,
+    });
+}
+
+export async function unclaimLiveIngredient({ livePartyId, claimId }) {
+    const memberToken = await getStoredMemberToken(livePartyId);
+    const sessionToken = await getOwnerSessionToken();
+    return partyFetch('/party?action=unclaim_ingredient', {
+        body: {
+            action: 'unclaim_ingredient',
+            partyId: livePartyId,
+            claimId,
+        },
+        memberToken,
+        sessionToken,
+    });
+}
+
 export async function pushLiveMeals({ livePartyId, meals, memberToken }) {
     const token = memberToken || (await getStoredMemberToken(livePartyId));
     const ownerToken = await getOwnerSessionToken();
@@ -190,9 +232,11 @@ export async function applyLivePartySnapshot(localPartyId, snapshot) {
             name: meal.name,
             description: meal.description,
             recipeIds: meal.recipeIds || [],
+            recipeMeta: meal.recipeMeta || {},
             syncMealId: String(meal.id),
         });
     }
+    await partyMealIngredientClaimOperations.syncFromLiveSnapshot(localPartyId, snapshot.ingredientClaims || []);
 }
 
 export async function attachOrCreateLocalLiveParty(snapshot) {
@@ -222,6 +266,7 @@ export async function pushLocalPartyMealsToLive(localParty) {
         name: m.name,
         description: m.description,
         recipeIds: m.recipeIds || [],
+        recipeMeta: m.recipeMeta || (m.recipe_meta ? JSON.parse(m.recipe_meta) : {}),
         id: m.sync_meal_id,
     }));
     const result = await pushLiveMeals({

@@ -468,6 +468,15 @@ export const MIGRATIONS = [
             await addColumnIfMissing(db, 'parties', 'live_version', 'INTEGER', '0');
         },
     },
+    {
+        version: 16,
+        name: 'party_meal_recipe_meta',
+        up: async (db) => {
+            await addColumnIfMissing(db, 'party_meals', 'recipe_meta', 'TEXT', "'{}'");
+            await addColumnIfMissing(db, 'party_meal_ingredient_claims', 'live_claim_id', 'TEXT');
+            await addColumnIfMissing(db, 'party_meal_ingredient_claims', 'claimed_by_member_id', 'TEXT');
+        },
+    },
 ];
 
 // Cheap PRAGMA check on every boot so Expo Go installs that already sit at
