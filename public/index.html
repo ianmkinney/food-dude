@@ -60,6 +60,28 @@
         height: 100dvh;
         display: flex;
       }
+      /* While Ampi pins #root to visualViewport (class toggled from useKeyboardViewport.web.ts). */
+      html.af-keyboard-open {
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
+        height: 100%;
+        overscroll-behavior: none;
+      }
+      html.af-keyboard-open body {
+        overflow: hidden;
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overscroll-behavior: none;
+      }
+      html.af-keyboard-open #root {
+        inset: unset;
+        bottom: auto;
+        height: auto;
+        max-height: none;
+      }
       input,
       textarea,
       select {
