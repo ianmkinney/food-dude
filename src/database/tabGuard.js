@@ -7,11 +7,21 @@ export class TabLockedError extends Error {
     }
 }
 
+export function isTabLockHeld() {
+    return true;
+}
+
 export async function acquireTabLock() {}
 
 export async function takeOverFromOtherTab() {}
 
 export async function requestPeersCloseDatabase() {}
+
+export function releaseTabLock() {}
+
+export function onTabLockLost() {
+    return () => {};
+}
 
 export function listenForCloseDatabase() {
     return () => {};
@@ -19,4 +29,12 @@ export function listenForCloseDatabase() {
 
 export function listenForTakeover() {
     return () => {};
+}
+
+export function installTabLifecycleHandlers() {
+    return () => {};
+}
+
+export function consumePreferMirrorAfterTakeover() {
+    return false;
 }

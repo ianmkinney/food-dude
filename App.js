@@ -14,7 +14,13 @@ import {
 } from '@expo-google-fonts/inter';
 import { initDatabase, getDatabaseMode, shutdownDatabase } from './src/database/operations';
 import { isInvalidVfsStateError, isOpfsBusyError } from './src/database/openDatabase';
-import { listenForTakeover, listenForCloseDatabase, takeOverFromOtherTab } from './src/database/tabGuard';
+import {
+  installTabLifecycleHandlers,
+  listenForTakeover,
+  listenForCloseDatabase,
+  onTabLockLost,
+  takeOverFromOtherTab,
+} from './src/database/tabGuard';
 import AppNavigator from './src/navigation/AppNavigator';
 import { getTheme } from './src/theme';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -105,6 +111,8 @@ function StartupError({ error, theme, onUseHere }) {
       await onUseHere();
     } catch {
       reload();
+    } finally {
+      setTakingOver(false);
     }
   };
 
@@ -157,6 +165,24 @@ function StartupError({ error, theme, onUseHere }) {
   );
 }
 
+function IndexedDbMirrorBanner({ theme }) {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return (
+    <View
+      accessibilityRole="alert"
+      style={[styles.banner, styles.bannerCompact, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+    >
+      <Text style={[styles.bannerText, { color: theme.colors.text.secondary }]}>
+        This tab is using your saved kitchen from backup storage because another tab still holds the on-disk file. Changes here are saved to that backup copy.
+      </Text>
+      <Pressable onPress={() => setDismissed(true)} accessibilityRole="button" style={styles.bannerButton}>
+        <Text style={[styles.bannerButtonText, { color: theme.colors.text.secondary }]}>Dismiss</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function TemporaryDatabaseBanner({ theme }) {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
@@ -180,9 +206,33 @@ function TemporaryDatabaseBanner({ theme }) {
   );
 }
 
+function DisplacedTabOverlay({ theme, onUseHere, takingOver }) {
+  return (
+    <View style={[styles.displacedOverlay, { backgroundColor: theme.colors.background }]}>
+      <BrandMark variant="ink" size={72} />
+      <Text style={[styles.errorTitle, { color: theme.colors.text.primary, fontFamily: theme.typography.fonts.display }]}>
+        AmpliFood moved to another tab
+      </Text>
+      <Text style={[styles.errorText, { color: theme.colors.text.secondary }]}>
+        This tab released your kitchen data so another tab could use it. Tap Use here to move AmpliFood back to this tab.
+      </Text>
+      <Pressable
+        onPress={onUseHere}
+        disabled={takingOver}
+        style={[styles.retryButton, { backgroundColor: theme.primary[500], opacity: takingOver ? 0.7 : 1 }]}
+        accessibilityRole="button"
+      >
+        <Text style={styles.retryText}>{takingOver ? 'Moving here…' : 'Use here'}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function AppContent() {
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState(null);
+  const [displaced, setDisplaced] = useState(false);
+  const [displacedBusy, setDisplacedBusy] = useState(false);
   const [dbMode, setDbMode] = useState('persistent');
   const { isDark } = useTheme();
   const theme = getTheme(isDark);
@@ -207,22 +257,53 @@ function AppContent() {
     prepare();
   }, [prepare]);
 
-  // Another tab pressed "Use here": reload, which ends this tab's SQLite worker
-  // and frees the database for it.
+  const markDisplaced = useCallback(async () => {
+    try {
+      await shutdownDatabase();
+    } catch {
+      // ignore
+    }
+    setDisplaced(true);
+  }, []);
+
   useEffect(() => {
     if (Platform.OS !== 'web' || !isReady) return undefined;
     const stopClose = listenForCloseDatabase(() => shutdownDatabase());
-    const stopTakeover = listenForTakeover(reload);
+    const stopTakeover = listenForTakeover(() => markDisplaced());
+    const stopLockLost = onTabLockLost(() => markDisplaced());
+    const stopLifecycle = installTabLifecycleHandlers({
+      onRelease: () => shutdownDatabase(),
+      onLockLost: () => markDisplaced(),
+    });
     return () => {
       stopClose();
       stopTakeover();
+      stopLockLost();
+      stopLifecycle();
     };
-  }, [isReady]);
+  }, [isReady, markDisplaced]);
 
   const moveHere = useCallback(async () => {
     await takeOverFromOtherTab();
+    setDisplaced(false);
+    try {
+      await shutdownDatabase();
+    } catch {
+      // no-op if database was never opened
+    }
     await prepare();
   }, [prepare]);
+
+  const useHereFromDisplaced = useCallback(async () => {
+    setDisplacedBusy(true);
+    try {
+      await moveHere();
+    } catch {
+      reload();
+    } finally {
+      setDisplacedBusy(false);
+    }
+  }, [moveHere]);
 
   useEffect(() => {
     if (appReady || error) signalAppReady();
@@ -266,6 +347,10 @@ function AppContent() {
           </WebShell>
         </OnboardingGate>
         {dbMode === 'memory' && <TemporaryDatabaseBanner theme={theme} />}
+        {dbMode === 'indexeddb' && <IndexedDbMirrorBanner theme={theme} />}
+        {displaced && (
+          <DisplacedTabOverlay theme={theme} onUseHere={useHereFromDisplaced} takingOver={displacedBusy} />
+        )}
         <ConsentHost />
         <AlertHost />
       </ShareIntentProvider>
@@ -353,6 +438,13 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
   },
+  displacedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
   banner: {
     position: 'absolute',
     left: 12,
@@ -368,6 +460,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
+  },
+  bannerCompact: {
+    bottom: 88,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   bannerText: {
     fontSize: 14,
