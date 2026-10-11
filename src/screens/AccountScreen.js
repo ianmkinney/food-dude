@@ -24,6 +24,7 @@ import DataSharingSettings from '../components/DataSharingSettings';
 import AccountGoogleSection from '../components/AccountGoogleSection';
 import CloudBackupSettings from '../components/CloudBackupSettings';
 import CloudSyncSettings from '../components/CloudSyncSettings';
+import SyncDiagnosticsPanel from '../components/SyncDiagnosticsPanel';
 import { runFullSync } from '../sync/engine';
 import { isGoogleSignInConfigured } from '../platform/ownerSignInConfig';
 import AccountAboutSheet from '../components/AccountAboutSheet';
@@ -380,6 +381,7 @@ const AccountScreen = ({ navigation, route }) => {
                     <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                         <AccountGoogleSection theme={theme} />
                         <CloudSyncSettings theme={theme} />
+                        <SyncDiagnosticsPanel theme={theme} />
                         <CloudBackupSettings theme={theme} />
                     </ElevatedCard>
                 </View>

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSyncDataRefresh } from '../hooks/useSyncDataRefresh';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { recipeOperations } from '../database/operations';
@@ -108,13 +109,7 @@ const RecipeBookScreen = ({ navigation }) => {
     const [filter, setFilter] = useState('all'); // 'all', 'cooked', 'uncooked'
 
     // Header customization removed as per user request
-    useFocusEffect(
-        useCallback(() => {
-            loadRecipes();
-        }, [filter])
-    );
-
-    const loadRecipes = async () => {
+    const loadRecipes = useCallback(async () => {
         try {
             setLoading(true);
             const filters = {};
@@ -131,7 +126,15 @@ const RecipeBookScreen = ({ navigation }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [filter]);
+
+    useFocusEffect(
+        useCallback(() => {
+            loadRecipes();
+        }, [loadRecipes])
+    );
+
+    useSyncDataRefresh(loadRecipes);
 
     const handleSearch = async (query) => {
         setSearchQuery(query);

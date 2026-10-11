@@ -35,7 +35,7 @@ export async function setLastSyncedAt(ms: number): Promise<void> {
     await AsyncStorage.setItem(LAST_SYNC_KEY, String(ms));
 }
 
+/** Re-enable sync on every successful sign-in (sign-out turns sync off). */
 export async function defaultEnableSyncAfterSignIn(): Promise<void> {
-    const raw = await AsyncStorage.getItem(ENABLED_KEY);
-    if (raw === null) await setSyncEnabled(true);
+    await setSyncEnabled(true);
 }

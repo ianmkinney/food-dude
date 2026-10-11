@@ -29,6 +29,7 @@ import PartyPrivacyChip from '../components/party/PartyPrivacyChip';
 import PartyMealCard from '../components/party/PartyMealCard';
 import PartyScreenSkeleton from '../components/party/PartyScreenSkeleton';
 import { usePartyLivePoll } from '../hooks/usePartyLivePoll';
+import { useSyncDataRefresh } from '../hooks/useSyncDataRefresh';
 import { getOwnerSession } from '../platform/ownerSession';
 import {
     applyLivePartySnapshot,
@@ -199,6 +200,8 @@ const PartyScreen = ({ navigation }) => {
             if (refreshed) setSelectedParty(refreshed);
         }
     }, [selectedParty?.id]);
+
+    useSyncDataRefresh(refreshParty);
 
     const loadMealStats = async (partyId, partyMeals) => {
         setMealsLoading(true);
