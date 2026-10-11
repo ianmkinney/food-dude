@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
     AccessibilityInfo,
     FlatList,
@@ -53,7 +53,11 @@ import type { PendingAttachment } from './chatAttachments';
 import { persistAmpiExchange } from '../chat/promptContext';
 import { recipeEventsFromCards } from '../chat/chatRecipes';
 import { CHAT_THREAD_AMPI } from '../chat/chatThreads';
-import { chatOperations } from '../database/operations';
+import { chatOperations, memoryOperations } from '../database/operations';
+import { runSyncPush } from '../sync/engine';
+import { useSyncDataRefresh } from '../hooks/useSyncDataRefresh';
+import AccessibleConfirmModal from '../components/AccessibleConfirmModal';
+import { HeaderAccountActions } from '../components/HeaderTitle';
 import { askSous, confirmSousActions, type SousTurn } from './agent';
 import type { SousCard, ToolCall } from './tools';
 import { useLayoutMode } from '../layout/useLayoutMode';
@@ -147,6 +151,9 @@ export default function SousScreen() {
     const [inputHeight, setInputHeight] = useState(INPUT_MIN_HEIGHT);
     const freshUntil = useRef(new Map<string, number>());
 
+    const [showClearConfirm, setShowClearConfirm] = useState(false);
+    const [alsoClearMemory, setAlsoClearMemory] = useState(false);
+
     const [composerFocused, setComposerFocusedState] = useState(false);
     const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const onComposerFocus = useCallback(() => {
@@ -181,22 +188,66 @@ export default function SousScreen() {
         pageBackground: c.background,
     });
 
+    const reloadChatFromDb = useCallback(async () => {
+        const rows = await chatOperations.getRecent(CHAT_THREAD_AMPI, 40);
+        if (!rows.length) {
+            setMessages([]);
+            return;
+        }
+        rows.forEach((row: { id: number }) => freshUntil.current.set(String(row.id), 0));
+        setMessages(
+            rows.map((row: { id: number; role: string; text: string; created_at?: number }) => ({
+                id: String(row.id),
+                role: row.role === 'user' ? 'user' : 'sous',
+                text: row.text,
+                createdAt: Number(row.created_at) || Date.now(),
+            }))
+        );
+    }, []);
+
+    useSyncDataRefresh(reloadChatFromDb);
+
+    const confirmClearChat = useCallback(async () => {
+        setShowClearConfirm(false);
+        try {
+            await chatOperations.clearThread(CHAT_THREAD_AMPI);
+            if (alsoClearMemory) {
+                await memoryOperations.clearAll();
+            }
+            freshUntil.current.clear();
+            setMessages([]);
+            setAlsoClearMemory(false);
+            await runSyncPush();
+        } catch (error) {
+            console.error('Error clearing chat:', error);
+        }
+    }, [alsoClearMemory]);
+
+    useLayoutEffect(() => {
+        if (isDesktop) return;
+        const parent = navigation as Nav & { setOptions?: (o: object) => void };
+        parent.setOptions?.({
+            headerRight: () => (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Pressable
+                        onPress={() => setShowClearConfirm(true)}
+                        style={styles.iconButton}
+                        accessibilityRole="button"
+                        accessibilityLabel="Clear chat"
+                    >
+                        <Ionicons name="ellipsis-vertical" size={22} color={c.text.secondary} />
+                    </Pressable>
+                    <HeaderAccountActions tintColor={c.text.primary} />
+                </View>
+            ),
+        });
+    }, [isDesktop, navigation, c.text.primary, c.text.secondary]);
+
     useEffect(() => {
         getVoiceSettings().then((s) => setAutoSpeakState(s.autoSpeak));
-        chatOperations.getRecent(CHAT_THREAD_AMPI, 40).then((rows) => {
-            if (!rows.length) return;
-            rows.forEach((row: { id: number }) => freshUntil.current.set(String(row.id), 0));
-            setMessages(
-                rows.map((row: { id: number; role: string; text: string; created_at?: number }) => ({
-                    id: String(row.id),
-                    role: row.role === 'user' ? 'user' : 'sous',
-                    text: row.text,
-                    createdAt: Number(row.created_at) || Date.now(),
-                }))
-            );
-        });
+        reloadChatFromDb();
         return () => engineRef.current?.stop();
-    }, []);
+    }, [reloadChatFromDb]);
 
     const [voiceNote, setVoiceNote] = useState<string | null>(null);
 
@@ -1044,11 +1095,83 @@ export default function SousScreen() {
         </KeyboardAvoidingView>
     );
 
-    if (!isDesktop) return chat;
+    if (!isDesktop) {
+        return (
+            <>
+                <AccessibleConfirmModal
+                    visible={showClearConfirm}
+                    title="Clear chat?"
+                    message={`This removes the conversation on this device and syncs the deletion to your other signed-in browsers. ${ASSISTANT_NAME}'s saved memories are kept unless you choose to clear them below.`}
+                    confirmLabel="Clear chat"
+                    cancelLabel="Cancel"
+                    destructive
+                    onCancel={() => {
+                        setShowClearConfirm(false);
+                        setAlsoClearMemory(false);
+                    }}
+                    onConfirm={() => confirmClearChat()}
+                >
+                    <Pressable
+                        onPress={() => setAlsoClearMemory((v) => !v)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: alsoClearMemory }}
+                        accessibilityLabel="Also clear Ampi's memory"
+                    >
+                        <Ionicons
+                            name={alsoClearMemory ? 'checkbox' : 'square-outline'}
+                            size={22}
+                            color={alsoClearMemory ? theme.primary[500] : c.text.secondary}
+                        />
+                        <Text style={{ color: c.text.primary, fontSize: 15, flex: 1 }}>
+                            Also clear {ASSISTANT_NAME}&apos;s memory
+                        </Text>
+                    </Pressable>
+                </AccessibleConfirmModal>
+                {chat}
+            </>
+        );
+    }
 
     return (
         <View style={{ flex: 1, minHeight: 0, backgroundColor: c.background }}>
+            <AccessibleConfirmModal
+                visible={showClearConfirm}
+                title="Clear chat?"
+                message={`This removes the conversation on this device and syncs the deletion to your other signed-in browsers. ${ASSISTANT_NAME}'s saved memories are kept unless you choose to clear them below.`}
+                confirmLabel="Clear chat"
+                cancelLabel="Cancel"
+                destructive
+                onCancel={() => {
+                    setShowClearConfirm(false);
+                    setAlsoClearMemory(false);
+                }}
+                onConfirm={() => confirmClearChat()}
+            >
+                <Pressable
+                    onPress={() => setAlsoClearMemory((v) => !v)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: alsoClearMemory }}
+                    accessibilityLabel="Also clear Ampi's memory"
+                >
+                    <Ionicons
+                        name={alsoClearMemory ? 'checkbox' : 'square-outline'}
+                        size={22}
+                        color={alsoClearMemory ? theme.primary[500] : c.text.secondary}
+                    />
+                    <Text style={{ color: c.text.primary, fontSize: 15, flex: 1 }}>Also clear {ASSISTANT_NAME}&apos;s memory</Text>
+                </Pressable>
+            </AccessibleConfirmModal>
             <DesktopPageHeader title={ASSISTANT_NAME} subtitle={ASSISTANT_TAGLINE}>
+                <Pressable
+                    onPress={() => setShowClearConfirm(true)}
+                    style={styles.iconButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear chat"
+                >
+                    <Ionicons name="ellipsis-vertical" size={22} color={c.text.secondary} />
+                </Pressable>
                 <AiBadge />
                 <Pressable
                     onPress={() => navigation.navigate('AiChef')}

@@ -46,7 +46,22 @@ export default async function handler(req, res) {
     }
 
     try {
-        const profile = await verifyGoogleIdToken(idToken, nonce);
+        let profile;
+        if (
+            process.env.AUTH_TEST_MODE === '1' &&
+            idToken === 'amplifood-test-id-token' &&
+            nonce === 'amplifood-test-nonce'
+        ) {
+            const email = String(req.body?.testEmail || 'owner@example.com').trim();
+            profile = {
+                sub: String(req.body?.testSub || 'test-google-sub'),
+                email,
+                name: String(req.body?.testName || 'Test Owner'),
+                picture: '',
+            };
+        } else {
+            profile = await verifyGoogleIdToken(idToken, nonce);
+        }
         const token = await signSession(profile);
         res.status(200).json({
             token,

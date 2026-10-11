@@ -712,8 +712,17 @@ export const chatOperations = {
 
     async clearThread(threadId) {
         const db = getDatabase();
-        await db.runAsync('DELETE FROM chat_messages WHERE thread_id = ?', [threadId]);
-        await db.runAsync('UPDATE chat_threads SET summary = NULL WHERE id = ?', [threadId]);
+        const rows = await db.getAllAsync('SELECT id FROM chat_messages WHERE thread_id = ?', [threadId]);
+        for (const row of rows) {
+            await db.runAsync('DELETE FROM chat_messages WHERE id = ?', [row.id]);
+        }
+        await db.runAsync('UPDATE chat_threads SET summary = NULL, updated_at = ? WHERE id = ?', [Date.now(), threadId]);
+        try {
+            const { scheduleSyncPush } = await import('../sync/engine');
+            scheduleSyncPush();
+        } catch {
+            // sync not loaded yet
+        }
     },
 };
 

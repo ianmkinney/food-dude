@@ -40,7 +40,7 @@ export function desktopNavFromWebPath(): DesktopNavSnapshot | null {
     return null;
 }
 
-function desktopNavFromStateTree(state: NavState): DesktopNavSnapshot | null {
+export function desktopNavFromStateTree(state: NavState): DesktopNavSnapshot | null {
     if (!state) return null;
     const route = state.routes[state.index];
     if (!route) return null;
@@ -64,15 +64,10 @@ function desktopNavFromStateTree(state: NavState): DesktopNavSnapshot | null {
     return { activeKey: route.name, title: titleForKey(route.name) };
 }
 
+/** Prefer navigation tree over URL so sidebar highlight updates on the first click (#54). */
 export function desktopNavFromState(state: NavState): DesktopNavSnapshot {
-    const fromPath = desktopNavFromWebPath();
     const fromTree = desktopNavFromStateTree(state);
-    if (fromPath && fromTree && fromPath.activeKey !== fromTree.activeKey) {
-        // Linking often paints the tab screen before the tab navigator state catches up.
-        const mainRoute = state?.routes[state?.index ?? 0];
-        if (mainRoute?.name === 'Main' || fromPath.activeKey !== ASSISTANT_NAME) {
-            return fromPath;
-        }
-    }
-    return fromTree ?? fromPath ?? { activeKey: ASSISTANT_NAME, title: titleForKey(ASSISTANT_NAME) };
+    if (fromTree) return fromTree;
+    const fromPath = desktopNavFromWebPath();
+    return fromPath ?? { activeKey: ASSISTANT_NAME, title: titleForKey(ASSISTANT_NAME) };
 }

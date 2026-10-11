@@ -31,6 +31,9 @@ export function usePartyLivePoll({ livePartyId, enabled = true, onSnapshot }) {
                         await setStoredLiveVersion(livePartyId, party.version);
                     }
                     onSnapshot?.(party);
+                    import('../sync/syncEvents')
+                        .then(({ emitSyncData }) => emitSyncData({ kind: 'party' }))
+                        .catch(() => undefined);
                     return;
                 }
                 const result = await fetchLiveChanges({ livePartyId, sinceVersion: since });
@@ -41,6 +44,9 @@ export function usePartyLivePoll({ livePartyId, enabled = true, onSnapshot }) {
                             : await fetchLivePartySnapshot(livePartyId);
                     await setStoredLiveVersion(livePartyId, result.version ?? party.version);
                     onSnapshot?.(party);
+                    import('../sync/syncEvents')
+                        .then(({ emitSyncData }) => emitSyncData({ kind: 'party' }))
+                        .catch(() => undefined);
                 }
             } catch (error) {
                 console.warn('[party live poll]', error?.message || error);

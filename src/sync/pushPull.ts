@@ -27,9 +27,12 @@ async function loadRowPayload(
     return row ?? null;
 }
 
-export async function pullAllIncremental(db: SQLiteDatabase): Promise<number> {
+export type PullBatchResult = { applied: number; collections: string[] };
+
+export async function pullAllIncremental(db: SQLiteDatabase): Promise<PullBatchResult> {
     let cursor = await getSyncCursor();
     let applied = 0;
+    const collections = new Set<string>();
     for (;;) {
         const batch = await pullSyncBatch(cursor);
         if (!batch.records?.length) {
@@ -38,14 +41,17 @@ export async function pullAllIncremental(db: SQLiteDatabase): Promise<number> {
         }
         await withSyncSuppress(db, async () => {
             for (const rec of batch.records) {
-                if (await applyRemoteRecord(db, rec)) applied += 1;
+                if (await applyRemoteRecord(db, rec)) {
+                    applied += 1;
+                    collections.add(rec.collection);
+                }
             }
         });
         cursor = batch.nextCursor;
         await setSyncCursor(cursor);
         if (!batch.hasMore) break;
     }
-    return applied;
+    return { applied, collections: [...collections] };
 }
 
 export async function pushDirtyRecords(db: SQLiteDatabase): Promise<number> {

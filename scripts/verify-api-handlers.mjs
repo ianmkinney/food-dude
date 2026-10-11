@@ -31,6 +31,7 @@ const modules = [
     '_lib/openRouterImage.js',
     '_lib/openRouterModels.js',
     '_lib/openRouterStats.js',
+    '_lib/chatOpenRouterMessages.js',
     '_lib/elevenLabs.js',
     'auth/google.js',
     'auth/session.js',

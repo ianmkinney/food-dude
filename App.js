@@ -255,6 +255,10 @@ function AppContent() {
         const { runDesktopScreenshotSeed } = await import('./src/demo/runDesktopScreenshotSeed');
         await runDesktopScreenshotSeed();
       }
+      if (Platform.OS === 'web' && globalThis.__CROSS_TAB_SYNC_TEST__) {
+        const { runCrossTabSyncTestSeed } = await import('./src/demo/runCrossTabSyncTestSeed');
+        await runCrossTabSyncTestSeed();
+      }
       console.log('✅ AmpliFood app initialized successfully');
       setDbMode(getDatabaseMode());
       setError(null);
