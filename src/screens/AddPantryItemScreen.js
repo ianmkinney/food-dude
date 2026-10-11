@@ -20,6 +20,8 @@ import { useViewTransitionTarget } from '../motion/viewTransition';
 import { pantryOperations } from '../database/operations';
 import { lookupBarcode } from '../services/barcodeService';
 import { goBackOr } from '../navigation/goBackOr';
+import PantryExpirationDateField from '../components/PantryExpirationDateField';
+import { pantryExpirationFromStorage, pantryExpirationToStorage } from '../utils/pantryExpiration';
 
 const AddPantryItemScreen = () => {
     const navigation = useNavigation();
@@ -119,7 +121,7 @@ const AddPantryItemScreen = () => {
                 category,
                 barcode,
                 imageUri,
-                expirationDate: expirationDate ? new Date(expirationDate).toISOString() : null,
+                expirationDate: pantryExpirationToStorage(expirationDate),
             });
             Alert.alert('Success', 'Item added to pantry', [
                 { text: 'OK', onPress: () => goBackOr(navigation, 'Pantry') }
@@ -207,6 +209,12 @@ const AddPantryItemScreen = () => {
                             onChangeText={setCategory}
                             placeholder="e.g. Dairy, Produce"
                             placeholderTextColor={theme.colors.text.tertiary}
+                        />
+
+                        <PantryExpirationDateField
+                            theme={theme}
+                            value={expirationDate}
+                            onChange={setExpirationDate}
                         />
 
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Barcode</Text>

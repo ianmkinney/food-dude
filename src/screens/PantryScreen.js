@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -21,6 +21,8 @@ import ScreenSkeleton from '../components/Skeleton';
 import { useLayoutMode } from '../layout/useLayoutMode';
 import { desktopListStyles, desktopPageStyles } from '../components/layout/desktopTheme';
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
+import PantryExpirationBadge from '../components/PantryExpirationBadge';
+import { expirationBadge, sortPantryItemsByExpiration } from '../utils/pantryExpiration';
 
 const PantryScreen = () => {
     const navigation = useNavigation();
@@ -28,7 +30,18 @@ const PantryScreen = () => {
     const theme = getTheme(isDark);
     const { isDesktop } = useLayoutMode();
     const { data, showSkeleton, refresh } = useQuery(pantryQuery.key, pantryQuery.fetch);
-    const pantryItems = data || [];
+    const pantryItems = useMemo(
+        () => sortPantryItemsByExpiration(data || []),
+        [data]
+    );
+    const expiringSoonCount = useMemo(
+        () =>
+            (data || []).filter((item) => {
+                const badge = expirationBadge(item.expiration_date);
+                return badge && (badge.tone === 'soon' || badge.tone === 'expired');
+            }).length,
+        [data]
+    );
 
     const loadPantryItems = useCallback(async () => {
         try {
@@ -87,14 +100,7 @@ const PantryScreen = () => {
                 </View>
             </View>
             <View style={styles.itemActions}>
-                {item.expiration_date && (
-                    <View style={[styles.expirationBadge, { backgroundColor: theme.accent.yellow + '20' }]}>
-                        <Ionicons name="time-outline" size={14} color={theme.accent.yellow} />
-                        <Text style={[styles.expirationText, { color: theme.accent.yellow }]}>
-                            Exp: {new Date(item.expiration_date).toLocaleDateString()}
-                        </Text>
-                    </View>
-                )}
+                <PantryExpirationBadge expirationDate={item.expiration_date} theme={theme} />
                 <View style={styles.actionButtons}>
                     <AnimatedPressable accessibilityRole="button" accessibilityLabel="Edit item"
                         style={[styles.actionButton, { backgroundColor: theme.primary[100] }]}
@@ -125,7 +131,14 @@ const PantryScreen = () => {
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {isDesktop ? (
-                <DesktopPageHeader title="My Pantry" subtitle={`${pantryItems.length} items on hand`}>
+                <DesktopPageHeader
+                    title="My Pantry"
+                    subtitle={
+                        expiringSoonCount
+                            ? `${pantryItems.length} items · ${expiringSoonCount} expiring soon`
+                            : `${pantryItems.length} items on hand`
+                    }
+                >
                     <AnimatedPressable
                         accessibilityRole="button"
                         accessibilityLabel="Add pantry item"
@@ -140,6 +153,15 @@ const PantryScreen = () => {
             {data === undefined ? (
                 showSkeleton ? <ScreenSkeleton /> : null
             ) : (
+                <>
+                {expiringSoonCount > 0 && !isDesktop ? (
+                    <View style={[styles.soonBanner, { backgroundColor: theme.accent.yellow + '18' }]}>
+                        <Ionicons name="time-outline" size={18} color={theme.accent.yellow} />
+                        <Text style={[styles.soonBannerText, { color: theme.colors.text.primary }]}>
+                            {expiringSoonCount} item{expiringSoonCount === 1 ? '' : 's'} expiring within a week
+                        </Text>
+                    </View>
+                ) : null}
                 <FlatList
                     key={isDesktop ? 'pantry-grid' : 'pantry-list'}
                     data={pantryItems}
@@ -152,6 +174,7 @@ const PantryScreen = () => {
                     refreshing={false}
                     onRefresh={loadPantryItems}
                 />
+                </>
             )}
 
             {!isDesktop ? (
@@ -175,6 +198,21 @@ const styles = StyleSheet.create({
     },
     listContent: {
         padding: 16,
+    },
+    soonBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginHorizontal: 16,
+        marginTop: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 10,
+    },
+    soonBannerText: {
+        fontSize: 14,
+        fontWeight: '600',
+        flex: 1,
     },
     itemCard: {
         padding: 16,
