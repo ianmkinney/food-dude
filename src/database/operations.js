@@ -97,8 +97,8 @@ export const recipeOperations = {
             const result = await db.runAsync(
                 `INSERT INTO recipes (title, description, source_url, source_platform, image_uri, 
          servings, prep_time, cook_time, total_time, difficulty, cuisine, notes, is_cooked, date_added,
-         calories, protein, carbohydrates, fat, fiber, sugar, sodium, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         calories, protein, carbohydrates, fat, fiber, sugar, sodium, nutrition_ai_estimate, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     recipe.title,
                     recipe.description || null,
@@ -121,6 +121,7 @@ export const recipeOperations = {
                     recipe.fiber || null,
                     recipe.sugar || null,
                     recipe.sodium || null,
+                    recipe.nutritionAiEstimate ? 1 : 0,
                     now,
                     now,
                 ]
@@ -315,6 +316,7 @@ export const recipeOperations = {
                     fiber = ?,
                     sugar = ?,
                     sodium = ?,
+                    nutrition_ai_estimate = ?,
                     updated_at = ?
                  WHERE id = ?`,
                 [
@@ -339,6 +341,9 @@ export const recipeOperations = {
                     updates.fiber !== undefined ? (updates.fiber ?? null) : (current.fiber ?? null),
                     updates.sugar !== undefined ? (updates.sugar ?? null) : (current.sugar ?? null),
                     updates.sodium !== undefined ? (updates.sodium ?? null) : (current.sodium ?? null),
+                    updates.nutritionAiEstimate !== undefined
+                        ? (updates.nutritionAiEstimate ? 1 : 0)
+                        : (current.nutrition_ai_estimate || 0),
                     now,
                     id
                 ]
@@ -1719,5 +1724,118 @@ export const partyMealIngredientClaimOperations = {
                 ]
             );
         }
+    },
+};
+
+const enhanceListeners = new Set();
+
+export function subscribeRecipeEnhanceJobs(listener) {
+    enhanceListeners.add(listener);
+    return () => enhanceListeners.delete(listener);
+}
+
+function notifyEnhanceJobs() {
+    enhanceListeners.forEach((l) => {
+        try {
+            l();
+        } catch {
+            // ignore
+        }
+    });
+}
+
+export const recipeEnhanceJobOperations = {
+    async enqueue({ recipeId, customInstructions = null }) {
+        const db = getDatabase();
+        await db.runAsync(
+            `DELETE FROM recipe_enhance_jobs WHERE recipe_id = ? AND status IN ('queued', 'failed')`,
+            [recipeId]
+        );
+        const now = Date.now();
+        const id = `enh-${now}-${Math.random().toString(36).slice(2, 9)}`;
+        await db.runAsync(
+            `INSERT INTO recipe_enhance_jobs (id, recipe_id, status, phase, custom_instructions, partial_json, result_json, error, attempt_count, created_at, updated_at)
+             VALUES (?, ?, 'queued', NULL, ?, NULL, NULL, NULL, 0, ?, ?)`,
+            [id, recipeId, customInstructions || null, now, now]
+        );
+        notifyEnhanceJobs();
+        return id;
+    },
+
+    async getById(id) {
+        const db = getDatabase();
+        return db.getFirstAsync('SELECT * FROM recipe_enhance_jobs WHERE id = ?', [id]);
+    },
+
+    async getActiveForRecipe(recipeId) {
+        const db = getDatabase();
+        return db.getFirstAsync(
+            `SELECT * FROM recipe_enhance_jobs WHERE recipe_id = ? AND status IN ('queued', 'running') ORDER BY created_at DESC LIMIT 1`,
+            [recipeId]
+        );
+    },
+
+    async getLatestForRecipe(recipeId) {
+        const db = getDatabase();
+        return db.getFirstAsync(
+            `SELECT * FROM recipe_enhance_jobs WHERE recipe_id = ? ORDER BY updated_at DESC LIMIT 1`,
+            [recipeId]
+        );
+    },
+
+    async listActiveRecipeIds() {
+        const db = getDatabase();
+        const rows = await db.getAllAsync(
+            `SELECT DISTINCT recipe_id FROM recipe_enhance_jobs WHERE status IN ('queued', 'running')`
+        );
+        return rows.map((r) => r.recipe_id);
+    },
+
+    async claimNextQueued() {
+        const db = getDatabase();
+        const row = await db.getFirstAsync(
+            `SELECT * FROM recipe_enhance_jobs WHERE status = 'queued' ORDER BY created_at ASC LIMIT 1`
+        );
+        if (!row) return null;
+        const now = Date.now();
+        await db.runAsync(
+            `UPDATE recipe_enhance_jobs SET status = 'running', phase = 'body', updated_at = ?, attempt_count = attempt_count + 1 WHERE id = ?`,
+            [now, row.id]
+        );
+        notifyEnhanceJobs();
+        return { ...row, status: 'running', phase: 'body' };
+    },
+
+    async patch(id, fields) {
+        const db = getDatabase();
+        const now = Date.now();
+        await db.runAsync(
+            `UPDATE recipe_enhance_jobs SET
+                status = COALESCE(?, status),
+                phase = COALESCE(?, phase),
+                partial_json = COALESCE(?, partial_json),
+                result_json = COALESCE(?, result_json),
+                error = COALESCE(?, error),
+                updated_at = ?
+             WHERE id = ?`,
+            [
+                fields.status ?? null,
+                fields.phase ?? null,
+                fields.partialJson ?? null,
+                fields.resultJson ?? null,
+                fields.error ?? null,
+                now,
+                id,
+            ]
+        );
+        notifyEnhanceJobs();
+    },
+
+    async markFailed(id, error) {
+        await this.patch(id, { status: 'failed', error: String(error).slice(0, 500) });
+    },
+
+    async markDone(id, resultJson) {
+        await this.patch(id, { status: 'done', phase: 'done', resultJson });
     },
 };

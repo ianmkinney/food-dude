@@ -12,6 +12,8 @@ import { toPersistentImageUri } from '../services/mediaPrep';
 import { Platform } from 'react-native';
 import { ATTACHMENT_SOURCE_LABEL } from './attachmentLimits';
 import type { ChatRecipeAction } from '../chat/chatRecipes';
+import { ensureRecipeNutritionAsync, nutritionFieldsFromCreateArgs } from '../utils/ensureRecipeNutrition';
+import { hasAnyNutrition } from '../utils/recipeNutrition';
 
 // What Sous can actually do in the app. The model asks for these by name in its
 // JSON reply (see agent.ts); each one runs against the local database and
@@ -32,6 +34,14 @@ export type ToolCall =
               servings?: number;
               prep_time?: number;
               cook_time?: number;
+              calories?: number;
+              protein?: number;
+              carbohydrates?: number;
+              carbs?: number;
+              fat?: number;
+              fiber?: number;
+              sugar?: number;
+              sodium?: number;
               ingredients: { ingredient: string; quantity?: string | number | null; unit?: string | null }[];
               instructions: string[];
           };
@@ -88,7 +98,7 @@ export type SousCard =
 export const TOOL_SPEC = `
 - find_recipes {"query": string}: search the user's saved recipes.
 - import_recipe {"url"?: string, "text"?: string}: import a recipe from a link, pasted text, or an attached file into the recipe book.
-- create_recipe {"title", "description"?, "servings"?, "prep_time"?, "cook_time"?, "ingredients": [{"ingredient", "quantity"?, "unit"?}], "instructions": [string]}: save a NEW recipe (from an attachment or your draft). Only when the user wants a new dish saved.
+- create_recipe {"title", "description"?, "servings"?, "prep_time"?, "cook_time"?, "calories"?, "protein"?, "carbohydrates"?, "fat"?, "fiber"?, "sugar"?, "sodium"?, "ingredients": [{"ingredient", "quantity"?, "unit"?}], "instructions": [string]}: save a NEW recipe (from an attachment or your draft). Always include per-serving nutrition estimates (calories, protein, carbohydrates, fat, fiber, sugar, sodium) and servings when saving.
 - update_recipe {"recipe_id": number, "title"?, "description"?, "servings"?, "prep_time"?, "cook_time"?, "ingredients"?: [{"ingredient", "quantity"?, "unit"?}], "instructions"?: [string]}: rename or edit a recipe that is already saved. Send only the fields that change; ingredients and instructions replace the whole list.
 If the user attached a photo, the app uses it as the recipe image automatically; never put image URLs in tool arguments.
 - add_to_meal_plan {"recipe_id"?: number, "recipe_title"?: string, "date": "YYYY-MM-DD", "meal_type": "breakfast"|"lunch"|"dinner"}: schedule a saved recipe.
@@ -190,12 +200,23 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
             );
             const userCover = await attachmentCover(options);
             const cover = userCover || result.recipe.imageUri || null;
-            const id = Number(await recipeOperations.create({ ...result.recipe, imageUri: cover }));
+            const nutrition = nutritionFieldsFromCreateArgs(result.recipe);
+            const id = Number(
+                await recipeOperations.create({
+                    ...result.recipe,
+                    imageUri: cover,
+                    ...nutrition,
+                    nutritionAiEstimate: Object.keys(nutrition).length ? 1 : 0,
+                })
+            );
             const fromFile = Boolean(userCover);
             await recipeOperations.setProvenance(id, {
                 isAiGenerated: aiExtracted,
                 imageSource: cover ? (fromFile ? 'user' : 'import') : null,
             });
+            if (aiExtracted && !hasAnyNutrition({ ...result.recipe, ...nutrition })) {
+                void ensureRecipeNutritionAsync(id);
+            }
             return {
                 type: 'recipe',
                 title: aiExtracted ? 'Imported (AI from video/caption)' : 'Imported to your recipe book',
@@ -211,16 +232,25 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
             const a = call.args;
             const cover = await attachmentCover(options);
             const fromFile = Boolean(cover);
+            const nutrition = nutritionFieldsFromCreateArgs(a) as Record<string, number | undefined>;
             const id = Number(
                 await recipeOperations.create({
                     title: a.title,
                     description: a.description || null,
-                    servings: a.servings || null,
+                    servings: nutrition.servings ?? a.servings ?? null,
                     prepTime: a.prep_time || null,
                     cookTime: a.cook_time || null,
                     totalTime: a.prep_time && a.cook_time ? a.prep_time + a.cook_time : null,
                     sourcePlatform: 'Ampi',
                     imageUri: cover,
+                    calories: nutrition.calories ?? null,
+                    protein: nutrition.protein ?? null,
+                    carbohydrates: nutrition.carbohydrates ?? null,
+                    fat: nutrition.fat ?? null,
+                    fiber: nutrition.fiber ?? null,
+                    sugar: nutrition.sugar ?? null,
+                    sodium: nutrition.sodium ?? null,
+                    nutritionAiEstimate: 1,
                     ingredients: (a.ingredients || []).map((ing) => ({
                         ingredient: ing.ingredient,
                         quantity: asText(ing.quantity),
@@ -230,6 +260,9 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
                 })
             );
             await recipeOperations.setProvenance(id, { isAiGenerated: true, imageSource: cover ? (fromFile ? 'user' : 'ai') : null });
+            if (!hasAnyNutrition(nutrition)) {
+                void ensureRecipeNutritionAsync(id);
+            }
             return {
                 type: 'recipe',
                 title: 'Saved to your recipe book',

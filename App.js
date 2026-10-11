@@ -247,6 +247,8 @@ function AppContent() {
   const prepare = useCallback(async () => {
     try {
       await initDatabase();
+      const { startRecipeEnhanceWorker } = await import('./src/ai/recipeEnhanceWorker');
+      startRecipeEnhanceWorker();
       if (Platform.OS === 'web' && globalThis.__PARTY_SCREENSHOT_SEED__) {
         const { runPartyScreenshotSeed } = await import('./src/demo/runPartyScreenshotSeed');
         await runPartyScreenshotSeed();
@@ -258,6 +260,10 @@ function AppContent() {
       if (Platform.OS === 'web' && globalThis.__CROSS_TAB_SYNC_TEST__) {
         const { runCrossTabSyncTestSeed } = await import('./src/demo/runCrossTabSyncTestSeed');
         await runCrossTabSyncTestSeed();
+      }
+      if (Platform.OS === 'web' && globalThis.__AMPI_SCROLL_TEST__) {
+        const { runAmpiScrollTestSeed } = await import('./src/demo/runAmpiScrollTestSeed');
+        await runAmpiScrollTestSeed();
       }
       console.log('✅ AmpliFood app initialized successfully');
       setDbMode(getDatabaseMode());

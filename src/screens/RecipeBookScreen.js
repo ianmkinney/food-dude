@@ -15,6 +15,7 @@ import { useSyncDataRefresh } from '../hooks/useSyncDataRefresh';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { recipeOperations } from '../database/operations';
+import { useActiveEnhanceRecipeIds } from '../hooks/useRecipeEnhanceStatus';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
@@ -26,7 +27,7 @@ import { desktopPageStyles, desktopRecipeStyles } from '../components/layout/des
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 import RecipeBookDesktopGrid from './RecipeBookDesktopGrid';
 
-const RecipeCard = ({ item, index, theme, navigation, layout = 'horizontal' }) => {
+const RecipeCard = ({ item, index, theme, navigation, layout = 'horizontal', enhancing = false }) => {
     const thumbRef = useRef(null);
     const cooked = item.is_cooked === 1 || item.is_cooked === true;
     const vertical = layout === 'vertical';
@@ -76,6 +77,12 @@ const RecipeCard = ({ item, index, theme, navigation, layout = 'horizontal' }) =
                         </Text>
                     )}
                     <View style={styles.recipeMeta}>
+                        {enhancing && (
+                            <View style={styles.metaItem}>
+                                <Ionicons name="sparkles" size={14} color={theme.accent.purple} />
+                                <Text style={[styles.metaText, { color: theme.accent.purple }]}>Enhancing…</Text>
+                            </View>
+                        )}
                         {!!item.total_time && (
                             <View style={styles.metaItem}>
                                 <Ionicons name="time-outline" size={14} color={theme.colors.text.tertiary} />
@@ -107,6 +114,7 @@ const RecipeBookScreen = ({ navigation }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // 'all', 'cooked', 'uncooked'
+    const enhancingIds = useActiveEnhanceRecipeIds();
 
     // Header customization removed as per user request
     const loadRecipes = useCallback(async () => {
@@ -192,9 +200,19 @@ const RecipeBookScreen = ({ navigation }) => {
 
     const recipeKey = useCallback((item) => item.id.toString(), []);
 
-    const renderRecipeCard = useCallback(({ item, index }) => (
-        <RecipeCard item={item} index={index} theme={theme} navigation={navigation} layout="horizontal" />
-    ), [navigation, theme]);
+    const renderRecipeCard = useCallback(
+        ({ item, index }) => (
+            <RecipeCard
+                item={item}
+                index={index}
+                theme={theme}
+                navigation={navigation}
+                layout="horizontal"
+                enhancing={enhancingIds.has(item.id)}
+            />
+        ),
+        [navigation, theme, enhancingIds]
+    );
 
     const renderEmptyState = () => (
         <EmptyState
@@ -353,6 +371,7 @@ const RecipeBookScreen = ({ navigation }) => {
                                     theme={theme}
                                     navigation={navigation}
                                     layout="vertical"
+                                    enhancing={enhancingIds.has(item.id)}
                                 />
                             ))}
                         </RecipeBookDesktopGrid>

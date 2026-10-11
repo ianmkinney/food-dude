@@ -39,6 +39,9 @@ import { useSpeechInput } from '../voice/useSpeechInput';
 import { WEB_SPEECH_NOTICE } from '../voice/webSpeechRecognition';
 import * as ImagePicker from 'expo-image-picker';
 import { recipeOperations } from '../database/operations';
+import { ensureRecipeNutritionAsync } from '../utils/ensureRecipeNutrition';
+import { hasAnyNutrition } from '../utils/recipeNutrition';
+import useReducedMotion from '../hooks/useReducedMotion';
 import {
     importRecipeFromVideoAsset,
     extractSocialUrlFromText,
@@ -135,6 +138,7 @@ export default function SousScreen() {
     const navigation = useNavigation() as unknown as Nav;
     useOnboardingTour();
     const allergies = useAllergies();
+    const reduceMotion = useReducedMotion();
 
     const [messages, setMessages] = useState<Message[]>([]);
     const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
@@ -177,14 +181,37 @@ export default function SousScreen() {
         },
         []
     );
-    // Like Messages, the conversation stays pinned to the newest message when
-    // the list resizes (keyboard, tab bar) unless the user scrolled up to read.
-    const atBottom = useRef(true);
-    const scrollToLatest = useCallback(() => {
-        if (atBottom.current) listRef.current?.scrollToEnd({ animated: false });
+    const followLatest = useRef(true);
+    const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+    const scrollToLatest = useCallback(
+        (force = false) => {
+            if (!force && !followLatest.current) return;
+            const animated = !reduceMotion;
+            requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated }));
+        },
+        [reduceMotion]
+    );
+    const updateScrollFollow = useCallback((event: { nativeEvent: { contentOffset: { y: number }; contentSize: { height: number }; layoutMeasurement: { height: number } } }) => {
+        const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+        const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+        const nearBottom = distanceFromBottom < 72;
+        if (nearBottom) {
+            followLatest.current = true;
+            setShowJumpToLatest(false);
+        } else {
+            setShowJumpToLatest(true);
+        }
     }, []);
+    const onUserScrollDrag = useCallback(() => {
+        followLatest.current = false;
+    }, []);
+    const jumpToLatest = useCallback(() => {
+        followLatest.current = true;
+        setShowJumpToLatest(false);
+        scrollToLatest(true);
+    }, [scrollToLatest]);
     const c = theme.colors;
-    const { keyboardOpen } = useKeyboardViewport(composerFocused, scrollToLatest, {
+    const { keyboardOpen } = useKeyboardViewport(composerFocused, () => scrollToLatest(true), {
         pageBackground: c.background,
     });
 
@@ -313,6 +340,9 @@ export default function SousScreen() {
                 attachmentNames: attachments.map((a) => a.name),
             };
             setMessages((prev) => [...prev, userMessage]);
+            followLatest.current = true;
+            setShowJumpToLatest(false);
+            scrollToLatest(true);
             setThinking(true);
             const videoAsset = attachedVideo;
             setAttachedVideo(null);
@@ -364,8 +394,16 @@ export default function SousScreen() {
                         );
                     }
                     const recipe = imported.recipe;
-                    const id = Number(await recipeOperations.create(recipe));
+                    const id = Number(
+                        await recipeOperations.create({
+                            ...recipe,
+                            nutritionAiEstimate: hasAnyNutrition(recipe) ? 1 : 0,
+                        })
+                    );
                     await recipeOperations.setProvenance(id, { isAiGenerated: true });
+                    if (!hasAnyNutrition(recipe)) {
+                        void ensureRecipeNutritionAsync(id);
+                    }
                     const card: SousCard = {
                         type: 'recipe',
                         title: 'Imported from video (AI)',
@@ -431,7 +469,7 @@ export default function SousScreen() {
                 setThinking(false);
             }
         },
-        [messages, thinking, autoSpeak, speak, attachedVideo, pendingAttachments, composerFocused]
+        [messages, thinking, autoSpeak, speak, attachedVideo, pendingAttachments, composerFocused, scrollToLatest]
     );
 
     const confirmActions = useCallback(async (messageId: string) => {
@@ -477,9 +515,16 @@ export default function SousScreen() {
         markWebSpeechNoticeSeen();
     };
 
+    const messagesScrollKey = useMemo(
+        () =>
+            `${messages.length}:${thinking}:${messages
+                .map((m) => `${m.id}:${m.text.length}:${m.cards?.length ?? 0}:${m.confirmDone ? 1 : 0}`)
+                .join(';')}`,
+        [messages, thinking]
+    );
     useEffect(() => {
-        if (messages.length) requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-    }, [messages.length, thinking]);
+        if (messages.length || thinking) scrollToLatest();
+    }, [messagesScrollKey, scrollToLatest]);
 
     const toggleAutoSpeak = async () => {
         const next = !autoSpeak;
@@ -870,10 +915,11 @@ export default function SousScreen() {
             >
             <FlatList
                 ref={listRef}
+                testID="ampi-chat-list"
                 data={messages}
                 keyExtractor={(m) => m.id}
                 renderItem={renderMessage}
-                extraData={speakingId}
+                extraData={`${speakingId}:${messagesScrollKey}`}
                 ListEmptyComponent={hero}
                 ListHeaderComponent={
                     isDesktop && started && messages.length > 0 ? (
@@ -898,13 +944,11 @@ export default function SousScreen() {
                 ]}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
-                onLayout={scrollToLatest}
-                onContentSizeChange={scrollToLatest}
-                onScroll={(e) => {
-                    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-                    atBottom.current = contentSize.height - (contentOffset.y + layoutMeasurement.height) < 48;
-                }}
-                scrollEventThrottle={64}
+                onLayout={() => scrollToLatest()}
+                onContentSizeChange={() => scrollToLatest()}
+                onScrollBeginDrag={onUserScrollDrag}
+                onScroll={updateScrollFollow}
+                scrollEventThrottle={16}
                 ListFooterComponent={thinking ? (
                     <Enter springy distance={16} style={styles.thinking}>
                         <TypingBubble
@@ -916,6 +960,18 @@ export default function SousScreen() {
                     </Enter>
                 ) : null}
             />
+            {showJumpToLatest ? (
+                <Pressable
+                    testID="ampi-jump-latest"
+                    onPress={jumpToLatest}
+                    style={[styles.jumpPill, { backgroundColor: c.surface, borderColor: c.border }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Jump to latest message"
+                >
+                    <Ionicons name="chevron-down" size={16} color={theme.primary[600]} />
+                    <Text style={[styles.jumpPillText, { color: theme.primary[700] }]}>Jump to latest</Text>
+                </Pressable>
+            ) : null}
             </View>
             {!!voiceNote && !listening && !mic.error && (
                 <Text style={[styles.micStatus, { color: c.text.secondary }]}>{voiceNote}</Text>
@@ -1212,8 +1268,25 @@ const keepComposerFocus =
 const styles = StyleSheet.create({
     root: { flex: 1 },
     rootDesktop: { minHeight: 0 },
-    chatListViewport: { flex: 1, minHeight: 0 },
-    chatListViewportNative: { flex: 1 },
+    chatListViewport: { flex: 1, minHeight: 0, position: 'relative' },
+    chatListViewportNative: { flex: 1, position: 'relative' },
+    jumpPill: {
+        position: 'absolute',
+        bottom: 12,
+        alignSelf: 'center',
+        left: '50%',
+        transform: [{ translateX: -90 }],
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 20,
+        borderWidth: 1,
+        zIndex: 4,
+        ...Platform.select({ web: { boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }, default: {} }),
+    },
+    jumpPillText: { fontSize: 14, fontWeight: '700' },
     listDesktop: { flex: 1, minHeight: 0 },
     listDesktopPinned: { flexGrow: 1 },
     desktopChatSpacer: { flexGrow: 1, minHeight: 1 },

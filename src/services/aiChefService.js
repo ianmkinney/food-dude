@@ -671,6 +671,42 @@ Return ONLY a valid JSON object with this structure (no markdown, no code blocks
         }
     }
 
+    async enhanceRecipeBodyPhase(recipe, customInstructions = null) {
+        await requireAiConfigured();
+        const recipeInfo = this._recipeInfoBlock(recipe);
+        const prompt = `Return ONLY JSON for recipe body improvements (ingredients, instructions, times, meta). ${customInstructions ? `Apply: ${customInstructions}` : ''}\n${recipeInfo}`;
+        const text = await this.retryOperation(() => generateText(prompt, { feature: 'recipeEnhance', model: 'google/gemini-2.5-flash' }));
+        return JSON.parse(this._cleanJson(text));
+    }
+
+    async enhanceRecipeNutritionPhase(recipe, bodyRecipe, customInstructions = null) {
+        await requireAiConfigured();
+        const merged = { ...recipe, ...bodyRecipe };
+        const recipeInfo = this._recipeInfoBlock(merged);
+        const prompt = `Return ONLY JSON: {"nutrition":{"servings":n,"calories":n|null,"protein":n|null,"carbohydrates":n|null,"fat":n|null,"fiber":n|null,"sugar":n|null,"sodium":n|null},"changes":[]}\nPer serving estimates.\n${recipeInfo}`;
+        const text = await this.retryOperation(() => generateText(prompt, { feature: 'recipeEnhance', model: 'google/gemini-2.5-flash' }));
+        return JSON.parse(this._cleanJson(text));
+    }
+
+    _cleanJson(text) {
+        let cleanedText = text.trim();
+        if (cleanedText.startsWith('```json')) {
+            cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+        } else if (cleanedText.startsWith('```')) {
+            cleanedText = cleanedText.replace(/```\n?/g, '');
+        }
+        return cleanedText;
+    }
+
+    _recipeInfoBlock(recipe) {
+        return `
+Title: ${recipe.title}
+Ingredients:
+${(recipe.ingredients || []).map((ing) => `- ${ing.quantity || ''} ${ing.unit || ''} ${ing.ingredient}`).join('\n')}
+Instructions:
+${(recipe.instructions || []).map((s, i) => `${i + 1}. ${s}`).join('\n')}`;
+    }
+
     /**
      * Enhance recipe with AI - fill missing data and verify existing data
      */
