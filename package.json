@@ -15,7 +15,9 @@
     "party-db:migrate": "node scripts/party-db/migrate.mjs",
     "test:web-db-tabs": "node scripts/test-web-db-two-tabs.mjs",
     "test:ampi": "node scripts/test-ampi-recipe-followup.mjs",
-    "test:web-back": "node scripts/test-web-back-after-actions.mjs"
+    "test:web-back": "node scripts/test-web-back-after-actions.mjs",
+    "test:chat-text": "node scripts/test-chat-text.mjs",
+    "test:web-chat": "node scripts/test-web-ampi-chat.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/fredoka": "^0.4.1",
