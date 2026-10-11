@@ -285,6 +285,7 @@ export const parseRecipeFromUrl = async (url) => {
                 return {
                     success: false,
                     error: viaApi.message || "Couldn't import that link.",
+                    errorCode: viaApi.code,
                 };
             }
         }

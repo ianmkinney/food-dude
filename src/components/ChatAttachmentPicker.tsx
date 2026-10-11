@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -9,6 +9,8 @@ import {
     type PendingAttachment,
     validatePending,
 } from '../sous/chatAttachments';
+
+export type ChatAttachmentPickerHandle = { openPicker: () => void };
 
 type Props = {
     attachments: PendingAttachment[];
@@ -21,7 +23,10 @@ type Props = {
 const ACCEPT =
     'image/*,.pdf,.txt,.md,.markdown,.html,.htm,text/plain,text/markdown,text/html';
 
-export default function ChatAttachmentPicker({ attachments, onChange, theme, layout = 'full' }: Props) {
+function ChatAttachmentPickerInner(
+    { attachments, onChange, theme, layout = 'full' }: Props,
+    ref: React.Ref<ChatAttachmentPickerHandle>
+) {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const c = theme.colors;
 
@@ -145,6 +150,8 @@ export default function ChatAttachmentPicker({ attachments, onChange, theme, lay
         pickNative();
     };
 
+    useImperativeHandle(ref, () => ({ openPicker }), []);
+
     const remove = (id: string) => onChange(attachments.filter((a) => a.id !== id));
 
     const showChips = layout === 'full' || layout === 'chips';
@@ -209,3 +216,5 @@ const styles = StyleSheet.create({
     chipText: { fontSize: 13, fontWeight: '600', flexShrink: 1, maxWidth: 120 },
     attachBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });
+
+export default forwardRef(ChatAttachmentPickerInner);

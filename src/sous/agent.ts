@@ -1,5 +1,5 @@
 import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION, ASSISTANT_TAGLINE } from '../config/assistant';
-import { pantryOperations, recipeOperations, userOperations } from '../database/operations';
+import { groceryOperations, pantryOperations, recipeOperations, userOperations } from '../database/operations';
 import { generateMultimodal, generateText, stripCodeFences } from '../services/aiClient';
 import type { PendingAttachment } from './chatAttachments';
 import { prepareAttachmentPayload } from './chatAttachments';
@@ -40,9 +40,10 @@ export function isCrisisMessage(text: string): boolean {
 const today = () => new Date().toISOString().split('T')[0];
 
 async function kitchenContext(userMessage: string): Promise<string> {
-    const [recipes, pantry, user, includeHealth] = await Promise.all([
+    const [recipes, pantry, grocery, user, includeHealth] = await Promise.all([
         recipeOperations.getAll().catch(() => []),
         pantryOperations.getAll().catch(() => []),
+        groceryOperations.getAll().catch(() => []),
         userOperations.getCurrent().catch(() => null),
         getIncludeHealthData(),
     ]);
@@ -53,6 +54,10 @@ async function kitchenContext(userMessage: string): Promise<string> {
     const pantryLines = (pantry as { name: string }[])
         .slice(0, 60)
         .map((p) => p.name)
+        .join(', ');
+    const groceryLines = (grocery as { name: string; is_checked?: number }[])
+        .slice(0, 60)
+        .map((g) => g.name)
         .join(', ');
     const flavor = (user as { flavor_preferences?: string } | null)?.flavor_preferences;
     const allergies = includeHealth ? (user as { allergies?: string } | null)?.allergies : null;
@@ -66,6 +71,7 @@ async function kitchenContext(userMessage: string): Promise<string> {
             ? `Recipes saved in this conversation (oldest first; the LAST one is what "it", "this recipe" or a follow-up answer refers to):\n${chatRecipes}`
             : '',
         `Pantry: ${pantryLines || 'empty'}.`,
+        `Grocery list: ${groceryLines || 'empty'}.`,
         flavor ? `Flavor preferences: ${flavor}.` : '',
         allergies ? `Allergies (hard exclusion, never duplicate in memory — reference this field only): ${allergies}.` : '',
         diet ? `Diet needs: ${diet}.` : '',
@@ -99,6 +105,9 @@ Rules:
 - If the user asks you to pick a name ("you choose", "you pick", "surprise me"), choose one that matches that recipe's actual ingredients and dish type (a soup stays a soup), then call update_recipe with the new title. If its current title already fits, say so and keep it.
 - When the user attaches a photo, PDF, or recipe file, read it carefully. You can import it, answer questions, scale servings, convert units, or suggest allergy-safe substitutions in your reply. Only call tools when saving data to the app.
 - For add_to_grocery, only list ingredients they still need; the app skips items already in the pantry.
+- When the user wants items removed, checked off, or cleared from the grocery list (or bought and moved to pantry), call update_grocery_list with those item names — never only say you did it in "reply".
+- When the user wants pantry items used up or removed, call add_to_pantry only to add stock; there is no remove-from-pantry tool yet — say what you cannot do instead of pretending.
+- Never claim you added, removed, checked off, cleared, saved, imported, scheduled, updated, or priced anything unless the matching tool is in "actions" for this turn. The app shows cards from actions; a reply alone does not change data.
 - Never use the user's allergens, or ingredients that commonly contain them, in anything you suggest or save.
 - Mention allergens when they are obvious (nuts, shellfish, gluten, dairy, eggs). You are not a doctor or dietitian; don't give medical advice.
 - Follow the food-safety rules above: give safe internal temperatures, no canning instructions of your own, no infant or pregnancy feeding guidance, and refuse non-food or unsafe items.

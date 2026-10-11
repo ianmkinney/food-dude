@@ -222,7 +222,23 @@ try {
     const keyboardTop = VIEW.height - KEYBOARD_PX;
     let bottom = await composerBottom();
     check('composer sits directly on the keyboard', Math.abs(bottom - keyboardTop) <= 2, `bottom ${bottom}, keyboard at ${keyboardTop}`);
+    await shot('composer-empty');
     await shot('chat-1-keyboard-empty');
+
+    const multiline =
+        'Line one for a taller composer\nLine two keeps growing\nLine three\nLine four should wrap nicely';
+    await composer.fill(multiline);
+    await settle(300);
+    const inputHeight = await page.evaluate(() => {
+        const el = document.querySelector('[aria-label="Message to Ampi"]');
+        return el ? Math.round(el.getBoundingClientRect().height) : 0;
+    });
+    check('composer grows with multiline text', inputHeight > 52, `height ${inputHeight}`);
+    check('attach control sits below the text field', await page.getByLabel('Attach photo or file').isVisible());
+    await shot('composer-multiline');
+    await composer.fill('');
+    await settle(200);
+    await shot('composer-keyboard-open');
 
     await sendMessage('Plan a quick dinner');
     await settle(300);

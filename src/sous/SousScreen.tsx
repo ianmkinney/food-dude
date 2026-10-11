@@ -47,7 +47,7 @@ import {
 import { runTools } from './tools';
 import { recordChatRecipes } from '../chat/chatRecipes';
 import { isSocialPostUrl, isTikTokPostUrl, isInstagramPostUrl } from '../services/recipeUrlImport';
-import ChatAttachmentPicker from '../components/ChatAttachmentPicker';
+import ChatAttachmentPicker, { type ChatAttachmentPickerHandle } from '../components/ChatAttachmentPicker';
 import { ATTACHMENT_SOURCE_LABEL } from './attachmentLimits';
 import type { PendingAttachment } from './chatAttachments';
 import { persistAmpiExchange } from '../chat/promptContext';
@@ -67,7 +67,31 @@ type Message = {
     attachmentNames?: string[];
     confirm?: { actions: ToolCall[]; summary: string; userRecipeImageUri?: string | null };
     confirmDone?: boolean;
+    importAssist?: 'instagram_login_wall' | 'instagram_no_caption';
 };
+
+const INPUT_LINE_HEIGHT = 20;
+const INPUT_MAX_LINES = 6;
+const INPUT_MIN_HEIGHT = 44;
+const INPUT_MAX_HEIGHT = INPUT_LINE_HEIGHT * INPUT_MAX_LINES + 22;
+
+function splitImportAssist(cards?: SousCard[]): {
+    cards: SousCard[] | undefined;
+    importAssist?: Message['importAssist'];
+    assistMessage?: string;
+} {
+    if (!cards?.length) return { cards };
+    const assist = cards.find((c) => c.type === 'import_assist');
+    if (!assist || assist.type !== 'import_assist') return { cards };
+    const rest = cards.filter((c) => c.type !== 'import_assist');
+    const code =
+        assist.code === 'instagram_login_wall' || assist.code === 'instagram_no_caption' ? assist.code : undefined;
+    return {
+        cards: rest.length ? rest : undefined,
+        importAssist: code,
+        assistMessage: assist.message,
+    };
+}
 
 const SUGGESTIONS = [
     "What can I cook with what's in my pantry?",
@@ -112,6 +136,8 @@ export default function SousScreen() {
     const engineRef = useRef<SpeechEngine | null>(null);
     const listRef = useRef<FlatList<Message>>(null);
     const inputRef = useRef<TextInput>(null);
+    const attachRef = useRef<ChatAttachmentPickerHandle>(null);
+    const [inputHeight, setInputHeight] = useState(INPUT_MIN_HEIGHT);
     const freshUntil = useRef(new Map<string, number>());
 
     const [composerFocused, setComposerFocusedState] = useState(false);
@@ -215,6 +241,7 @@ export default function SousScreen() {
             if (autoSpeak) primeSpeechOnWeb();
             if (composerFocused) inputRef.current?.focus();
             setInput('');
+            setInputHeight(INPUT_MIN_HEIGHT);
             setPendingAttachments([]);
             const history: SousTurn[] = messages.map((m) => ({ role: m.role, text: m.text }));
             const userMessage: Message = {
@@ -232,22 +259,25 @@ export default function SousScreen() {
                 const linkImportUrl =
                     !attachments.length && !videoAsset ? extractRecipeImportUrl(text) : null;
                 if (linkImportUrl) {
-                    const cards = await runTools([{ tool: 'import_recipe', args: { url: linkImportUrl } }]);
+                    const rawCards = await runTools([{ tool: 'import_recipe', args: { url: linkImportUrl } }]);
+                    const split = splitImportAssist(rawCards);
                     const reply: Message = {
                         id: newId(),
                         role: 'sous',
                         createdAt: Date.now(),
                         text:
-                            cards[0]?.type === 'recipe'
+                            split.assistMessage ||
+                            (rawCards[0]?.type === 'recipe'
                                 ? 'Imported — tap the card to review.'
-                                : cards[0]?.type === 'error'
-                                  ? cards[0].message
-                                  : 'Done.',
-                        cards,
+                                : rawCards[0]?.type === 'error'
+                                  ? rawCards[0].message
+                                  : 'Done.'),
+                        cards: split.cards,
+                        importAssist: split.importAssist,
                     };
                     setMessages((prev) => [...prev, reply]);
                     await persistAmpiExchange(userMessage.text, reply.text, {
-                        recipes: recipeEventsFromCards(cards),
+                        recipes: recipeEventsFromCards(split.cards || rawCards),
                     });
                     if (autoSpeak && (await shouldSpeak()) && reply.text) speak(reply);
                     return;
@@ -299,12 +329,14 @@ export default function SousScreen() {
                     return;
                 }
                 const result = await askSous(history, text || 'Please use the attached files.', attachments);
+                const split = splitImportAssist(result.cards);
                 const reply: Message = {
                     id: newId(),
                     role: 'sous',
                     createdAt: Date.now(),
-                    text: result.reply,
-                    cards: result.cards,
+                    text: split.assistMessage || result.reply,
+                    cards: split.cards,
+                    importAssist: split.importAssist,
                     confirm: result.pendingActions
                         ? {
                               actions: result.pendingActions,
@@ -459,7 +491,9 @@ export default function SousScreen() {
                         <View style={styles.cardRow}>
                             <Ionicons name={card.type === 'pantry' ? 'cube-outline' : 'cart-outline'} size={20} color={theme.primary[500]} />
                             <Text style={[styles.cardRowText, { color: c.text.primary }]} numberOfLines={2}>
-                                Added to {card.type === 'pantry' ? 'pantry' : 'grocery list'}: {card.items.join(', ')}
+                                {card.type === 'grocery' && card.action === 'removed'
+                                    ? `Cleared from grocery list: ${card.items.join(', ')}`
+                                    : `Added to ${card.type === 'pantry' ? 'pantry' : 'grocery list'}: ${card.items.join(', ')}`}
                             </Text>
                             <Ionicons name="chevron-forward" size={16} color={c.text.tertiary} />
                         </View>
@@ -483,6 +517,8 @@ export default function SousScreen() {
                     </Pressable>
                 );
             }
+            case 'import_assist':
+                return null;
             case 'error':
                 return (
                     <View key={index} style={[...cardStyle, { borderColor: c.error }]}>
@@ -572,6 +608,31 @@ export default function SousScreen() {
                             <Pressable onPress={() => navigation.navigate('Account')} style={[styles.inlineButton, { backgroundColor: theme.primary[500] }]} accessibilityRole="button">
                                 <Text style={styles.inlineButtonText}>Open Account</Text>
                             </Pressable>
+                        )}
+                        {item.importAssist && (
+                            <View style={styles.importAssistRow}>
+                                <Pressable
+                                    onPress={() => inputRef.current?.focus()}
+                                    style={[styles.importAssistBtn, { borderColor: c.border, backgroundColor: c.surfaceMuted }]}
+                                    accessibilityRole="button"
+                                >
+                                    <Text style={[styles.importAssistBtnText, { color: c.text.primary }]}>Paste caption</Text>
+                                </Pressable>
+                                <Pressable
+                                    onPress={pickVideo}
+                                    style={[styles.importAssistBtn, { borderColor: c.border, backgroundColor: c.surfaceMuted }]}
+                                    accessibilityRole="button"
+                                >
+                                    <Text style={[styles.importAssistBtnText, { color: c.text.primary }]}>Upload screen recording</Text>
+                                </Pressable>
+                                <Pressable
+                                    onPress={() => attachRef.current?.openPicker()}
+                                    style={[styles.importAssistBtn, { borderColor: c.border, backgroundColor: c.surfaceMuted }]}
+                                    accessibilityRole="button"
+                                >
+                                    <Text style={[styles.importAssistBtnText, { color: c.text.primary }]}>Upload screenshot</Text>
+                                </Pressable>
+                            </View>
                         )}
                     </View>
                     {item.cards?.map(renderCard)}
@@ -800,89 +861,118 @@ export default function SousScreen() {
                     </Enter>
                 )}
                 <ChatAttachmentPicker layout="chips" attachments={pendingAttachments} onChange={setPendingAttachments} theme={theme} />
-                <View style={styles.composer}>
-                <ChatAttachmentPicker layout="button" attachments={pendingAttachments} onChange={setPendingAttachments} theme={theme} />
-                <Pressable
-                    onPress={pickVideo}
-                    style={[styles.roundButton, { backgroundColor: c.surface, borderColor: c.border }]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Attach screen recording for recipe import"
-                >
-                    <Ionicons name="film-outline" size={20} color={c.text.primary} />
-                </Pressable>
-                {mic.isSupported ? (
-                    <Pressable
-                        ref={micTarget}
-                        {...mic.pressProps}
-                        onPress={
-                            mic.pressProps.onPress
-                                ? () => {
-                                      if (autoSpeak) primeSpeechOnWeb();
-                                      if (!listening) showMicTipOnce();
-                                      else setMicTip(false);
-                                      mic.pressProps.onPress?.();
+                <View style={styles.composerInputRow}>
+                    <TextInput
+                        ref={inputRef}
+                        value={draft}
+                        onChangeText={(text) => {
+                            setInput(text);
+                            if (!text.trim()) setInputHeight(INPUT_MIN_HEIGHT);
+                        }}
+                        onFocus={onComposerFocus}
+                        onBlur={onComposerBlur}
+                        placeholder={`Message ${ASSISTANT_NAME}…`}
+                        accessibilityLabel={`Message to ${ASSISTANT_NAME}`}
+                        placeholderTextColor={c.text.tertiary}
+                        style={[
+                            styles.input,
+                            {
+                                color: c.text.primary,
+                                backgroundColor: c.surface,
+                                borderColor: c.border,
+                                height: Math.max(INPUT_MIN_HEIGHT, inputHeight),
+                            },
+                        ]}
+                        multiline
+                        scrollEnabled={inputHeight >= INPUT_MAX_HEIGHT}
+                        onContentSizeChange={(e) => {
+                            const next = Math.min(
+                                INPUT_MAX_HEIGHT,
+                                Math.max(INPUT_MIN_HEIGHT, e.nativeEvent.contentSize.height + 12)
+                            );
+                            setInputHeight(next);
+                        }}
+                        editable={!listening}
+                        onSubmitEditing={() => send(input)}
+                        // On the web Enter sends without dropping the keyboard (Shift+Enter is a new line).
+                        blurOnSubmit={Platform.OS !== 'web'}
+                        onKeyPress={
+                            Platform.OS === 'web'
+                                ? (e) => {
+                                      const key = e.nativeEvent as unknown as { key: string; shiftKey?: boolean; isComposing?: boolean };
+                                      if (key.key === 'Enter' && !key.shiftKey && !key.isComposing) {
+                                          e.preventDefault();
+                                          send(input);
+                                      }
                                   }
                                 : undefined
                         }
-                        style={[styles.roundButton, { backgroundColor: listening ? theme.colors.error : c.surface, borderColor: c.border }]}
-                        accessibilityRole="button"
-                        accessibilityLabel={mic.isWeb ? `Tap to talk to ${ASSISTANT_NAME}` : `Hold to talk to ${ASSISTANT_NAME}`}
-                        accessibilityHint={
-                            mic.isWeb
-                                ? 'Tap again to stop. Your browser turns speech into text and may send the audio to Apple or Google'
-                                : 'Listens only while held. Asks for microphone access the first time'
-                        }
-                    >
-                        <Ionicons name={listening ? 'stop' : 'mic'} size={20} color={listening ? '#FFFFFF' : c.text.primary} />
-                    </Pressable>
-                ) : null}
-                <TextInput
-                    ref={inputRef}
-                    value={draft}
-                    onChangeText={setInput}
-                    onFocus={onComposerFocus}
-                    onBlur={onComposerBlur}
-                    placeholder={`Message ${ASSISTANT_NAME}…`}
-                    accessibilityLabel={`Message to ${ASSISTANT_NAME}`}
-                    placeholderTextColor={c.text.tertiary}
-                    style={[styles.input, { color: c.text.primary, backgroundColor: c.surface, borderColor: c.border }]}
-                    multiline
-                    numberOfLines={Platform.OS === 'web' ? 1 : undefined}
-                    editable={!listening}
-                    onSubmitEditing={() => send(input)}
-                    // On the web Enter sends without dropping the keyboard (Shift+Enter is a new line).
-                    blurOnSubmit={Platform.OS !== 'web'}
-                    onKeyPress={
-                        Platform.OS === 'web'
-                            ? (e) => {
-                                  const key = e.nativeEvent as unknown as { key: string; shiftKey?: boolean; isComposing?: boolean };
-                                  if (key.key === 'Enter' && !key.shiftKey && !key.isComposing) {
-                                      e.preventDefault();
-                                      send(input);
-                                  }
-                              }
-                            : undefined
-                    }
-                />
-                <View {...keepComposerFocus}>
-                <AnimatedPressable
-                    onPress={() => send(listening ? mic.transcript : input)}
-                    disabled={(!input.trim() && !pendingAttachments.length && !attachedVideo) || thinking}
-                    scaleTo={motion.scale.press}
-                    style={[
-                        styles.roundButton,
-                        styles.sendButton,
-                        {
-                            backgroundColor: theme.primary[500],
-                            opacity: (!input.trim() && !pendingAttachments.length && !attachedVideo) || thinking ? 0.5 : 1,
-                        },
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Send"
-                >
-                    <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
-                </AnimatedPressable>
+                    />
+                    <View {...keepComposerFocus}>
+                        <AnimatedPressable
+                            onPress={() => send(listening ? mic.transcript : input)}
+                            disabled={(!input.trim() && !pendingAttachments.length && !attachedVideo) || thinking}
+                            scaleTo={motion.scale.press}
+                            style={[
+                                styles.roundButton,
+                                styles.sendButton,
+                                {
+                                    backgroundColor: theme.primary[500],
+                                    opacity: (!input.trim() && !pendingAttachments.length && !attachedVideo) || thinking ? 0.5 : 1,
+                                },
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Send"
+                        >
+                            <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+                        </AnimatedPressable>
+                    </View>
                 </View>
+                <View style={styles.composerToolsRow}>
+                    <ChatAttachmentPicker
+                        ref={attachRef}
+                        layout="button"
+                        attachments={pendingAttachments}
+                        onChange={setPendingAttachments}
+                        theme={theme}
+                    />
+                    <Pressable
+                        onPress={pickVideo}
+                        style={[styles.toolButton, { backgroundColor: c.surface, borderColor: c.border }]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Attach screen recording for recipe import"
+                    >
+                        <Ionicons name="film-outline" size={20} color={c.text.primary} />
+                    </Pressable>
+                    {mic.isSupported ? (
+                        <Pressable
+                            ref={micTarget}
+                            {...mic.pressProps}
+                            onPress={
+                                mic.pressProps.onPress
+                                    ? () => {
+                                          if (autoSpeak) primeSpeechOnWeb();
+                                          if (!listening) showMicTipOnce();
+                                          else setMicTip(false);
+                                          mic.pressProps.onPress?.();
+                                      }
+                                    : undefined
+                            }
+                            style={[
+                                styles.toolButton,
+                                { backgroundColor: listening ? theme.colors.error : c.surface, borderColor: c.border },
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel={mic.isWeb ? `Tap to talk to ${ASSISTANT_NAME}` : `Hold to talk to ${ASSISTANT_NAME}`}
+                            accessibilityHint={
+                                mic.isWeb
+                                    ? 'Tap again to stop. Your browser turns speech into text and may send the audio to Apple or Google'
+                                    : 'Listens only while held. Asks for microphone access the first time'
+                            }
+                        >
+                            <Ionicons name={listening ? 'stop' : 'mic'} size={20} color={listening ? '#FFFFFF' : c.text.primary} />
+                        </Pressable>
+                    ) : null}
                 </View>
             </View>
         </KeyboardAvoidingView>
@@ -965,8 +1055,24 @@ const styles = StyleSheet.create({
     },
     videoAttachText: { flex: 1, fontSize: 13 },
     composerWrap: { paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
-    composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
-    input: { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderRadius: 22, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 11, fontSize: 16, lineHeight: 20 },
+    composerInputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, width: '100%' },
+    composerToolsRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, paddingLeft: 2 },
+    input: {
+        flex: 1,
+        minHeight: 44,
+        maxHeight: INPUT_MAX_HEIGHT,
+        borderWidth: 1,
+        borderRadius: 22,
+        paddingHorizontal: 14,
+        paddingTop: 11,
+        paddingBottom: 11,
+        fontSize: 16,
+        lineHeight: INPUT_LINE_HEIGHT,
+    },
+    toolButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+    importAssistRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+    importAssistBtn: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 12, minHeight: 40, justifyContent: 'center' },
+    importAssistBtnText: { fontSize: 13, fontWeight: '700' },
     roundButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
     sendButton: { borderWidth: 0 },
 });
