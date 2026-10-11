@@ -30,6 +30,7 @@ import ImageSourceChoice from '../components/ImageSourceChoice';
 import { SkeletonBlock } from '../components/Skeleton';
 import { useViewTransitionTarget } from '../motion/viewTransition';
 import useReducedMotion from '../hooks/useReducedMotion';
+import { goBackOr } from '../navigation/goBackOr';
 
 // Below this width the current/new photo comparison stacks vertically.
 const COMPARE_STACK_WIDTH = 520;
@@ -85,7 +86,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
         } catch (error) {
             console.error('Error loading recipe:', error);
             Alert.alert('Error', 'Failed to load recipe details');
-            navigation.goBack();
+            goBackOr(navigation, 'Recipes');
         } finally {
             setLoading(false);
         }
@@ -225,7 +226,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                     onPress: async () => {
                         try {
                             await recipeOperations.delete(recipeId);
-                            navigation.goBack();
+                            goBackOr(navigation, 'Recipes');
                         } catch (error) {
                             Alert.alert('Error', 'Failed to delete recipe');
                         }

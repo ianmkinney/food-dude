@@ -377,7 +377,7 @@ export default function PartySyncPanel({
                     ) : null}
                 </View>
 
-                <Modal visible={Boolean(pendingImport)} transparent animationType="slide">
+                <Modal visible={Boolean(pendingImport)} transparent animationType="slide" onRequestClose={onClearPendingImport}>
                     <View style={styles.modalOverlay}>
                         <View style={[styles.modalCard, { backgroundColor: theme.colors.surface }]}>
                             <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>Review party changes</Text>

@@ -18,6 +18,7 @@ import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { pantryOperations } from '../database/operations';
 import { lookupBarcode } from '../services/barcodeService';
+import { goBackOr } from '../navigation/goBackOr';
 
 const EditPantryItemScreen = () => {
     const navigation = useNavigation();
@@ -143,7 +144,7 @@ const EditPantryItemScreen = () => {
                 notes,
             });
             Alert.alert('Success', 'Item updated successfully', [
-                { text: 'OK', onPress: () => navigation.goBack() }
+                { text: 'OK', onPress: () => goBackOr(navigation, 'Pantry') }
             ]);
         } catch (error) {
             console.error('Error updating pantry item:', error);

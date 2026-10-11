@@ -20,6 +20,7 @@ import { invalidateQueries } from '../data/queryCache';
 import { groceryQuery } from '../data/queries';
 import { parseGroceryItemsWithAI, checkPantryForMatches } from '../services/intelligentGroceryService';
 import PantryMatchModal from '../components/PantryMatchModal';
+import { goBackOr } from '../navigation/goBackOr';
 
 const AddGroceryItemScreen = () => {
     const navigation = useNavigation();
@@ -130,7 +131,7 @@ const AddGroceryItemScreen = () => {
             } else {
                 Alert.alert('Success', 'Item added to grocery list', [
                     { text: 'Add Another', onPress: resetManualForm },
-                    { text: 'Done', onPress: () => navigation.goBack() }
+                    { text: 'Done', onPress: () => goBackOr(navigation, 'Grocery') }
                 ]);
             }
         } catch (error) {
@@ -184,7 +185,7 @@ const AddGroceryItemScreen = () => {
                 setListText('');
             } else {
                 Alert.alert('Success', `${addedCount} items added to grocery list`, [
-                    { text: 'OK', onPress: () => navigation.goBack() }
+                    { text: 'OK', onPress: () => goBackOr(navigation, 'Grocery') }
                 ]);
             }
         } catch (error) {
@@ -239,7 +240,7 @@ const AddGroceryItemScreen = () => {
                 setShowPantryMatchModal(true);
             } else {
                 Alert.alert('Success', `${addedCount} ingredients added to grocery list`, [
-                    { text: 'OK', onPress: () => navigation.goBack() }
+                    { text: 'OK', onPress: () => goBackOr(navigation, 'Grocery') }
                 ]);
             }
         } catch (error) {
@@ -489,7 +490,7 @@ const AddGroceryItemScreen = () => {
                 onClose={() => {
                     setShowPantryMatchModal(false);
                     setPantryMatches([]);
-                    navigation.goBack();
+                    goBackOr(navigation, 'Grocery');
                 }}
             />
         </View>

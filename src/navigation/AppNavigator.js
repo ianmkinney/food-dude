@@ -14,6 +14,7 @@ import SousScreen from '../sous/SousScreen';
 import { ASSISTANT_NAME } from '../config/assistant';
 import { lazyScreen } from './lazyScreen';
 import { prefetchTabData } from '../data/queries';
+import { goBackOr } from './goBackOr';
 
 const MealPlannerScreen = lazyScreen(() => import('../screens/MealPlannerScreen'));
 const PantryScreen = lazyScreen(() => import('../screens/PantryScreen'));
@@ -210,7 +211,7 @@ const AppNavigator = () => {
                     },
                     headerLeft: () => (
                         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
-                            onPress={() => navigation.goBack()}
+                            onPress={() => goBackOr(navigation, 'Recipes')}
                             style={styles.headerBack}
                         >
                             <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
@@ -235,7 +236,7 @@ const AppNavigator = () => {
                     },
                     headerLeft: () => (
                         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
-                            onPress={() => navigation.goBack()}
+                            onPress={() => goBackOr(navigation, 'Recipes')}
                             style={styles.headerBack}
                         >
                             <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
@@ -261,7 +262,7 @@ const AppNavigator = () => {
                     },
                     headerLeft: () => (
                         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
-                            onPress={() => navigation.goBack()}
+                            onPress={() => goBackOr(navigation, 'Recipes')}
                             style={styles.headerBack}
                         >
                             <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
@@ -287,7 +288,7 @@ const AppNavigator = () => {
                     },
                     headerLeft: () => (
                         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
-                            onPress={() => navigation.goBack()}
+                            onPress={() => goBackOr(navigation, 'Pantry')}
                             style={styles.headerBack}
                         >
                             <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
@@ -312,7 +313,7 @@ const AppNavigator = () => {
                     },
                     headerLeft: () => (
                         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
-                            onPress={() => navigation.goBack()}
+                            onPress={() => goBackOr(navigation, 'Pantry')}
                             style={styles.headerBack}
                         >
                             <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
@@ -338,7 +339,7 @@ const AppNavigator = () => {
                     },
                     headerLeft: () => (
                         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
-                            onPress={() => navigation.goBack()}
+                            onPress={() => goBackOr(navigation, 'Grocery')}
                             style={styles.headerBack}
                         >
                             <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
@@ -363,7 +364,7 @@ const AppNavigator = () => {
                     },
                     headerLeft: () => (
                         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
-                            onPress={() => navigation.goBack()}
+                            onPress={() => goBackOr(navigation, 'Grocery')}
                             style={styles.headerBack}
                         >
                             <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
@@ -404,7 +405,7 @@ const AppNavigator = () => {
                     },
                     headerLeft: () => (
                         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
-                            onPress={() => navigation.goBack()}
+                            onPress={() => goBackOr(navigation, 'Recipes')}
                             style={styles.headerBack}
                         >
                             <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
@@ -429,7 +430,7 @@ const AppNavigator = () => {
                     },
                     headerLeft: () => (
                         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
-                            onPress={() => navigation.goBack()}
+                            onPress={() => goBackOr(navigation, 'Recipes')}
                             style={styles.headerBack}
                         >
                             <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
