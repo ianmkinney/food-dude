@@ -3,6 +3,7 @@ import { checkMinuteRateLimit } from './store.js';
 export const ELEVENLABS_TTS_MAX_CHARS = 1000;
 export const ELEVENLABS_REQUESTS_PER_MINUTE = 20;
 export const ELEVENLABS_DEFAULT_MODEL = 'eleven_flash_v2_5';
+export const ELEVENLABS_EXPRESSIVE_MODEL = 'eleven_v3';
 const OUTPUT_FORMAT = 'mp3_44100_128';
 
 const VOICE_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -48,6 +49,23 @@ export function validateTtsText(text) {
     return trimmed;
 }
 
+// Eleven v3 audio tags such as [warmly] or [laughs]: one to four words in
+// brackets, not a Markdown link. Same rule as src/chat/messageText.ts.
+const AUDIO_TAG = /\[(?:[a-z][a-z'-]*)(?: [a-z][a-z'-]*){0,3}\](?!\()/gi;
+
+export function hasAudioTags(text) {
+    AUDIO_TAG.lastIndex = 0;
+    return AUDIO_TAG.test(text);
+}
+
+export function stripAudioTags(text) {
+    return text
+        .replace(AUDIO_TAG, '')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/[ \t]+([,.!?;:])/g, '$1')
+        .trim();
+}
+
 export function validateVoiceId(voiceId) {
     if (!voiceId || typeof voiceId !== 'string') {
         throw new Error('Missing voiceId');
@@ -59,10 +77,19 @@ export function validateVoiceId(voiceId) {
     return trimmed;
 }
 
+export class ElevenLabsUpstreamError extends Error {
+    constructor(status, message) {
+        super(`HTTP ${status}: ${message}`);
+        this.status = status;
+    }
+}
+
 function upstreamMessage(status, text) {
     try {
         const json = JSON.parse(text);
-        const msg = json?.detail?.message || json?.detail || json?.message;
+        const detail = json?.detail;
+        const msg =
+            (detail && typeof detail === 'object' ? detail.message || detail.status : detail) || json?.message;
         if (msg) return String(msg).slice(0, 300);
     } catch {
         // not JSON
@@ -101,13 +128,13 @@ export async function fetchElevenLabsVoices() {
     }
     if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new Error(upstreamMessage(response.status, text));
+        throw new ElevenLabsUpstreamError(response.status, upstreamMessage(response.status, text));
     }
     const data = await response.json();
     return sanitizeVoices(data);
 }
 
-export async function fetchElevenLabsTts({ voiceId, text }) {
+export async function fetchElevenLabsTts({ voiceId, text, modelId = ELEVENLABS_DEFAULT_MODEL }) {
     const apiKey = getElevenLabsApiKey();
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=${OUTPUT_FORMAT}`;
     let response;
@@ -121,7 +148,7 @@ export async function fetchElevenLabsTts({ voiceId, text }) {
             },
             body: JSON.stringify({
                 text,
-                model_id: ELEVENLABS_DEFAULT_MODEL,
+                model_id: modelId,
             }),
         });
     } catch (error) {
@@ -129,7 +156,7 @@ export async function fetchElevenLabsTts({ voiceId, text }) {
     }
     if (!response.ok) {
         const bodyText = await response.text().catch(() => '');
-        throw new Error(upstreamMessage(response.status, bodyText));
+        throw new ElevenLabsUpstreamError(response.status, upstreamMessage(response.status, bodyText));
     }
     const buffer = Buffer.from(await response.arrayBuffer());
     if (!buffer.length) {
@@ -138,12 +165,34 @@ export async function fetchElevenLabsTts({ voiceId, text }) {
     return buffer;
 }
 
-function reject(res, status, error) {
-    console.warn(`[ai/chat] elevenlabs ${status} ${error}`);
+// Only allowlisted owner accounts reach these handlers, so ElevenLabs' own
+// error text (never the key) is passed back to make Account → Voice test useful.
+function reject(res, status, error, detail) {
+    console.warn(`[ai/chat] elevenlabs ${status} ${error}${detail ? `: ${detail}` : ''}`);
     res.status(status).json({
         error,
         message: ELEVENLABS_MSG[error] || 'Request failed.',
+        ...(detail ? { detail: String(detail).slice(0, 300) } : null),
     });
+}
+
+/**
+ * Text with audio tags goes to eleven_v3; if v3 rejects it, the same text
+ * without tags goes to the fast model so the reply is still spoken.
+ */
+export async function synthesizeWithFallback({ voiceId, text }) {
+    if (hasAudioTags(text)) {
+        try {
+            const audio = await fetchElevenLabsTts({ voiceId, text, modelId: ELEVENLABS_EXPRESSIVE_MODEL });
+            return { audio, model: ELEVENLABS_EXPRESSIVE_MODEL };
+        } catch (error) {
+            console.warn('[ai/chat] elevenlabs v3 failed, retrying without tags:', error?.message || error);
+        }
+        const plain = stripAudioTags(text);
+        if (!plain) throw new Error('Missing text');
+        return { audio: await fetchElevenLabsTts({ voiceId, text: plain }), model: ELEVENLABS_DEFAULT_MODEL };
+    }
+    return { audio: await fetchElevenLabsTts({ voiceId, text }), model: ELEVENLABS_DEFAULT_MODEL };
 }
 
 /**
@@ -170,7 +219,7 @@ export async function handleElevenLabsMode(req, res, session, mode) {
             res.status(200).json({ voices });
         } catch (error) {
             console.error('[ai/chat] elevenlabs voices failed:', error?.message || error);
-            reject(res, 502, 'upstream_failed');
+            reject(res, 502, 'upstream_failed', error?.message);
         }
         return;
     }
@@ -181,18 +230,19 @@ export async function handleElevenLabsMode(req, res, session, mode) {
         voiceId = validateVoiceId(req.body?.voiceId);
         text = validateTtsText(req.body?.text);
     } catch (error) {
-        console.warn('[ai/chat] elevenlabs tts bad request:', error?.message || error);
-        reject(res, 400, 'bad_request');
+        reject(res, 400, 'bad_request', error?.message);
         return;
     }
 
     try {
-        const audio = await fetchElevenLabsTts({ voiceId, text });
+        const { audio, model } = await synthesizeWithFallback({ voiceId, text });
         res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Content-Length', String(audio.length));
         res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('X-ElevenLabs-Model', model);
         res.status(200).send(audio);
     } catch (error) {
         console.error('[ai/chat] elevenlabs tts failed:', error?.message || error);
-        reject(res, 502, 'upstream_failed');
+        reject(res, 502, 'upstream_failed', error?.message);
     }
 }

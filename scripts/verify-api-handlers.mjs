@@ -146,6 +146,72 @@ if (!isElevenLabsConfigured()) {
 delete process.env.ELEVENLABS_API_KEY;
 console.log('ok elevenlabs key resolution');
 
+{
+    const { handleElevenLabsMode, stripAudioTags } = await import(pathToFileURL(join(apiRoot, '_lib/elevenLabs.js')).href);
+    if (stripAudioTags('[warmly] Hi there [laughs]. See [the recipe](https://x.y)') !== 'Hi there. See [the recipe](https://x.y)') {
+        throw new Error('stripAudioTags should drop tags but keep links');
+    }
+    process.env.ELEVENLABS_API_KEY = 'xi-test-key';
+    const realFetch = globalThis.fetch;
+    const calls = [];
+    let failV3 = false;
+    let failAll = false;
+    globalThis.fetch = async (url, init) => {
+        const body = JSON.parse(init.body);
+        calls.push({ url: String(url), model: body.model_id, text: body.text });
+        if (failAll || (failV3 && body.model_id === 'eleven_v3')) {
+            return new Response(JSON.stringify({ detail: { status: 'quota_exceeded', message: 'Quota exceeded.' } }), { status: 401 });
+        }
+        return new Response(new Uint8Array([0xff, 0xfb, 0x90, 0x00]), { status: 200, headers: { 'content-type': 'audio/mpeg' } });
+    };
+    const run = async (text, sub) => {
+        const res = {
+            headers: {},
+            statusCode: 0,
+            body: null,
+            setHeader(k, v) {
+                this.headers[k.toLowerCase()] = v;
+            },
+            status(code) {
+                this.statusCode = code;
+                return this;
+            },
+            send(b) {
+                this.body = b;
+            },
+            json(b) {
+                this.body = b;
+            },
+        };
+        await handleElevenLabsMode({ body: { voiceId: 'voice_12345678', text } }, res, { sub }, 'tts');
+        return res;
+    };
+    try {
+        let res = await run('[excited] Dinner is ready!', 'verify-tts-1');
+        if (res.statusCode !== 200 || res.headers['x-elevenlabs-model'] !== 'eleven_v3' || calls.at(-1).text !== '[excited] Dinner is ready!') {
+            throw new Error(`tagged text should use eleven_v3 with tags: ${JSON.stringify({ status: res.statusCode, calls })}`);
+        }
+        if (res.headers['content-type'] !== 'audio/mpeg' || !res.body?.length) throw new Error('tts should return audio/mpeg bytes');
+        failV3 = true;
+        res = await run('[excited] Dinner is ready!', 'verify-tts-2');
+        const last = calls.at(-1);
+        if (res.statusCode !== 200 || res.headers['x-elevenlabs-model'] !== 'eleven_flash_v2_5' || last.text !== 'Dinner is ready!') {
+            throw new Error(`v3 failure should fall back to flash without tags: ${JSON.stringify(last)}`);
+        }
+        res = await run('Plain text.', 'verify-tts-3');
+        if (calls.at(-1).model !== 'eleven_flash_v2_5') throw new Error('untagged text should use flash');
+        failAll = true;
+        res = await run('Plain text.', 'verify-tts-4');
+        if (res.statusCode !== 502 || !/Quota exceeded/.test(res.body?.detail || '')) {
+            throw new Error(`upstream errors should pass ElevenLabs detail back: ${JSON.stringify(res.body)}`);
+        }
+    } finally {
+        globalThis.fetch = realFetch;
+        delete process.env.ELEVENLABS_API_KEY;
+    }
+    console.log('ok elevenlabs tts model choice, fallback and error detail');
+}
+
 const onDisk = listApiJsFiles(apiRoot);
 const missing = onDisk.filter((rel) => !modules.includes(rel));
 if (missing.length) {
