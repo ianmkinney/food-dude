@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 18;
+export const CURRENT_SCHEMA_VERSION = 19;
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
@@ -483,6 +483,30 @@ export const MIGRATIONS = [
         up: async (db) => {
             const { applySyncV17 } = await import('./syncV17.js');
             await applySyncV17(db);
+        },
+    },
+    {
+        version: 19,
+        name: 'recipe_enhance_jobs_nutrition_flag',
+        up: async (db) => {
+            await addColumnIfMissing(db, 'recipes', 'nutrition_ai_estimate', 'INTEGER', '0');
+            await db.execAsync(`
+              CREATE TABLE IF NOT EXISTS recipe_enhance_jobs (
+                id TEXT PRIMARY KEY NOT NULL,
+                recipe_id INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                phase TEXT,
+                custom_instructions TEXT,
+                partial_json TEXT,
+                result_json TEXT,
+                error TEXT,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+              );
+              CREATE INDEX IF NOT EXISTS idx_recipe_enhance_jobs_recipe ON recipe_enhance_jobs(recipe_id);
+              CREATE INDEX IF NOT EXISTS idx_recipe_enhance_jobs_status ON recipe_enhance_jobs(status);
+            `);
         },
     },
     {

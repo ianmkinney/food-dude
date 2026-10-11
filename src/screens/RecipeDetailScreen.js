@@ -19,8 +19,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
-import { recipeOperations, mealPlanOperations, groceryOperations, recipeCookingHistoryOperations, userOperations } from '../database/operations';
+import {
+    recipeOperations,
+    mealPlanOperations,
+    groceryOperations,
+    recipeCookingHistoryOperations,
+    userOperations,
+    subscribeRecipeEnhanceJobs,
+} from '../database/operations';
 import aiChefService from '../services/aiChefService';
+import { enqueueRecipeEnhance, retryRecipeEnhanceJob } from '../ai/recipeEnhanceWorker';
+import { useRecipeEnhanceStatus } from '../hooks/useRecipeEnhanceStatus';
 import { toPersistentImageUri } from '../services/mediaPrep';
 import { AiBadge, AiDisclaimer, AllergenWarning, AllergyNotice, ReportButton } from '../ai/AiLabel';
 import SourceLabel from '../components/SourceLabel';
@@ -74,9 +83,18 @@ const RecipeDetailScreen = ({ route, navigation }) => {
     const { width: windowWidth } = useWindowDimensions();
     const reduceMotion = useReducedMotion();
 
+    const { enhancing, failed, job: enhanceJob, refresh: refreshEnhanceStatus } = useRecipeEnhanceStatus(recipeId);
+
     useEffect(() => {
         loadRecipe();
     }, [recipeId]);
+
+    useEffect(() => {
+        return subscribeRecipeEnhanceJobs(() => {
+            refreshEnhanceStatus();
+            loadRecipe();
+        });
+    }, [recipeId, refreshEnhanceStatus]);
 
     const loadRecipe = async () => {
         try {
@@ -281,37 +299,26 @@ const RecipeDetailScreen = ({ route, navigation }) => {
 
     const handleAIUpdateWithInstructions = async () => {
         setCustomInstructionsModalVisible(false);
-        setUpdatingWithAI(true);
-        setUpdatingStatus('Analyzing recipe...');
+        const instructions = customInstructions.trim() || null;
+        setCustomInstructions('');
         try {
-            setUpdatingStatus('Enhancing with AI...');
-            const result = await aiChefService.enhanceRecipe(recipe, customInstructions.trim() || null);
-            if (result.success && result.enhancement) {
-                const { updatedRecipe, changes } = result.enhancement;
-
-                if (changes.length === 0) {
-                    Alert.alert('No Changes Needed', 'Your recipe looks complete and accurate!');
-                    setUpdatingWithAI(false);
-                    setUpdatingStatus('');
-                    setCustomInstructions('');
-                    return;
-                }
-
-                setUpdatingStatus('Preparing suggestions...');
-                // Store changes and updated recipe for display and application
-                setAiChanges(changes);
-                setAiUpdatedRecipe(updatedRecipe);
-                setAiUpdateModalVisible(true);
-            } else {
-                Alert.alert('Error', result.error || 'Failed to enhance recipe');
-            }
+            await enqueueRecipeEnhance(recipeId, instructions);
+            Alert.alert(
+                'Enhancing in the background',
+                'You can leave this screen — we will update the recipe and notify you when it is done.'
+            );
         } catch (error) {
-            console.error('Error updating with AI:', error);
-            Alert.alert('Error', 'Failed to update recipe with AI');
-        } finally {
-            setUpdatingWithAI(false);
-            setUpdatingStatus('');
-            setCustomInstructions('');
+            console.error('Error queueing enhance:', error);
+            Alert.alert('Error', error?.message || 'Could not start enhance');
+        }
+    };
+
+    const handleRetryEnhance = async () => {
+        try {
+            await retryRecipeEnhanceJob(recipeId, enhanceJob?.custom_instructions || null);
+            Alert.alert('Retrying enhance', 'We will try again in the background.');
+        } catch (error) {
+            Alert.alert('Error', error?.message || 'Could not retry');
         }
     };
 
@@ -731,13 +738,13 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                             <TouchableOpacity
                                 style={[styles.quickActionButton, { backgroundColor: theme.accent.purple + '20' }]}
                                 onPress={handleAIUpdate}
-                                disabled={updatingWithAI}
+                                disabled={enhancing}
                             >
-                                {updatingWithAI ? (
+                                {enhancing ? (
                                     <>
                                         <ActivityIndicator size="small" color={theme.accent.purple} />
                                         <Text style={[styles.quickActionText, { color: theme.accent.purple }]}>
-                                            {updatingStatus || 'Updating...'}
+                                            Enhancing…
                                         </Text>
                                     </>
                                 ) : (
@@ -801,6 +808,30 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                         </View>
                     </View>
 
+                    {failed && !enhancing && (
+                        <View style={[styles.card, { backgroundColor: theme.colors.error + '12', borderColor: theme.colors.error + '40', borderWidth: 1, marginBottom: 12 }]}>
+                            <Text style={{ color: theme.colors.error, fontWeight: '600', marginBottom: 6 }}>Enhance failed</Text>
+                            <Text style={{ color: theme.colors.text.secondary, marginBottom: 10 }}>
+                                {enhanceJob?.error || 'Something went wrong. Try again.'}
+                            </Text>
+                            <TouchableOpacity
+                                onPress={handleRetryEnhance}
+                                style={[styles.quickActionButton, { alignSelf: 'flex-start', backgroundColor: theme.accent.purple + '20' }]}
+                            >
+                                <Ionicons name="refresh" size={18} color={theme.accent.purple} />
+                                <Text style={[styles.quickActionText, { color: theme.accent.purple }]}>Retry</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                    {enhancing && (
+                        <View style={[styles.card, { backgroundColor: theme.accent.purple + '12', marginBottom: 12 }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <ActivityIndicator size="small" color={theme.accent.purple} />
+                                <Text style={{ color: theme.accent.purple, fontWeight: '600' }}>Enhancing with AI…</Text>
+                            </View>
+                        </View>
+                    )}
+
                     {/* Nutritional Information */}
                     {(recipe.calories != null || recipe.protein != null || recipe.carbohydrates != null || recipe.fat != null || recipe.fiber != null || recipe.sugar != null || recipe.sodium != null) ? (
                         <>
@@ -809,7 +840,10 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                                 <Text style={[styles.sectionSubtitle, { color: theme.colors.text.secondary }]}>
                                     Per serving
                                 </Text>
-                                <AiDisclaimer kind={recipe.is_ai_generated ? 'estimate' : 'recipe'} style={{ marginTop: 6 }} />
+                                <AiDisclaimer
+                                    kind={recipe.nutrition_ai_estimate ? 'estimate' : recipe.is_ai_generated ? 'estimate' : 'recipe'}
+                                    style={{ marginTop: 6 }}
+                                />
                             </View>
                             <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
                                 <View style={styles.nutritionGrid}>
@@ -1158,14 +1192,12 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                                 <TouchableOpacity
                                     style={[styles.modalSubmitButton, { backgroundColor: theme.accent.purple }]}
                                     onPress={handleAIUpdateWithInstructions}
-                                    disabled={updatingWithAI}
+                                    disabled={enhancing}
                                 >
-                                    {updatingWithAI ? (
+                                    {enhancing ? (
                                         <>
                                             <ActivityIndicator color="#FFFFFF" size="small" style={{ marginRight: 8 }} />
-                                            <Text style={styles.modalSubmitText}>
-                                                {updatingStatus || 'Processing...'}
-                                            </Text>
+                                            <Text style={styles.modalSubmitText}>Enhancing…</Text>
                                         </>
                                     ) : (
                                         <Text style={styles.modalSubmitText}>Enhance Recipe</Text>

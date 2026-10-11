@@ -49,6 +49,7 @@ export const CREDIT_COSTS = {
     textImport: 2,
     imageImport: 3,
     recipeImage: 5,
+    recipeEnhance: 1,
 } as const;
 
 export type PlatformAiFeature = keyof typeof CREDIT_COSTS;
