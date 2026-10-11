@@ -138,42 +138,69 @@ const FunLoader = ({ visible, progress: externalProgress }) => {
 
     const cardStyle = getSurfaceStyle({ ...theme, platform: Platform.OS }, 'elevated');
 
+    const card = (
+        <View
+            style={[styles.container, cardStyle, { backgroundColor: theme.colors.surfaceElevated }]}
+            role="status"
+            aria-live="polite"
+        >
+            <View style={[styles.iconHalo, { backgroundColor: theme.primary[100] }]}>
+                <Reanimated.View style={iconStyle}>
+                    <Ionicons name="restaurant" size={40} color={theme.primary[500]} />
+                </Reanimated.View>
+            </View>
+
+            <Text style={[styles.message, { color: theme.colors.text.primary }]}>
+                {MESSAGES[messageIndex]}
+            </Text>
+
+            <View style={[styles.progressTrack, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <Animated.View
+                    style={[
+                        styles.progressBar,
+                        {
+                            backgroundColor: theme.primary[500],
+                            width: width,
+                        },
+                    ]}
+                />
+                <Reanimated.View
+                    pointerEvents="none"
+                    style={[styles.shimmer, shimmerStyle, { backgroundColor: '#FFFFFF' }]}
+                />
+            </View>
+        </View>
+    );
+
+    // On web a full-screen modal would cover the header for the whole request,
+    // leaving no way back if it hangs; the card floats without taking taps.
+    if (Platform.OS === 'web') {
+        return (
+            <View style={styles.webLayer} pointerEvents="none">
+                {card}
+            </View>
+        );
+    }
+
     return (
         <Modal transparent animationType={reduceMotion ? 'none' : 'fade'} visible={visible}>
-            <View style={[styles.overlay, { backgroundColor: theme.colors.overlay }]}>
-                <View style={[styles.container, cardStyle, { backgroundColor: theme.colors.surfaceElevated }]}>
-                    <View style={[styles.iconHalo, { backgroundColor: theme.primary[100] }]}>
-                        <Reanimated.View style={iconStyle}>
-                            <Ionicons name="restaurant" size={40} color={theme.primary[500]} />
-                        </Reanimated.View>
-                    </View>
-
-                    <Text style={[styles.message, { color: theme.colors.text.primary }]}>
-                        {MESSAGES[messageIndex]}
-                    </Text>
-
-                    <View style={[styles.progressTrack, { backgroundColor: theme.colors.surfaceMuted }]}>
-                        <Animated.View
-                            style={[
-                                styles.progressBar,
-                                {
-                                    backgroundColor: theme.primary[500],
-                                    width: width,
-                                },
-                            ]}
-                        />
-                        <Reanimated.View
-                            pointerEvents="none"
-                            style={[styles.shimmer, shimmerStyle, { backgroundColor: '#FFFFFF' }]}
-                        />
-                    </View>
-                </View>
-            </View>
+            <View style={[styles.overlay, { backgroundColor: theme.colors.overlay }]}>{card}</View>
         </Modal>
     );
 };
 
 const styles = StyleSheet.create({
+    webLayer: {
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+        zIndex: 900,
+    },
     overlay: {
         flex: 1,
         justifyContent: 'center',
