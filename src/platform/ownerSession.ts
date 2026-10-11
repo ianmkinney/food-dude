@@ -103,11 +103,7 @@ export async function exchangeGoogleIdToken(idToken: string, nonce: string): Pro
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
-        const message =
-            body?.message ||
-            (response.status === 403
-                ? 'This Google account is not authorized for owner sign-in.'
-                : 'Owner sign-in failed.');
+        const message = body?.message || 'Google sign-in failed.';
         throw new Error(message);
     }
     const session: OwnerSession = {
@@ -120,7 +116,15 @@ export async function exchangeGoogleIdToken(idToken: string, nonce: string): Pro
     return session;
 }
 
-export async function fetchOwnerUsage(): Promise<OwnerUsage | null> {
+export type AuthSessionProfile = {
+    email: string;
+    name: string;
+    sub?: string;
+    platformAiAllowed: boolean;
+    elevenlabsAvailable: boolean;
+};
+
+export async function fetchAuthSessionProfile(): Promise<AuthSessionProfile | null> {
     const token = await getOwnerSessionToken();
     if (!token) return null;
     const response = await fetch(`${getApiBaseUrl()}/auth/session`, {
@@ -132,6 +136,22 @@ export async function fetchOwnerUsage(): Promise<OwnerUsage | null> {
     }
     if (!response.ok) return null;
     const body = await response.json();
-    const usage = body.usage as OwnerUsage | undefined;
-    return usage?.requestLimit != null ? usage : null;
+    return {
+        email: body.email,
+        name: body.name || '',
+        sub: body.sub,
+        platformAiAllowed: Boolean(body.platformAiAllowed),
+        elevenlabsAvailable: Boolean(body.elevenlabsAvailable),
+    };
+}
+
+/** Google sign-in present; platform OpenRouter proxy only when allowlisted on server. */
+export async function hasPlatformAiAccess(): Promise<boolean> {
+    const profile = await fetchAuthSessionProfile();
+    return Boolean(profile?.platformAiAllowed);
+}
+
+/** @deprecated platform AI usage meters are not stored server-side */
+export async function fetchOwnerUsage(): Promise<OwnerUsage | null> {
+    return null;
 }

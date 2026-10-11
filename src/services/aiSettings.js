@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { hasOwnerSession } from '../platform/ownerSession';
+import { hasPlatformAiAccess } from '../platform/ownerSession';
 
 let SecureStore = null;
 try {
@@ -265,7 +265,7 @@ export async function getActiveCredentials() {
 
 export async function isAiConfigured() {
     const { apiKey } = await getActiveCredentials();
-    return Boolean(apiKey) || (await hasOwnerSession());
+    return Boolean(apiKey) || (await hasPlatformAiAccess());
 }
 
 /**
@@ -278,7 +278,7 @@ export async function requireAiConfigured() {
     if (creds.apiKey) {
         return { ...creds, route: 'byok' };
     }
-    if (await hasOwnerSession()) {
+    if (await hasPlatformAiAccess()) {
         return { ...creds, route: 'platform' };
     }
     throw new Error(MISSING_KEY_MESSAGE);

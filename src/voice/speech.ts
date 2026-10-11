@@ -85,8 +85,8 @@ export async function getSpeechEngine(): Promise<SpeechEngine> {
     if (apiKey && voiceId) {
         return createElevenLabsEngine();
     }
-    const hasOwnerSession = Boolean(await getOwnerSessionToken());
-    if (await isPlatformElevenLabsActive(hasOwnerSession)) {
+    const { hasPlatformAiAccess } = await import('../platform/ownerSession');
+    if (await isPlatformElevenLabsActive(await hasPlatformAiAccess())) {
         return createPlatformElevenLabsEngine();
     }
     return deviceSpeechEngine;

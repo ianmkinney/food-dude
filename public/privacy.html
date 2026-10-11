@@ -18,20 +18,21 @@
 
     <main>
       <h1>Privacy Policy</h1>
-      <p class="lede">The short version: for most people, AmpliFood has no sign-in and no servers that collect your kitchen data. Your recipes and plans stay on your device, and your AI key goes only to the provider you choose.</p>
+      <p class="lede">The short version: your recipes and kitchen data stay on your device. Optional Google sign-in connects parties with friends and optional cloud backups. Your AI key goes only to the provider you choose unless your account is allowlisted for platform AI.</p>
       <p><em>Last updated: October 10, 2026</em></p>
-      <p class="note"><strong>Pending Legal review:</strong> Owner-only Google sign-in and platform AI (OpenRouter) described below.</p>
 
       <h2>Accounts and sign-in</h2>
-      <p><strong>Regular users do not sign in.</strong> The name, username, email, and flavor preferences on the Account screen are stored only on your device, as labels for your own use. They are not sent to AmpliFood.</p>
-      <p><strong>Owner sign-in (app owner only):</strong> A hidden <em>Owner sign-in</em> control in Account lets the app owner authenticate with Google. We receive their Google account ID, email address, and display name to verify identity against an allowlist. We keep a short-lived session token on the device and per-day <strong>usage counters</strong> on the server (request count and estimated tokens). We do <strong>not</strong> store AI prompts on the server. When the owner uses platform AI, requests go through AmpliFood's server to <a href="https://openrouter.ai/privacy">OpenRouter</a> and the underlying model provider.</p>
+      <p><strong>Local profile (no sign-in required):</strong> The name, username, email, and flavor preferences on the Account screen are stored only on your device, as labels for your own use. They are not sent to AmpliFood unless you sign in with Google for parties or backup.</p>
+      <p><strong>Sign in with Google (optional):</strong> In Account you can authenticate with Google to create or join <strong>parties</strong> and use optional <strong>cloud backup</strong>. We receive your Google account ID (<code>sub</code>), email address, and display name, and keep a short-lived session token on your device. Signing in does <strong>not</strong> by itself enable platform AI.</p>
+      <p><strong>Platform AI (allowlisted accounts only):</strong> If your Google email is on the server allowlist, you may use AmpliFood's OpenRouter proxy for AI (and optional platform ElevenLabs voice). We do <strong>not</strong> store AI prompts on the server. Requests go through AmpliFood's server to <a href="https://openrouter.ai/privacy">OpenRouter</a> and the underlying model provider.</p>
 
       <h2>Your data stays on your device</h2>
       <ul>
-        <li>Recipes, meal plans, pantry items, grocery lists, parties, AI chat history, assistant memory, and your profile are saved in a local SQLite database on your device. In the web version, that database lives in your browser's storage for this site.</li>
+        <li>Recipes, meal plans, pantry items, grocery lists, AI chat history, assistant memory, and your profile are saved in a local SQLite database on your device. In the web version, that database lives in your browser's storage for this site.</li>
+        <li><strong>Parties are the only part of AmpliFood stored online</strong> (plus backups you choose to save). This is how we connect you with friends. Everything else stays on your phone.</li>
         <li><strong>Ampi memory</strong> stores short facts you ask Ampi to remember (likes, household size, equipment, skill, goals). You can search, edit, delete, or turn memory off in Account. Memories are sent to your AI provider only when you allow AI requests, under the same consent as chat.</li>
         <li>Theme, voice, and display settings are saved locally on your device.</li>
-        <li>We don't upload, back up, or sync any of it. If you delete the app or clear the site's data, it's gone.</li>
+        <li>We don't upload or sync kitchen data by default. Optional cloud backup (when signed in) stores a compressed export you trigger in Account. If you delete the app or clear the site's data without a backup, local data is gone.</li>
         <li>We don't sell your data. Nothing in this list is used for advertising.</li>
       </ul>
 
@@ -39,16 +40,17 @@
       <ul>
         <li>On iPhone and Android, API keys you add (AI provider and optional ElevenLabs voice) are stored with SecureStore in the system's encrypted storage (iOS Keychain / Android Keystore).</li>
         <li>In the web version, there is no system keychain, so keys are kept in your browser's local storage for this site. Anyone with access to that browser profile could read them, so use Account → Clear on shared computers.</li>
-        <li>Keys are never sent to AmpliFood. Your AI key is sent only with your requests to the AI provider you picked (unless you are the signed-in owner using platform AI via OpenRouter; see above).</li>
+        <li>Keys are never sent to AmpliFood. Your AI key is sent only with your requests to the AI provider you picked (unless your signed-in Google account is allowlisted for platform AI via OpenRouter; see above).</li>
         <li><strong>ElevenLabs (optional):</strong> If you add an ElevenLabs API key in Account → Voice, Ampi's spoken replies are synthesized by calling ElevenLabs directly from your device. Reply text is sent to ElevenLabs under your own account; AmpliFood does not receive or store that audio on a server.</li>
       </ul>
 
       <h2>What leaves your device, and where it goes</h2>
       <ul>
         <li><strong>AI requests (BYOK)</strong> go directly to your chosen provider (Anthropic, OpenAI, xAI, or Google Gemini), and only after you've allowed AI requests in the app and use an AI feature. You can turn that permission off in settings. A request can include the text, links, screenshots, photos, PDFs, and other recipe files you attach in chat, and, for AI chef features, relevant pantry items, recipes, and flavor preferences. PDF text is extracted on your device when possible before anything is sent. That provider's own privacy policy and terms govern what it does with the request.</li>
-        <li><strong>Owner platform AI</strong> (owner sign-in only): prompts pass through AmpliFood's server to OpenRouter and the selected model provider; prompts are not stored on our server.</li>
-        <li><strong>Party emails (optional):</strong> if you use Party invite or sync and are signed in as the app owner (or an allowlisted tester), AmpliFood's server sends email through <a href="https://resend.com/legal/privacy-policy">Resend</a> to addresses you choose. Signed link parties keep data in the URL fragment on your device (not on our servers). Without owner sign-in or Resend configuration, the app opens your own email app instead.</li>
-        <li><strong>Live party sync (optional):</strong> when a party owner enables live sync, we store the party <strong>name</strong>, optional <strong>cover photo</strong>, member <strong>display names</strong> (and optional emails you provide), and <strong>meal names/descriptions</strong> in <a href="https://neon.tech/privacy">Neon Postgres</a> (via Vercel) so members can poll for updates. Recipe lists in meals reference IDs on each member's device; your recipes, pantry, and grocery data are not uploaded. Join links use an unguessable token; each member receives a secret token stored on their device.</li>
+        <li><strong>Platform AI</strong> (allowlisted Google accounts only): prompts pass through AmpliFood's server to OpenRouter and the selected model provider; prompts are not stored on our server.</li>
+        <li><strong>Parties (when signed in):</strong> party <strong>name</strong>, optional <strong>cover photo</strong>, member <strong>display names</strong> and Google emails, and <strong>meal names/descriptions</strong> are stored in <a href="https://neon.tech/privacy">Neon Postgres</a> (via Vercel) so members can poll for updates. Recipe lists in meals reference IDs on each member's device; your recipes, pantry, and grocery data are not uploaded. Invites use share links (<code>/p/&lt;token&gt;</code>); each member receives a secret token stored on their device.</li>
+        <li><strong>Cloud backup (optional, when signed in):</strong> when you tap Back up now in Account, a gzip-compressed JSON export of your local database (excluding party sync secrets and never including API keys) is stored in Neon, capped at about 5&nbsp;MB per backup and the last 10 per account. Only your Google <code>sub</code> can list, restore, or delete your backups.</li>
+        <li><strong>Party emails (optional, server):</strong> if configured, allowlisted accounts may send party-related email through <a href="https://resend.com/legal/privacy-policy">Resend</a>. The app otherwise uses your device's share sheet for invite links.</li>
         <li><strong>Barcode numbers go to Open Food Facts</strong>, a public product database, so the app can look up the product name and details. Only the barcode number is sent, not your profile.</li>
         <li><strong>Recipe links you import</strong> are fetched by your device so the recipe can be read.</li>
         <li><strong>Web version:</strong> the site is hosted on Vercel, which, like any web host, receives standard request information (such as IP address and browser type) when it serves the pages. AmpliFood doesn't add tracking on top of that.</li>

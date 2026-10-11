@@ -3,7 +3,7 @@ import { getApiBaseUrl } from '../config/api';
 import { getOwnerSessionToken } from '../platform/ownerSession';
 
 const MSG = {
-    unauthorized: 'Sign in under Account → Owner sign-in to send email from AmpliFood.',
+    unauthorized: 'Sign in with Google under Account to send email from AmpliFood.',
     rate_limited: 'Too many emails sent. Wait a moment and try again.',
     bad_request: 'Could not send that email.',
     upstream_failed: 'Email could not be sent. Try again or use your email app.',

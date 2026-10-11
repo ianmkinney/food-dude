@@ -54,4 +54,14 @@ export const PARTY_SCHEMA_STATEMENTS = [
     'ALTER TABLE invite_tokens ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ',
     `UPDATE invite_tokens SET expires_at = created_at + interval '30 days'
      WHERE expires_at IS NULL`,
+    `CREATE TABLE IF NOT EXISTS user_backups (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_sub TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    app_version TEXT NOT NULL,
+    schema_version INTEGER NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    data BYTEA NOT NULL
+)`,
+    'CREATE INDEX IF NOT EXISTS idx_user_backups_sub_created ON user_backups(user_sub, created_at DESC)',
 ];

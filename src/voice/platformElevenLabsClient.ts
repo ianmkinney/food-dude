@@ -32,7 +32,7 @@ export async function fetchOwnerSessionElevenLabsAvailable(): Promise<boolean> {
 export async function listPlatformElevenLabsVoices(): Promise<ElevenLabsVoice[]> {
     const token = await getOwnerSessionToken();
     if (!token) {
-        throw new PlatformElevenLabsError(401, 'unauthorized', 'Sign in with owner sign-in in Account.');
+        throw new PlatformElevenLabsError(401, 'unauthorized', 'Sign in with Google in Account (allowlisted for platform voice).');
     }
     const url = `${getApiBaseUrl()}/ai/chat`;
     let response: Response;
@@ -70,7 +70,7 @@ export async function listPlatformElevenLabsVoices(): Promise<ElevenLabsVoice[]>
 export async function requestPlatformElevenLabsTts(text: string, voiceId: string): Promise<Response> {
     const token = await getOwnerSessionToken();
     if (!token) {
-        throw new PlatformElevenLabsError(401, 'unauthorized', 'Sign in with owner sign-in in Account.');
+        throw new PlatformElevenLabsError(401, 'unauthorized', 'Sign in with Google in Account (allowlisted for platform voice).');
     }
     const url = `${getApiBaseUrl()}/ai/chat`;
     try {

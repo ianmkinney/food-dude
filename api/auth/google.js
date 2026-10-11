@@ -1,13 +1,12 @@
 import { applyCors } from '../_lib/cors.js';
-import { isOwnerGateConfigured, isEmailAllowed, requireSecrets } from '../_lib/env.js';
+import { isEmailAllowed, isGoogleSignInConfigured, requireSecrets } from '../_lib/env.js';
 import { verifyGoogleIdToken } from '../_lib/google.js';
 import { signSession } from '../_lib/session.js';
 const MSG = {
     method_not_allowed: 'Method not allowed.',
-    platform_disabled: 'Owner platform AI is not enabled.',
+    sign_in_disabled: 'Google sign-in is not enabled on this server.',
     misconfigured: 'Server configuration error.',
     bad_request: 'Invalid sign-in request.',
-    not_allowed: 'This Google account is not authorized.',
     auth_failed: 'Google sign-in failed.',
 };
 
@@ -22,8 +21,8 @@ export default async function handler(req, res) {
         return;
     }
 
-    if (!isOwnerGateConfigured()) {
-        jsonError(res, 503, 'platform_disabled');
+    if (!isGoogleSignInConfigured()) {
+        jsonError(res, 503, 'sign_in_disabled');
         return;
     }
 
@@ -48,15 +47,13 @@ export default async function handler(req, res) {
 
     try {
         const profile = await verifyGoogleIdToken(idToken, nonce);
-        if (!isEmailAllowed(profile.email)) {
-            jsonError(res, 403, 'not_allowed');
-            return;
-        }
         const token = await signSession(profile);
         res.status(200).json({
             token,
             email: profile.email,
             name: profile.name,
+            sub: profile.sub,
+            platformAiAllowed: isEmailAllowed(profile.email),
         });
     } catch (error) {
         console.error('[auth/google] verify failed:', error?.message || error);

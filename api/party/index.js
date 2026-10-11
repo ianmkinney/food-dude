@@ -1,5 +1,5 @@
 import { applyCors } from '../_lib/cors.js';
-import { isEmailAllowed, isOwnerGateConfigured, requireSecrets } from '../_lib/env.js';
+import { isEmailAllowed, isGoogleSignInConfigured, requireSecrets } from '../_lib/env.js';
 import { bearerToken, verifySession } from '../_lib/session.js';
 import { checkMinuteRateLimit } from '../_lib/store.js';
 import { getPartySql, isPartyDatabaseConfigured, MAX_PARTY_IMAGE_BYTES } from '../_lib/partyDb.js';
@@ -52,8 +52,8 @@ function applyBinaryImageHeaders(res, contentType) {
     res.setHeader('Cache-Control', 'public, max-age=3600');
 }
 
-async function requireOwnerSession(req, res) {
-    if (!isOwnerGateConfigured()) {
+async function requireUserSession(req, res) {
+    if (!isGoogleSignInConfigured()) {
         partyReject(res, 503, 'misconfigured');
         return null;
     }
@@ -70,12 +70,7 @@ async function requireOwnerSession(req, res) {
         return null;
     }
     try {
-        const session = await verifySession(token);
-        if (!isEmailAllowed(session.email)) {
-            partyReject(res, 403, 'not_allowed');
-            return null;
-        }
-        return session;
+        return await verifySession(token);
     } catch {
         partyReject(res, 401, 'unauthorized');
         return null;
@@ -112,7 +107,7 @@ async function assertPartyOwner(sql, partyId, session) {
     if (!row) return { ok: false, status: 404, error: 'not_found' };
     const email = String(session.email).toLowerCase();
     const ownerEmail = String(row.owner_email || '').toLowerCase();
-    if (row.owner_sub !== session.sub && email !== ownerEmail) {
+    if (session.sub && row.owner_sub !== session.sub && email !== ownerEmail) {
         return { ok: false, status: 403, error: 'forbidden' };
     }
     return { ok: true };
@@ -271,10 +266,14 @@ async function handleGet(req, res, session) {
     res.status(200).json({ ok: true, party: rowToPartySnapshot(bundle, { isOwner: ownerView }) });
 }
 
-async function handleJoin(req, res) {
+async function handleJoin(req, res, session) {
     const body = parseBody(req);
     const inviteToken = String(body.inviteToken || body.token || '').trim();
-    const displayName = String(body.displayName || '').trim().slice(0, MAX_DISPLAY);
+    const displayName = String(
+        body.displayName || session?.name || session?.email?.split('@')[0] || ''
+    )
+        .trim()
+        .slice(0, MAX_DISPLAY);
     if (!INVITE_TOKEN_RE.test(inviteToken) || !displayName) {
         partyReject(res, 400, 'bad_request');
         return;
@@ -290,7 +289,9 @@ async function handleJoin(req, res) {
         return;
     }
 
-    const email = body.email ? String(body.email).trim().toLowerCase().slice(0, MAX_EMAIL_LEN) : null;
+    const email = session?.email
+        ? String(session.email).trim().toLowerCase().slice(0, MAX_EMAIL_LEN)
+        : null;
 
     const result = await withPartyTransaction(async (client) => {
         const active = await countActiveMembers(client, invite.party_id);
@@ -667,29 +668,23 @@ export default async function handler(req, res) {
     if (!softRateLimit(req, res, 'party-api', 40)) return;
 
     let session = null;
-    const needsOwner =
-        action === 'create' ||
-        action === 'remove_member' ||
-        action === 'upload_image' ||
-        action === 'migrate' ||
-        action === 'rotate_invite' ||
-        action === 'rename';
-    const optionalSession =
-        action === 'get' || action === 'update_meals' || action === 'changes_since';
+    const needsSession = [
+        'create',
+        'join',
+        'get',
+        'leave',
+        'remove_member',
+        'upload_image',
+        'migrate',
+        'rotate_invite',
+        'rename',
+        'update_meals',
+        'changes_since',
+    ].includes(action);
 
-    if (needsOwner) {
-        session = await requireOwnerSession(req, res);
+    if (needsSession) {
+        session = await requireUserSession(req, res);
         if (!session) return;
-    } else if (optionalSession) {
-        const token = bearerToken(req);
-        if (token) {
-            try {
-                session = await verifySession(token);
-                if (!isEmailAllowed(session.email)) session = null;
-            } catch {
-                session = null;
-            }
-        }
     }
 
     try {
@@ -701,7 +696,7 @@ export default async function handler(req, res) {
                 await handleGet(req, res, session);
                 break;
             case 'join':
-                await handleJoin(req, res);
+                await handleJoin(req, res, session);
                 break;
             case 'leave':
                 await handleLeave(req, res);

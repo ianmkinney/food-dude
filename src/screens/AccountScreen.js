@@ -22,7 +22,8 @@ import TextSizeSettings from '../components/TextSizeSettings';
 import MemorySettings from '../components/MemorySettings';
 import DataSharingSettings from '../components/DataSharingSettings';
 import OwnerSignInSettings from '../components/OwnerSignInSettings';
-import { isOwnerSignInConfigured } from '../platform/ownerSignInConfig';
+import CloudBackupSettings from '../components/CloudBackupSettings';
+import { isGoogleSignInConfigured } from '../platform/ownerSignInConfig';
 import AccountAboutSheet from '../components/AccountAboutSheet';
 import ElevatedCard from '../components/ElevatedCard';
 import { PRIVACY_URL } from '../consent/consentStore';
@@ -350,13 +351,14 @@ const AccountScreen = ({ navigation }) => {
                 <Text style={[styles.safetyBody, { color: theme.colors.text.secondary }]}>
                     Your API keys never go to AmpliFood. Profile and flavor preferences stay in the
                     on-device database. AI calls go to the provider you pick in Account, unless you
-                    use owner sign-in below (owner only).
+                    use platform AI after allowlisted Google sign-in below.
                 </Text>
             </ElevatedCard>
 
-            {isOwnerSignInConfigured() ? (
+            {isGoogleSignInConfigured() ? (
                 <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                     <OwnerSignInSettings theme={theme} />
+                    <CloudBackupSettings theme={theme} />
                 </ElevatedCard>
             ) : null}
 

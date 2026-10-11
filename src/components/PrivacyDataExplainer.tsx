@@ -10,6 +10,9 @@ type Props = {
     variant?: 'intro' | 'account';
 };
 
+const PARTY_COPY =
+    'Parties are the only part of AmpliFood stored online (plus backups you choose to save). This is how we connect you with friends. Everything else stays on your phone.';
+
 /** Plain-language explainer: local storage vs what leaves the device for AI/voice. */
 export default function PrivacyDataExplainer({ theme, variant = 'account' }: Props) {
     const c = theme.colors;
@@ -32,13 +35,14 @@ export default function PrivacyDataExplainer({ theme, variant = 'account' }: Pro
             ) : null}
             <Text style={[styles.body, { color: c.text.secondary }]}>
                 Recipes, meal plans, pantry and grocery lists, AI chat history, memory, and API keys are stored locally on
-                this device (SQLite in the app; browser storage on web). They are not uploaded to AmpliFood and nothing is
-                sold.
+                this device (SQLite in the app; browser storage on web). They are not uploaded to AmpliFood by default and
+                nothing is sold.
             </Text>
+            <Text style={[styles.body, { color: c.text.secondary }]}>{PARTY_COPY}</Text>
             <Text style={[styles.body, { color: c.text.secondary }]}>
                 When you message Ampi, your text (and anything you attach) is sent to the AI provider you chose to generate a
-                reply.                 Optional ElevenLabs voice sends reply text to ElevenLabs (your own key on device, or the owner platform
-                voice when you use owner sign-in) from Account → Voice.
+                reply. Optional ElevenLabs voice sends reply text to ElevenLabs (your own key on device, or platform voice
+                when your Google account is allowlisted for platform AI) from Account → Voice.
             </Text>
             {!compact && (
                 <Pressable
