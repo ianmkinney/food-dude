@@ -786,7 +786,7 @@ export default async function handler(req, res) {
             await handlePartyImage(req, res);
         } catch (error) {
             console.error('[party/image]', error);
-            partyReject(res, 500, 'bad_request');
+            partyReject(res, 500, 'server_error');
         }
         return;
     }
@@ -870,6 +870,6 @@ export default async function handler(req, res) {
         }
     } catch (error) {
         console.error(`[party/${action}]`, error);
-        partyReject(res, 500, 'bad_request');
+        partyReject(res, 500, 'server_error');
     }
 }

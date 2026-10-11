@@ -1,7 +1,49 @@
 /** Idempotent DDL for party-only Neon schema. Keep in sync with scripts/party-db/schema.sql */
+
 export const PARTY_SCHEMA_ADVISORY_LOCK_KEY = '9037428910123';
 
-export const PARTY_SCHEMA_STATEMENTS = [
+/** Recorded in `party_schema_migrations` after identity dedupe + partial unique index. */
+export const PARTY_IDENTITY_MIGRATION_KEY = 'party_members_identity_v1';
+
+export const PARTY_SCHEMA_MIGRATIONS_DDL = `CREATE TABLE IF NOT EXISTS party_schema_migrations (
+    key TEXT PRIMARY KEY,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+)`;
+
+/** Backup + encrypted sync — safe to run without party member migrations. */
+export const BACKUP_SYNC_SCHEMA_STATEMENTS = [
+    `CREATE TABLE IF NOT EXISTS user_backups (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_sub TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    app_version TEXT NOT NULL,
+    schema_version INTEGER NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    data BYTEA NOT NULL
+)`,
+    'CREATE INDEX IF NOT EXISTS idx_user_backups_sub_created ON user_backups(user_sub, created_at DESC)',
+    `CREATE TABLE IF NOT EXISTS user_sync_state (
+    user_sub TEXT PRIMARY KEY,
+    next_seq BIGINT NOT NULL DEFAULT 1,
+    last_push_at TIMESTAMPTZ,
+    last_pull_at TIMESTAMPTZ
+)`,
+    `CREATE TABLE IF NOT EXISTS user_sync_records (
+    user_sub TEXT NOT NULL,
+    collection TEXT NOT NULL,
+    record_id TEXT NOT NULL,
+    seq BIGINT NOT NULL,
+    updated_at_ms BIGINT NOT NULL,
+    device_id TEXT NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT false,
+    ciphertext BYTEA NOT NULL,
+    PRIMARY KEY (user_sub, collection, record_id)
+)`,
+    'CREATE INDEX IF NOT EXISTS idx_user_sync_records_seq ON user_sync_records(user_sub, seq)',
+];
+
+/** Party tables and indexes except the partial unique index on (party_id, identity_key). */
+export const PARTY_CORE_SCHEMA_STATEMENTS = [
     `CREATE TABLE IF NOT EXISTS parties (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
@@ -27,9 +69,6 @@ export const PARTY_SCHEMA_STATEMENTS = [
     'CREATE INDEX IF NOT EXISTS idx_party_members_party_id ON party_members(party_id)',
     'ALTER TABLE party_members ADD COLUMN IF NOT EXISTS google_sub TEXT',
     'ALTER TABLE party_members ADD COLUMN IF NOT EXISTS identity_key TEXT',
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_party_members_party_identity
-        ON party_members(party_id, identity_key)
-        WHERE status = 'active' AND identity_key IS NOT NULL`,
     `CREATE TABLE IF NOT EXISTS party_meals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     party_id UUID NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
@@ -59,16 +98,6 @@ export const PARTY_SCHEMA_STATEMENTS = [
     'ALTER TABLE invite_tokens ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ',
     `UPDATE invite_tokens SET expires_at = created_at + interval '30 days'
      WHERE expires_at IS NULL`,
-    `CREATE TABLE IF NOT EXISTS user_backups (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_sub TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    app_version TEXT NOT NULL,
-    schema_version INTEGER NOT NULL,
-    size_bytes INTEGER NOT NULL,
-    data BYTEA NOT NULL
-)`,
-    'CREATE INDEX IF NOT EXISTS idx_user_backups_sub_created ON user_backups(user_sub, created_at DESC)',
     'ALTER TABLE party_meals ADD COLUMN IF NOT EXISTS recipe_meta JSONB NOT NULL DEFAULT \'{}\'::jsonb',
     `CREATE TABLE IF NOT EXISTS party_meal_ingredient_claims (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -83,22 +112,14 @@ export const PARTY_SCHEMA_STATEMENTS = [
     UNIQUE (meal_id, recipe_id, ingredient_key)
 )`,
     'CREATE INDEX IF NOT EXISTS idx_party_meal_claims_meal ON party_meal_ingredient_claims(meal_id)',
-    `CREATE TABLE IF NOT EXISTS user_sync_state (
-    user_sub TEXT PRIMARY KEY,
-    next_seq BIGINT NOT NULL DEFAULT 1,
-    last_push_at TIMESTAMPTZ,
-    last_pull_at TIMESTAMPTZ
-)`,
-    `CREATE TABLE IF NOT EXISTS user_sync_records (
-    user_sub TEXT NOT NULL,
-    collection TEXT NOT NULL,
-    record_id TEXT NOT NULL,
-    seq BIGINT NOT NULL,
-    updated_at_ms BIGINT NOT NULL,
-    device_id TEXT NOT NULL,
-    deleted BOOLEAN NOT NULL DEFAULT false,
-    ciphertext BYTEA NOT NULL,
-    PRIMARY KEY (user_sub, collection, record_id)
-)`,
-    'CREATE INDEX IF NOT EXISTS idx_user_sync_records_seq ON user_sync_records(user_sub, seq)',
+];
+
+export const PARTY_MEMBERS_IDENTITY_UNIQUE_INDEX = `CREATE UNIQUE INDEX IF NOT EXISTS idx_party_members_party_identity
+        ON party_members(party_id, identity_key)
+        WHERE status = 'active' AND identity_key IS NOT NULL`;
+
+/** Full bootstrap for `scripts/party-db/migrate.mjs` (index applied after dedupe in migrate script). */
+export const PARTY_SCHEMA_STATEMENTS = [
+    ...BACKUP_SYNC_SCHEMA_STATEMENTS,
+    ...PARTY_CORE_SCHEMA_STATEMENTS,
 ];

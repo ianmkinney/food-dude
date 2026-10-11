@@ -84,48 +84,142 @@ export function dedupeServerMemberRows(members, opts = {}) {
     return list;
 }
 
+async function reassignClaimsAndRemoveMembers(client, survivorId, loserIds) {
+    if (!loserIds.length) return;
+    await client.query(
+        `UPDATE party_meal_ingredient_claims
+         SET claimed_by_member_id = $1::uuid
+         WHERE claimed_by_member_id = ANY($2::uuid[])`,
+        [survivorId, loserIds]
+    );
+    await client.query(
+        `UPDATE party_members
+         SET status = 'removed',
+             removed_at = now(),
+             member_token_hash = NULL,
+             identity_key = NULL
+         WHERE member_id = ANY($1::uuid[])`,
+        [loserIds]
+    );
+}
+
+async function dedupeActiveGroups(client, groupSql) {
+    const groups = await client.query(groupSql);
+    for (const row of groups.rows) {
+        const ids = row.member_ids;
+        if (!ids || ids.length < 2) continue;
+        const survivor = ids[0];
+        const losers = ids.slice(1);
+        await reassignClaimsAndRemoveMembers(client, survivor, losers);
+    }
+}
+
+async function safeBackfillIdentityKeys(client) {
+    await client.query(`
+        UPDATE party_members pm
+        SET identity_key = 'email:' || lower(trim(pm.email))
+        WHERE pm.status = 'active'
+          AND pm.email IS NOT NULL AND trim(pm.email) <> ''
+          AND (pm.identity_key IS NULL OR pm.identity_key = '')
+          AND NOT EXISTS (
+            SELECT 1 FROM party_members o
+            WHERE o.party_id = pm.party_id
+              AND o.status = 'active'
+              AND o.identity_key = 'email:' || lower(trim(pm.email))
+              AND o.member_id <> pm.member_id
+          )
+    `);
+    await client.query(`
+        UPDATE party_members pm
+        SET identity_key = 'sub:' || trim(pm.google_sub)
+        WHERE pm.status = 'active'
+          AND pm.google_sub IS NOT NULL AND trim(pm.google_sub) <> ''
+          AND NOT EXISTS (
+            SELECT 1 FROM party_members o
+            WHERE o.party_id = pm.party_id
+              AND o.status = 'active'
+              AND o.identity_key = 'sub:' || trim(pm.google_sub)
+              AND o.member_id <> pm.member_id
+          )
+    `);
+}
+
 /**
  * Merge duplicate active members in Postgres (claims → survivor, losers marked removed).
+ * Dedupes before assigning identity_key; safe for existing duplicate-key production data.
  * @param {import('pg').PoolClient | { query: Function }} client
  */
 export async function mergeDuplicatePartyMembers(client) {
-    await client.query(`
-        UPDATE party_members
-        SET identity_key = 'email:' || lower(trim(email))
-        WHERE email IS NOT NULL AND trim(email) <> '' AND (identity_key IS NULL OR identity_key = '')
-    `);
-    await client.query(`
-        UPDATE party_members
-        SET identity_key = 'sub:' || trim(google_sub)
-        WHERE google_sub IS NOT NULL AND trim(google_sub) <> ''
-    `);
+    await dedupeActiveGroups(
+        client,
+        `
+        SELECT pm.party_id,
+               lower(trim(pm.email)) AS norm_email,
+               array_agg(
+                   pm.member_id
+                   ORDER BY
+                     (CASE
+                       WHEN lower(trim(pm.email)) = lower(trim(p.owner_email))
+                        AND pm.google_sub IS NOT NULL AND pm.google_sub = p.owner_sub THEN 0
+                       WHEN lower(trim(pm.email)) = lower(trim(p.owner_email)) THEN 1
+                       ELSE 2
+                     END),
+                     pm.joined_at ASC
+               ) AS member_ids
+        FROM party_members pm
+        JOIN parties p ON p.id = pm.party_id
+        WHERE pm.status = 'active'
+          AND pm.email IS NOT NULL AND trim(pm.email) <> ''
+        GROUP BY pm.party_id, lower(trim(pm.email)), p.owner_email
+        HAVING COUNT(*) > 1
+    `
+    );
 
-    const dups = await client.query(`
+    await dedupeActiveGroups(
+        client,
+        `
+        SELECT pm.party_id,
+               trim(pm.google_sub) AS norm_sub,
+               array_agg(
+                   pm.member_id
+                   ORDER BY
+                     (CASE WHEN pm.google_sub IS NOT NULL AND pm.google_sub = p.owner_sub THEN 0 ELSE 1 END),
+                     pm.joined_at ASC
+               ) AS member_ids
+        FROM party_members pm
+        JOIN parties p ON p.id = pm.party_id
+        WHERE pm.status = 'active'
+          AND pm.google_sub IS NOT NULL AND trim(pm.google_sub) <> ''
+        GROUP BY pm.party_id, trim(pm.google_sub), p.owner_sub
+        HAVING COUNT(*) > 1
+    `
+    );
+
+    await dedupeActiveGroups(
+        client,
+        `
         SELECT party_id, identity_key,
                array_agg(member_id ORDER BY joined_at ASC) AS member_ids
         FROM party_members
         WHERE status = 'active' AND identity_key IS NOT NULL
         GROUP BY party_id, identity_key
         HAVING COUNT(*) > 1
-    `);
+    `
+    );
 
-    for (const row of dups.rows) {
-        const ids = row.member_ids;
-        const survivor = ids[0];
-        const losers = ids.slice(1);
-        if (!losers.length) continue;
-        await client.query(
-            `UPDATE party_meal_ingredient_claims
-             SET claimed_by_member_id = $1::uuid
-             WHERE claimed_by_member_id = ANY($2::uuid[])`,
-            [survivor, losers]
-        );
-        await client.query(
-            `UPDATE party_members
-             SET status = 'removed', removed_at = now(), member_token_hash = NULL
-             WHERE member_id = ANY($1::uuid[])`,
-            [losers]
-        );
+    await safeBackfillIdentityKeys(client);
+}
+
+/**
+ * Run dedupe inside a transaction; swallow unique-violation races (23505) after retry.
+ * @param {import('pg').PoolClient | { query: Function }} client
+ */
+export async function mergeDuplicatePartyMembersSafe(client) {
+    try {
+        await mergeDuplicatePartyMembers(client);
+    } catch (error) {
+        if (error?.code !== '23505') throw error;
+        await mergeDuplicatePartyMembers(client);
     }
 }
 
@@ -142,32 +236,27 @@ export async function upsertActivePartyMember(client, {
 }) {
     const identityKey = memberIdentityKey({ email, googleSub });
     if (identityKey) {
-        const existing = await client.query(
-            `SELECT member_id FROM party_members
-             WHERE party_id = $1::uuid AND identity_key = $2 AND status = 'active'
-             LIMIT 1`,
-            [partyId, identityKey]
+        const upserted = await client.query(
+            `INSERT INTO party_members (party_id, display_name, email, google_sub, identity_key, status, member_token_hash)
+             VALUES ($1::uuid, $2, $3, $4, $5, 'active', $6)
+             ON CONFLICT (party_id, identity_key) WHERE (status = 'active' AND identity_key IS NOT NULL)
+             DO UPDATE SET
+                 display_name = EXCLUDED.display_name,
+                 email = COALESCE(EXCLUDED.email, party_members.email),
+                 google_sub = COALESCE(EXCLUDED.google_sub, party_members.google_sub),
+                 member_token_hash = COALESCE(EXCLUDED.member_token_hash, party_members.member_token_hash),
+                 status = 'active',
+                 removed_at = NULL
+             RETURNING member_id`,
+            [partyId, displayName, email, googleSub || null, identityKey, memberTokenHash || null]
         );
-        if (existing.rows[0]) {
-            const memberId = existing.rows[0].member_id;
-            await client.query(
-                `UPDATE party_members
-                 SET display_name = $1,
-                     email = COALESCE($2, email),
-                     google_sub = COALESCE($3, google_sub),
-                     member_token_hash = COALESCE($4, member_token_hash),
-                     identity_key = $5
-                 WHERE member_id = $6::uuid`,
-                [displayName, email, googleSub, memberTokenHash, identityKey, memberId]
-            );
-            return memberId;
-        }
+        return upserted.rows[0].member_id;
     }
     const inserted = await client.query(
         `INSERT INTO party_members (party_id, display_name, email, google_sub, identity_key, status, member_token_hash)
-         VALUES ($1::uuid, $2, $3, $4, $5, 'active', $6)
+         VALUES ($1::uuid, $2, $3, $4, NULL, 'active', $5)
          RETURNING member_id`,
-        [partyId, displayName, email, googleSub || null, identityKey, memberTokenHash || null]
+        [partyId, displayName, email, googleSub || null, memberTokenHash || null]
     );
     return inserted.rows[0].member_id;
 }

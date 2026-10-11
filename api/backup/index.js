@@ -1,7 +1,7 @@
 import { applyCors } from '../_lib/cors.js';
 import { isGoogleSignInConfigured, requireSecrets } from '../_lib/env.js';
 import { bearerToken, verifySession } from '../_lib/session.js';
-import { getPartySql, isPartyDatabaseConfigured } from '../_lib/partyDb.js';
+import { getBackupSql, isPartyDatabaseConfigured } from '../_lib/partyDb.js';
 import { consumePartyRateLimit } from '../_lib/partyRateLimit.js';
 import { checkMinuteRateLimit } from '../_lib/store.js';
 import { isSyncEncryptionConfigured } from '../_lib/syncCrypto.js';
@@ -73,7 +73,7 @@ export default async function handler(req, res) {
     const session = await requireUser(req, res);
     if (!session) return;
 
-    const sql = await getPartySql();
+    const sql = await getBackupSql();
     const userSub = session.sub;
 
     try {
@@ -226,6 +226,9 @@ export default async function handler(req, res) {
         res.status(400).json({ error: 'bad_request', message: 'Unknown action.' });
     } catch (error) {
         console.error('[backup]', action, error);
-        res.status(500).json({ error: 'bad_request', message: 'Backup request failed.' });
+        res.status(500).json({
+            error: 'server_error',
+            message: 'Something went wrong on our side. Try again in a moment.',
+        });
     }
 }
