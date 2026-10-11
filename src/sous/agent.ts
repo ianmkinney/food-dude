@@ -1,6 +1,6 @@
 import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION, ASSISTANT_TAGLINE } from '../config/assistant';
 import { groceryOperations, pantryOperations, recipeOperations, userOperations } from '../database/operations';
-import { generateMultimodal, generateText, stripCodeFences } from '../services/aiClient';
+import { generateMultimodal, generateText, peekMultimodalVisionNote, stripCodeFences } from '../services/aiClient';
 import type { PendingAttachment } from './chatAttachments';
 import { prepareAttachmentPayload } from './chatAttachments';
 import { isMutatingAction, summarizeActions } from './confirmActions';
@@ -14,7 +14,7 @@ import { getIncludeHealthData } from '../consent/consentStore';
 // reply and the app actions to run. The same prompt works on Claude, GPT, Grok
 // and Gemini (and later on platform AI), with no provider-specific tool APIs.
 
-export type SousTurn = { role: 'user' | 'sous'; text: string };
+export type SousTurn = { role: 'user' | 'sous'; text: string; images?: { data: string; mimeType: string }[] };
 
 export type SousResult = {
     reply: string;
@@ -23,6 +23,9 @@ export type SousResult = {
     pendingActions?: ToolCall[];
     confirmSummary?: string;
     userRecipeImageUri?: string | null;
+    visionNote?: string | null;
+    /** Images to persist on the user message row for follow-up turns. */
+    userChatImages?: { data: string; mimeType: string }[];
 };
 
 export const CRISIS_REPLY =
@@ -100,10 +103,10 @@ Rules:
 - When you write new recipes the user wants to keep, call create_recipe for each dish (main and sides) instead of pasting full recipes in the reply. Then add_to_grocery for missing ingredients and estimate_cost when they want pricing.
 - Only call create_recipe when the user asks for a new recipe or a new dish you wrote for them. Never use it to rename, tweak or "finalize" a recipe that is already saved; call update_recipe with that recipe's id instead.
 - When the user is refining a recipe you just discussed (follow-up answers, "you choose", "make it spicier", "call it…"), stay on that exact recipe. Never invent a different dish.
-- Don't ask the user to name a recipe that was imported with a title; it already has one. Only rename it if they ask.
+- When the user asks to add, save, or import a recipe from images, a link, pasted text, or a PDF, you CAN see that content (including photos). Never say you cannot read images or attachments. Infer a sensible recipe title from the dish name in the photo, the page title, or the main ingredients — then call create_recipe or import_recipe immediately with that title. Do not ask what to name it; the user can rename later in the recipe book.
 - When the user sends a recipe link (TikTok, Instagram, or a recipe website) or says to save/import a link, call import_recipe with that url immediately. Do not ask what to name it — use the post or page title. Keep the reply to one short sentence; the app shows the recipe card.
 - If the user asks you to pick a name ("you choose", "you pick", "surprise me"), choose one that matches that recipe's actual ingredients and dish type (a soup stays a soup), then call update_recipe with the new title. If its current title already fits, say so and keep it.
-- When the user attaches a photo, PDF, or recipe file, read it carefully. You can import it, answer questions, scale servings, convert units, or suggest allergy-safe substitutions in your reply. Only call tools when saving data to the app.
+- When the user attaches a photo, PDF, or recipe file, read it carefully. You can import it, answer questions, scale servings, convert units, or suggest allergy-safe substitutions in your reply. If they want it saved, call create_recipe or import_recipe in the same turn.
 - For add_to_grocery, only list ingredients they still need; the app skips items already in the pantry.
 - When the user wants items removed, checked off, or cleared from the grocery list (or bought and moved to pantry), call update_grocery_list with those item names — never only say you did it in "reply".
 - When the user wants pantry items used up or removed, call add_to_pantry only to add stock; there is no remove-from-pantry tool yet — say what you cannot do instead of pretending.
@@ -138,6 +141,50 @@ function parseResponse(text: string): { reply: string; actions: ToolCall[] } {
 
 const MAX_HISTORY = 12;
 
+function recipeSaveIntent(message: string, hasAttachments: boolean): boolean {
+    if (!message && !hasAttachments) return false;
+    const m = String(message || '').toLowerCase();
+    return (
+        /\b(add|save|import|create|store)\b/.test(m) &&
+        /\b(recipe|this|it|dish|card|photo|image|pdf)\b/.test(m)
+    );
+}
+
+function shouldAutoApplyRecipeSave(message: string, attachments: PendingAttachment[], actions: ToolCall[]): boolean {
+    if (!recipeSaveIntent(message, attachments.length > 0)) return false;
+    return actions.some((a) => a.tool === 'create_recipe' || a.tool === 'import_recipe');
+}
+
+function buildApiTurns(
+    merged: SousTurn[],
+    message: string,
+    currentImages: { data: string; mimeType: string }[]
+): { role: 'user' | 'assistant'; text: string; images?: { data: string; mimeType: string }[] }[] {
+    const turns: { role: 'user' | 'assistant'; text: string; images?: { data: string; mimeType: string }[] }[] = [];
+    for (const turn of merged) {
+        if (turn.role === 'sous') {
+            turns.push({ role: 'assistant', text: turn.text });
+        } else {
+            turns.push({
+                role: 'user',
+                text: turn.text,
+                images: turn.images?.length ? turn.images : undefined,
+            });
+        }
+    }
+    const last = turns[turns.length - 1];
+    if (last?.role === 'user' && last.text === message && currentImages.length) {
+        last.images = currentImages;
+    } else {
+        turns.push({
+            role: 'user',
+            text: message || 'Please use the attached images.',
+            images: currentImages.length ? currentImages : undefined,
+        });
+    }
+    return turns.slice(-MAX_HISTORY);
+}
+
 export async function askSous(
     history: SousTurn[],
     message: string,
@@ -147,40 +194,63 @@ export async function askSous(
         return { reply: CRISIS_REPLY, cards: [] };
     }
 
-    let attachmentBlock = '';
     let images: { data: string; mimeType: string }[] = [];
     let userRecipeImageUri: string | null = null;
     if (attachments.length) {
         const prepared = await prepareAttachmentPayload(attachments);
-        attachmentBlock = prepared.promptExtra;
         images = prepared.images;
         userRecipeImageUri = prepared.attachments.find((a) => a.recipeImageUri)?.recipeImageUri || null;
     }
 
     const persisted = await loadThreadTurns(CHAT_THREAD_AMPI, MAX_HISTORY);
-    const merged =
+    const merged: SousTurn[] =
         persisted.history.length >= history.length
-            ? persisted.history.map((t) => ({ role: t.role === 'assistant' ? 'sous' : t.role, text: t.text }))
+            ? persisted.history.map((t) => ({
+                  role: t.role === 'assistant' ? 'sous' : t.role === 'sous' ? 'sous' : 'user',
+                  text: t.text,
+                  images: t.images,
+              }))
             : history;
-    const transcript = merged
-        .slice(-MAX_HISTORY)
-        .map((turn) => `${turn.role === 'user' ? 'User' : ASSISTANT_NAME}: ${turn.text}`)
-        .join('\n');
     const summaryBlock = persisted.summary ? `\nEarlier conversation summary:\n${persisted.summary}\n` : '';
-    const prompt = `${systemPrompt(await kitchenContext(message))}
-${summaryBlock}
-Conversation so far:
-${transcript || '(new conversation)'}
-User: ${message}${attachmentBlock}`;
+    const context = await kitchenContext(message);
+    const system = `${systemPrompt(context)}${summaryBlock}`;
 
-    const raw = images.length
-        ? await generateMultimodal({ prompt, images, video: null, feature: 'chat' })
-        : await generateText(prompt, { feature: 'chat' });
+    const anyImages =
+        images.length > 0 || merged.some((t) => t.role === 'user' && (t.images?.length || 0) > 0);
+    const apiTurns = buildApiTurns(merged, message, images);
+
+    const raw = anyImages
+        ? await generateMultimodal({
+              system,
+              turns: apiTurns,
+              feature: 'chat',
+              prompt: message,
+              images,
+              video: null,
+          })
+        : await generateText(
+              `${system}\n\nConversation:\n${apiTurns.map((t) => `${t.role === 'user' ? 'User' : ASSISTANT_NAME}: ${t.text}`).join('\n')}`,
+              { feature: 'chat' }
+          );
+    const visionNote = peekMultimodalVisionNote();
     const { reply, actions } = parseResponse(raw);
 
     const mutating = actions.filter(isMutatingAction);
     const immediate = actions.filter((a) => !isMutatingAction(a));
-    const cards = immediate.length ? await runTools(immediate, { userRecipeImageUri }) : [];
+    let cards = immediate.length ? await runTools(immediate, { userRecipeImageUri }) : [];
+
+    if (mutating.length && shouldAutoApplyRecipeSave(message, attachments, mutating)) {
+        const saved = await runTools(mutating, { userRecipeImageUri });
+        cards = [...cards, ...saved];
+        await recordChatRecipes(CHAT_THREAD_AMPI, recipeEventsFromCards(saved)).catch(() => undefined);
+        return {
+            reply: visionNote ? `${visionNote}\n\n${reply || 'Saved to your recipe book.'}` : reply || 'Saved to your recipe book.',
+            cards,
+            userRecipeImageUri,
+            visionNote,
+            userChatImages: images.length ? images : undefined,
+        };
+    }
 
     if (mutating.length) {
         return {
@@ -189,13 +259,20 @@ User: ${message}${attachmentBlock}`;
             pendingActions: mutating,
             confirmSummary: summarizeActions(mutating, await titlesForUpdates(mutating)),
             userRecipeImageUri,
+            visionNote,
+            userChatImages: images.length ? images : undefined,
         };
     }
 
+    const replyText =
+        visionNote && reply ? `${visionNote}\n\n${reply}` : reply || (cards.length ? 'Done.' : "Sorry, I didn't get that. Try asking another way?");
+
     return {
-        reply: reply || (cards.length ? 'Done.' : "Sorry, I didn't get that. Try asking another way?"),
+        reply: replyText,
         cards,
         userRecipeImageUri,
+        visionNote,
+        userChatImages: images.length ? images : undefined,
     };
 }
 

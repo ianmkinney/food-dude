@@ -29,10 +29,13 @@ type ChatPayload = {
     imageUri?: string;
     model?: string;
     fallbackFrom?: string;
+    visionNote?: string;
     latencyMs?: number;
     error?: string;
     message?: string;
 };
+
+export type OwnerMultimodalResult = { text: string; visionNote?: string | null };
 
 async function postOwnerChat(body: Record<string, unknown>): Promise<ChatPayload> {
     const token = await getOwnerSessionToken();
@@ -77,13 +80,13 @@ async function ownerChatBody(extra: Record<string, unknown>): Promise<Record<str
     return model ? { ...extra, model } : extra;
 }
 
-async function ownerChat(body: Record<string, unknown>): Promise<string> {
+async function ownerChat(body: Record<string, unknown>): Promise<OwnerMultimodalResult> {
     const payload = await postOwnerChat(await ownerChatBody(body));
     const text = payload?.text;
     if (!text) {
         throw new Error('The model returned an empty response.');
     }
-    return text;
+    return { text, visionNote: payload.visionNote || null };
 }
 
 export type OwnerAiTestResult = { model: string; latencyMs: number; fallbackFrom?: string };
@@ -99,6 +102,27 @@ export async function testOwnerAi(): Promise<OwnerAiTestResult> {
     };
 }
 
+function ownerMultimodalBody(request: PlatformMultimodalRequest): Record<string, unknown> {
+    const body: Record<string, unknown> = { feature: request.feature };
+    if (request.system && request.turns?.length) {
+        body.system = request.system;
+        body.turns = request.turns.map((t) => ({
+            role: t.role,
+            text: t.text,
+            images: t.images?.map((img) => ({ data: img.data, mimeType: img.mimeType })),
+        }));
+    } else {
+        body.prompt = request.prompt;
+        body.images = request.images?.map((img) => ({ data: img.data, mimeType: img.mimeType }));
+    }
+    return body;
+}
+
+/** Structured or legacy multimodal chat through the owner proxy. */
+export async function platformOwnerMultimodal(request: PlatformMultimodalRequest): Promise<OwnerMultimodalResult> {
+    return ownerChat(await ownerChatBody(ownerMultimodalBody(request)));
+}
+
 /** Owner-only OpenRouter proxy. Store purchases stay on the stub path (`isLive: false`). */
 export const livePlatformAi: PlatformAiClient = {
     isLive: false,
@@ -107,14 +131,14 @@ export const livePlatformAi: PlatformAiClient = {
         status: 'unavailable',
         reason: 'Store verification is not live yet.',
     }),
-    generateText: async (request: PlatformTextRequest) =>
-        ownerChat({ prompt: request.prompt, feature: request.feature }),
-    generateMultimodal: async (request: PlatformMultimodalRequest) =>
-        ownerChat({
-            prompt: request.prompt,
-            feature: request.feature,
-            images: request.images?.map((img) => ({ data: img.data, mimeType: img.mimeType })),
-        }),
+    generateText: async (request: PlatformTextRequest) => {
+        const result = await ownerChat(await ownerChatBody({ prompt: request.prompt, feature: request.feature }));
+        return result.text;
+    },
+    generateMultimodal: async (request: PlatformMultimodalRequest) => {
+        const result = await platformOwnerMultimodal(request);
+        return result.text;
+    },
     generateImage: async (request: PlatformImageRequest) => {
         const imageModel = await getOwnerImageModelPreference();
         const payload = await postOwnerChat({

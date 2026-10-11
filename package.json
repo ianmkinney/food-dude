@@ -21,7 +21,8 @@
     "test:web-safari-composer": "node scripts/test-web-safari-composer.mjs",
     "test:sync-merge": "node scripts/test-sync-merge.mjs",
     "test:party-members": "node scripts/test-party-members.mjs",
-    "test:party-live-sync": "node scripts/test-party-live-sync.mjs"
+    "test:party-live-sync": "node scripts/test-party-live-sync.mjs",
+    "test:ampi-vision": "node scripts/test-ampi-vision.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/fredoka": "^0.4.1",
