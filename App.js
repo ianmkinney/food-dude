@@ -342,6 +342,11 @@ function AppContent() {
               ref={navigationRef}
               linking={linking}
               documentTitle={documentTitle}
+              onReady={() => {
+                if (navigationRef.isReady()) {
+                  setDesktopNavRoute(desktopNavFromState(navigationRef.getRootState()));
+                }
+              }}
               onStateChange={(state) => setDesktopNavRoute(desktopNavFromState(state))}
             >
               <DesktopNavigationFrame navRoute={desktopNavRoute}>
