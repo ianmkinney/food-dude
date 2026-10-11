@@ -28,7 +28,9 @@
     "test:party-live-sync": "node scripts/test-party-live-sync.mjs",
     "test:desktop-sidebar": "node scripts/test-desktop-sidebar-active.mjs",
     "test:cross-tab-sync": "node scripts/test-cross-tab-cloud-sync.mjs",
-    "test:ampi-vision": "node scripts/test-ampi-vision.mjs"
+    "test:ampi-vision": "node scripts/test-ampi-vision.mjs",
+    "test:grocery-normalize": "node scripts/test-grocery-normalize.mjs",
+    "test:web-all-tabs": "node scripts/test-web-all-tabs-smoke.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/fredoka": "^0.4.1",

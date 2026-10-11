@@ -27,7 +27,9 @@ export default function GroceryListDesktopBody({
                 uncategorized.push(item);
             }
         });
-        const sorted = [...byCategory.entries()].sort(([a], [b]) => a.localeCompare(b));
+        const sorted = [...byCategory.entries()].sort(([a], [b]) =>
+            String(a).localeCompare(String(b))
+        );
         if (uncategorized.length) sorted.push(['Other', uncategorized]);
         return sorted;
     }, [items]);

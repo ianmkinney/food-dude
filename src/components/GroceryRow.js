@@ -54,12 +54,13 @@ export default function GroceryRow(props) {
                 withSpring(1, motion.spring.base),
             );
         }
-        // Shared values are stable; only `checked` drives this.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [checked, reduceMotion]);
 
     const strikeStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: strike.value }] }));
     const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
+
+    if (!item) return null;
 
     const quantity = item.quantity ? `${item.quantity} ${item.unit || ''}`.trim() : '';
 

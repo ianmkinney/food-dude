@@ -26,9 +26,10 @@ import ScreenSkeleton from '../components/Skeleton';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
 import { useLayoutMode } from '../layout/useLayoutMode';
-import GroceryListDesktopBody from './desktop/GroceryListDesktopBody';
+import { useSyncDataRefresh } from '../hooks/useSyncDataRefresh';
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 import { desktopPageStyles } from '../components/layout/desktopTheme';
+import { normalizeGroceryRows } from '../utils/groceryItem';
 
 const GroceryListScreen = () => {
     const navigation = useNavigation();
@@ -41,7 +42,11 @@ const GroceryListScreen = () => {
         refresh: refreshGroceryItems,
         setData: setGroceryItems,
     } = useQuery(groceryQuery.key, groceryQuery.fetch);
-    const groceryItems = cachedItems || [];
+    const groceryItems = useMemo(
+        () => normalizeGroceryRows(Array.isArray(cachedItems) ? cachedItems : []),
+        [cachedItems]
+    );
+    const [GroceryListDesktopBody, setGroceryListDesktopBody] = useState(null);
     const [filter, setFilter] = useState('all'); // all, checked, unchecked
     const [showStoreModal, setShowStoreModal] = useState(false);
     const [showSimplifiedModal, setShowSimplifiedModal] = useState(false);
@@ -55,6 +60,20 @@ const GroceryListScreen = () => {
 
     useEffect(() => () => clearTimeout(settleTimer.current), []);
 
+    useEffect(() => {
+        if (!isDesktop) {
+            setGroceryListDesktopBody(null);
+            return;
+        }
+        let cancelled = false;
+        import('./desktop/GroceryListDesktopBody').then((mod) => {
+            if (!cancelled) setGroceryListDesktopBody(() => mod.default);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [isDesktop]);
+
     const loadGroceryItems = useCallback(async () => {
         try {
             await refreshGroceryItems();
@@ -63,6 +82,8 @@ const GroceryListScreen = () => {
             Alert.alert('Error', `Failed to load grocery list: ${error.message || 'Unknown error'}`);
         }
     }, [refreshGroceryItems]);
+
+    useSyncDataRefresh(loadGroceryItems);
 
     // Flip the checkbox immediately, let the strike and pop play, then reload so
     // the row moves into (or out of) the Done group.
@@ -352,6 +373,8 @@ const GroceryListScreen = () => {
             ) : isDesktop ? (
                 groceryItems.length === 0 ? (
                     renderEmptyState()
+                ) : !GroceryListDesktopBody ? (
+                    <ScreenSkeleton />
                 ) : (
                     <GroceryListDesktopBody
                         items={groceryItems}

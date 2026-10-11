@@ -6,11 +6,15 @@ import {
     mealPlanOperations,
 } from '../database/operations';
 import { getStartOfWeek, getWeekDates } from '../utils/dateHelpers';
+import { normalizeGroceryRows } from '../utils/groceryItem';
 import { prefetchQuery } from './queryCache';
 
 const isoDay = (d) => d.toISOString().split('T')[0];
 
-export const groceryQuery = { key: 'grocery', fetch: async () => (await groceryOperations.getAll()) || [] };
+export const groceryQuery = {
+    key: 'grocery',
+    fetch: async () => normalizeGroceryRows((await groceryOperations.getAll()) || []),
+};
 export const pantryQuery = { key: 'pantry', fetch: async () => (await pantryOperations.getAll()) || [] };
 export const recipesQuery = { key: 'recipes', fetch: async () => (await recipeOperations.getAll()) || [] };
 export const partiesQuery = { key: 'parties', fetch: async () => (await partyOperations.getAll()) || [] };
