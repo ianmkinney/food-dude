@@ -86,6 +86,8 @@ async function loadPartyBundle(sql, partyId) {
         ORDER BY joined_at ASC`;
     const meals = await sql`
         SELECT * FROM party_meals WHERE party_id = ${partyId}::uuid ORDER BY created_at ASC`;
+    const claims = await sql`
+        SELECT * FROM party_meal_ingredient_claims WHERE party_id = ${partyId}::uuid ORDER BY claimed_at ASC`;
     const invites = await sql`
         SELECT token, revoked, expires_at FROM invite_tokens
         WHERE party_id = ${partyId}::uuid AND revoked = false
@@ -96,6 +98,7 @@ async function loadPartyBundle(sql, partyId) {
         party,
         members,
         meals,
+        claims,
         inviteToken: inviteRow && isInviteRowValid(inviteRow) ? inviteRow.token : null,
     };
 }
@@ -187,15 +190,142 @@ async function persistPartyImage(sql, partyId, buffer, contentType) {
 
 async function replaceMealsOnClient(client, partyId, mealsInput) {
     const meals = normalizeMealsInput(mealsInput).slice(0, MAX_MEALS);
-    await client.query(`DELETE FROM party_meals WHERE party_id = $1::uuid`, [partyId]);
+    const existing = await client.query(`SELECT id FROM party_meals WHERE party_id = $1::uuid`, [partyId]);
+    const keepIds = new Set(meals.filter((m) => m.id).map((m) => m.id));
+    for (const row of existing.rows) {
+        if (!keepIds.has(row.id)) {
+            await client.query(`DELETE FROM party_meals WHERE id = $1::uuid`, [row.id]);
+        }
+    }
     for (const meal of meals) {
         const recipeJson = JSON.stringify(meal.recipeIds || []);
-        await client.query(
-            `INSERT INTO party_meals (party_id, name, description, recipe_ids)
-             VALUES ($1::uuid, $2, $3, $4::jsonb)`,
-            [partyId, meal.name, meal.description, recipeJson]
-        );
+        const metaJson = JSON.stringify(meal.recipeMeta || {});
+        if (meal.id) {
+            await client.query(
+                `INSERT INTO party_meals (id, party_id, name, description, recipe_ids, recipe_meta)
+                 VALUES ($1::uuid, $2::uuid, $3, $4, $5::jsonb, $6::jsonb)
+                 ON CONFLICT (id) DO UPDATE SET
+                   name = EXCLUDED.name,
+                   description = EXCLUDED.description,
+                   recipe_ids = EXCLUDED.recipe_ids,
+                   recipe_meta = EXCLUDED.recipe_meta,
+                   updated_at = now()`,
+                [meal.id, partyId, meal.name, meal.description, recipeJson, metaJson]
+            );
+        } else {
+            await client.query(
+                `INSERT INTO party_meals (party_id, name, description, recipe_ids, recipe_meta)
+                 VALUES ($1::uuid, $2, $3, $4::jsonb, $5::jsonb)`,
+                [partyId, meal.name, meal.description, recipeJson, metaJson]
+            );
+        }
     }
+}
+
+function normalizeIngredientKey(name) {
+    return String(name || '')
+        .trim()
+        .toLowerCase()
+        .slice(0, 200);
+}
+
+async function resolveActingMember(sql, partyId, session, memberToken) {
+    const ownerView = await isPartyOwner(sql, partyId, session);
+    if (ownerView) {
+        const rows = await sql`
+            SELECT member_id, display_name FROM party_members
+            WHERE party_id = ${partyId}::uuid AND status = 'active'
+            AND lower(email) = ${String(session.email).toLowerCase()}
+            LIMIT 1`;
+        if (rows[0]) return rows[0];
+    }
+    const access = await assertMemberAccess(sql, partyId, memberToken);
+    if (!access.ok) return null;
+    const rows = await sql`
+        SELECT member_id, display_name FROM party_members
+        WHERE member_id = ${access.memberId}::uuid LIMIT 1`;
+    return rows[0] || null;
+}
+
+async function handleClaimIngredient(req, res, session) {
+    const body = parseBody(req);
+    const partyId = String(body.partyId || '').trim();
+    const mealId = String(body.mealId || '').trim();
+    const recipeId = String(body.recipeId || '').trim();
+    const ingredientName = String(body.ingredientName || '').trim().slice(0, 200);
+    const ingredientKey = normalizeIngredientKey(body.ingredientKey || ingredientName);
+    if (!partyId || !mealId || !recipeId || !ingredientKey) {
+        partyReject(res, 400, 'bad_request');
+        return;
+    }
+    const sql = await getPartySql();
+    const memberToken = memberTokenFromReq(req);
+    const actor = await resolveActingMember(sql, partyId, session, memberToken);
+    if (!actor) {
+        partyReject(res, 403, 'forbidden');
+        return;
+    }
+    if (!(await durableRateLimit(res, sql, `party:claim:${partyId}`, 40))) return;
+
+    await sql`
+        INSERT INTO party_meal_ingredient_claims (
+            party_id, meal_id, recipe_id, ingredient_key, ingredient_name,
+            claimed_by_member_id, claimed_by_display_name
+        ) VALUES (
+            ${partyId}::uuid, ${mealId}::uuid, ${recipeId}, ${ingredientKey}, ${ingredientName},
+            ${actor.member_id}::uuid, ${actor.display_name}
+        )
+        ON CONFLICT (meal_id, recipe_id, ingredient_key) DO UPDATE SET
+            claimed_by_member_id = EXCLUDED.claimed_by_member_id,
+            claimed_by_display_name = EXCLUDED.claimed_by_display_name,
+            claimed_at = now()`;
+    await sql`UPDATE parties SET version = version + 1, updated_at = now() WHERE id = ${partyId}::uuid`;
+
+    const bundle = await loadPartyBundle(sql, partyId);
+    const ownerView = await isPartyOwner(sql, partyId, session);
+    res.status(200).json({
+        ok: true,
+        version: bundle.party.version,
+        party: rowToPartySnapshot(bundle, { isOwner: ownerView }),
+    });
+}
+
+async function handleUnclaimIngredient(req, res, session) {
+    const body = parseBody(req);
+    const partyId = String(body.partyId || '').trim();
+    const claimId = String(body.claimId || '').trim();
+    if (!partyId || !claimId) {
+        partyReject(res, 400, 'bad_request');
+        return;
+    }
+    const sql = await getPartySql();
+    const memberToken = memberTokenFromReq(req);
+    const actor = await resolveActingMember(sql, partyId, session, memberToken);
+    if (!actor) {
+        partyReject(res, 403, 'forbidden');
+        return;
+    }
+    const rows = await sql`
+        SELECT claimed_by_member_id FROM party_meal_ingredient_claims
+        WHERE id = ${claimId}::uuid AND party_id = ${partyId}::uuid LIMIT 1`;
+    const row = rows[0];
+    if (!row) {
+        partyReject(res, 404, 'not_found');
+        return;
+    }
+    const ownerView = await isPartyOwner(sql, partyId, session);
+    if (row.claimed_by_member_id !== actor.member_id && !ownerView) {
+        partyReject(res, 403, 'forbidden');
+        return;
+    }
+    await sql`DELETE FROM party_meal_ingredient_claims WHERE id = ${claimId}::uuid`;
+    await sql`UPDATE parties SET version = version + 1, updated_at = now() WHERE id = ${partyId}::uuid`;
+    const bundle = await loadPartyBundle(sql, partyId);
+    res.status(200).json({
+        ok: true,
+        version: bundle.party.version,
+        party: rowToPartySnapshot(bundle, { isOwner: ownerView }),
+    });
 }
 
 async function handleCreate(req, res, session) {
@@ -680,6 +810,8 @@ export default async function handler(req, res) {
         'rename',
         'update_meals',
         'changes_since',
+        'claim_ingredient',
+        'unclaim_ingredient',
     ].includes(action);
 
     if (needsSession) {
@@ -721,6 +853,12 @@ export default async function handler(req, res) {
                 break;
             case 'migrate':
                 await handleMigrate(req, res, session);
+                break;
+            case 'claim_ingredient':
+                await handleClaimIngredient(req, res, session);
+                break;
+            case 'unclaim_ingredient':
+                await handleUnclaimIngredient(req, res, session);
                 break;
             default:
                 partyReject(res, 400, 'bad_request');

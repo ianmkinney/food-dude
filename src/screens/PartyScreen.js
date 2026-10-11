@@ -20,8 +20,13 @@ import { useTheme } from '../context/ThemeContext';
 import { partyOperations, partyMealOperations, partyMemberOperations, recipeOperations, userOperations, partyMealIngredientClaimOperations, pantryOperations } from '../database/operations';
 import aiChefService from '../services/aiChefService';
 import PartyInviteModal from '../components/PartyInviteModal';
-import PartyLiveNotice from '../components/PartyLiveNotice';
-import PartyMembersList from '../components/PartyMembersList';
+import PartySwitcher from '../components/party/PartySwitcher';
+import PartyHero from '../components/party/PartyHero';
+import PartyActionBar from '../components/party/PartyActionBar';
+import PartyMembersCollapsible from '../components/party/PartyMembersCollapsible';
+import PartyPrivacyChip from '../components/party/PartyPrivacyChip';
+import PartyMealCard from '../components/party/PartyMealCard';
+import PartyScreenSkeleton from '../components/party/PartyScreenSkeleton';
 import { usePartyLivePoll } from '../hooks/usePartyLivePoll';
 import { getOwnerSession } from '../platform/ownerSession';
 import {
@@ -30,7 +35,12 @@ import {
     createLiveParty,
     joinLiveParty,
     pushLocalPartyMealsToLive,
+    renameLiveParty,
+    uploadLivePartyImage,
+    claimLiveIngredient,
+    unclaimLiveIngredient,
 } from '../services/partyLiveSync';
+import { pickPartyCoverImageBase64 } from '../utils/partyImage';
 
 const PartyScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -66,6 +76,10 @@ const PartyScreen = ({ navigation }) => {
     const [matchingStatus, setMatchingStatus] = useState('');
     const [estimatingStatus, setEstimatingStatus] = useState('');
     const [pendingLiveInvite, setPendingLiveInvite] = useState(null);
+    const [mealStats, setMealStats] = useState({});
+    const [mealsLoading, setMealsLoading] = useState(false);
+    const [showRenameModal, setShowRenameModal] = useState(false);
+    const [renameValue, setRenameValue] = useState('');
 
     useFocusEffect(
         useCallback(() => {
@@ -154,13 +168,63 @@ const PartyScreen = ({ navigation }) => {
         }
     }, [selectedParty?.id]);
 
+    const loadMealStats = async (partyId, partyMeals) => {
+        setMealsLoading(true);
+        try {
+            const claims = await partyMealIngredientClaimOperations.getClaimsByPartyId(partyId);
+            const map = {};
+            for (const meal of partyMeals) {
+                const recipes = await Promise.all(
+                    (meal.recipeIds || []).map((id) => recipeOperations.getById(id).catch(() => null))
+                );
+                let total = 0;
+                const contributors = [];
+                recipes.forEach((recipe) => {
+                    if (!recipe) return;
+                    total += (recipe.ingredients || []).length;
+                    const meta =
+                        meal.recipeMeta?.[String(recipe.id)] ||
+                        meal.recipeMeta?.[recipe.id] ||
+                        {};
+                    contributors.push({
+                        recipeId: recipe.id,
+                        recipeTitle: recipe.title,
+                        name: meta.addedByDisplayName || meta.addedByName || 'Someone',
+                        memberId: meta.addedByMemberId,
+                    });
+                });
+                const mealClaims = claims.filter((c) => c.party_meal_id === meal.id);
+                map[meal.id] = {
+                    totalIngredients: total,
+                    claimedCount: mealClaims.length,
+                    contributors,
+                };
+            }
+            setMealStats(map);
+        } catch (error) {
+            console.warn('meal stats', error?.message || error);
+        } finally {
+            setMealsLoading(false);
+        }
+    };
+
     const loadMeals = async (partyId) => {
         try {
             const partyMeals = await partyMealOperations.getByPartyId(partyId);
             setMeals(partyMeals);
+            await loadMealStats(partyId, partyMeals);
         } catch (error) {
             console.error('Error loading meals:', error);
         }
+    };
+
+    const partyCoverUri = (party) => {
+        if (!party?.live_party_id) return null;
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            return `${window.location.origin}/api/party?action=image&partyId=${party.live_party_id}`;
+        }
+        const base = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://amplifood.vercel.app/api';
+        return `${base.replace(/\/$/, '')}/party?action=image&partyId=${party.live_party_id}`;
     };
 
     const promptSignIn = () => {
@@ -530,48 +594,99 @@ const PartyScreen = ({ navigation }) => {
     };
 
     const handleClaimIngredient = async (ingredientName, recipeId) => {
-        if (!currentUser) {
+        if (!currentUser || !selectedMeal) {
             Alert.alert('Error', 'User not found');
             return;
         }
 
         try {
-            // Check if already claimed
             const existingClaim = ingredientClaims.find(
-                c => c.ingredient_name === ingredientName && c.recipe_id === recipeId
+                (c) => c.ingredient_name === ingredientName && String(c.recipe_id) === String(recipeId)
             );
-            
-            if (existingClaim) {
-                // Remove claim
+
+            if (
+                selectedParty?.sync_mode === 'live' &&
+                selectedParty?.live_party_id &&
+                selectedMeal.sync_meal_id
+            ) {
+                if (existingClaim?.live_claim_id) {
+                    await unclaimLiveIngredient({
+                        livePartyId: selectedParty.live_party_id,
+                        claimId: existingClaim.live_claim_id,
+                    });
+                } else if (!existingClaim) {
+                    await claimLiveIngredient({
+                        livePartyId: selectedParty.live_party_id,
+                        mealSyncId: selectedMeal.sync_meal_id,
+                        recipeId,
+                        ingredientName,
+                    });
+                } else {
+                    await partyMealIngredientClaimOperations.removeClaim(existingClaim.id);
+                }
+            } else if (existingClaim) {
                 await partyMealIngredientClaimOperations.removeClaim(existingClaim.id);
-                setIngredientClaims(prev => prev.filter(c => c.id !== existingClaim.id));
             } else {
-                // Add claim
-                const claimId = await partyMealIngredientClaimOperations.claimIngredient({
+                await partyMealIngredientClaimOperations.claimIngredient({
                     partyMealId: selectedMeal.id,
-                    recipeId: recipeId,
-                    ingredientName: ingredientName,
+                    recipeId,
+                    ingredientName,
                     claimedByUserId: currentUser.user_id,
                     claimedByUserName: currentUser.name || currentUser.username || 'You',
                 });
-                
-                const newClaim = {
-                    id: claimId,
-                    party_meal_id: selectedMeal.id,
-                    recipe_id: recipeId,
-                    ingredient_name: ingredientName,
-                    claimed_by_user_id: currentUser.user_id,
-                    claimed_by_user_name: currentUser.name || currentUser.username || 'You',
-                };
-                setIngredientClaims(prev => [...prev, newClaim]);
             }
-            
-            // Reload claims to ensure we have latest data
+
             const updatedClaims = await partyMealIngredientClaimOperations.getClaimsByPartyMeal(selectedMeal.id);
             setIngredientClaims(updatedClaims);
+            if (selectedParty?.id) await loadMealStats(selectedParty.id, meals);
         } catch (error) {
             console.error('Error claiming ingredient:', error);
-            Alert.alert('Error', 'Failed to claim ingredient');
+            Alert.alert('Error', error?.message || 'Failed to claim ingredient');
+        }
+    };
+
+    const handlePartyOverflow = () => {
+        Alert.alert('Party options', undefined, [
+            {
+                text: 'Rename',
+                onPress: () => {
+                    setRenameValue(selectedParty?.name || '');
+                    setShowRenameModal(true);
+                },
+            },
+            { text: 'Change photo', onPress: handleChangePartyPhoto },
+            { text: 'Disband party', style: 'destructive', onPress: handleDisbandParty },
+            { text: 'Cancel', style: 'cancel' },
+        ]);
+    };
+
+    const handleRenameParty = async () => {
+        const name = renameValue.trim();
+        if (!name || !selectedParty) return;
+        try {
+            if (selectedParty.live_party_id) {
+                await renameLiveParty({ livePartyId: selectedParty.live_party_id, name });
+            }
+            await partyOperations.update(selectedParty.id, { name });
+            setShowRenameModal(false);
+            await refreshParty();
+        } catch (error) {
+            Alert.alert('Error', error?.message || 'Could not rename party');
+        }
+    };
+
+    const handleChangePartyPhoto = async () => {
+        if (!selectedParty?.live_party_id) {
+            Alert.alert('Sign in', 'Party photos sync when the party is live.');
+            return;
+        }
+        try {
+            const imageBase64 = await pickPartyCoverImageBase64();
+            if (!imageBase64) return;
+            await uploadLivePartyImage({ livePartyId: selectedParty.live_party_id, imageBase64 });
+            await refreshParty();
+        } catch (error) {
+            Alert.alert('Error', error?.message || 'Could not update photo');
         }
     };
 
@@ -727,165 +842,130 @@ const PartyScreen = ({ navigation }) => {
     };
 
 
-    const renderPartyItem = ({ item }) => (
-        <TouchableOpacity
-            style={[
-                styles.partyItem,
-                {
-                    backgroundColor: selectedParty?.id === item.id ? theme.primary[500] : theme.colors.surface,
-                    borderColor: theme.colors.border,
-                },
-            ]}
-            onPress={() => setSelectedParty(item)}
-        >
-            <Ionicons
-                name="people"
-                size={24}
-                color={selectedParty?.id === item.id ? '#FFFFFF' : theme.primary[500]}
-            />
-            <Text
-                style={[
-                    styles.partyName,
-                    { color: selectedParty?.id === item.id ? '#FFFFFF' : theme.colors.text.primary },
-                ]}
-            >
-                {item.name}
-            </Text>
-        </TouchableOpacity>
-    );
-
-    const renderMealItem = ({ item }) => (
-        <TouchableOpacity
-            style={[styles.mealItem, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-            onPress={() => handleMealPress(item)}
-        >
-            <View style={styles.mealContent}>
-                <Text style={[styles.mealName, { color: theme.colors.text.primary }]}>{item.name}</Text>
-                {item.description && (
-                    <Text style={[styles.mealDescription, { color: theme.colors.text.secondary }]} numberOfLines={2}>
-                        {item.description}
-                    </Text>
-                )}
-                <Text style={[styles.mealRecipes, { color: theme.colors.text.tertiary }]}>
-                    {item.recipeIds.length} recipe{item.recipeIds.length !== 1 ? 's' : ''}
-                </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
-        </TouchableOpacity>
-    );
-
     const viewerEmail = (googleSession?.email || currentUser?.email || '').toLowerCase();
     const ownerEmail = (selectedParty?.owner_email || '').toLowerCase();
     const isPartyOwner =
         partyMembers?.some((m) => m.role === 'owner' && m.user_id === currentUser?.user_id) ||
         (viewerEmail && ownerEmail && viewerEmail === ownerEmail);
 
+    const listHeader = selectedParty ? (
+        <>
+            <PartySwitcher
+                parties={parties}
+                selectedId={selectedParty.id}
+                theme={theme}
+                onSelect={setSelectedParty}
+                onCreate={() => {
+                    if (!googleSession?.token) promptSignIn();
+                    else setShowCreatePartyModal(true);
+                }}
+            />
+            <PartyHero name={selectedParty.name} imageUri={partyCoverUri(selectedParty)} theme={theme} />
+            <PartyActionBar
+                theme={theme}
+                isOwner={isPartyOwner}
+                onInvite={() => setShowInviteModal(true)}
+                onAddMeal={() => {
+                    loadRecipesForMeal();
+                    setShowCreateMealModal(true);
+                }}
+                onOverflow={handlePartyOverflow}
+            />
+            <PartyMembersCollapsible
+                theme={theme}
+                members={partyMembers}
+                isOwner={isPartyOwner}
+                partyId={selectedParty.id}
+                livePartyId={selectedParty.live_party_id}
+                syncMode={selectedParty.sync_mode}
+                onChanged={async () => {
+                    await refreshParty();
+                    await loadPartyMembers(selectedParty.id);
+                }}
+                onInviteRotated={async () => refreshParty()}
+            />
+            <PartyPrivacyChip theme={theme} />
+            <Text style={[styles.sectionLabel, { color: theme.colors.text.secondary }]}>Meals</Text>
+        </>
+    ) : (
+        <>
+            <PartySwitcher
+                parties={parties}
+                selectedId={null}
+                theme={theme}
+                onSelect={setSelectedParty}
+                onCreate={() => {
+                    if (!googleSession?.token) promptSignIn();
+                    else setShowCreatePartyModal(true);
+                }}
+            />
+            <View style={styles.emptyState}>
+                <Ionicons name="people-outline" size={64} color={theme.colors.text.tertiary} />
+                <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>Plan a party</Text>
+                <Text style={[styles.emptyDescription, { color: theme.colors.text.secondary }]}>
+                    Create a party or pick a chip above to see meals.
+                </Text>
+            </View>
+        </>
+    );
+
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <PartyLiveNotice theme={theme} />
-            {/* Party List */}
-            <View style={[styles.partyListContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-                <FlatList
-                    data={parties}
-                    renderItem={renderPartyItem}
-                    keyExtractor={(item) => item.id.toString()}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.partyList}
-                    ListEmptyComponent={
-                        <View style={styles.emptyPartyList}>
+            {mealsLoading && meals.length === 0 && selectedParty ? <PartyScreenSkeleton theme={theme} /> : null}
+            <FlatList
+                data={selectedParty ? meals : []}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                    <PartyMealCard
+                        meal={item}
+                        stats={mealStats[item.id]}
+                        theme={theme}
+                        onPress={() => handleMealPress(item)}
+                    />
+                )}
+                ListHeaderComponent={listHeader}
+                contentContainerStyle={styles.mealsList}
+                ListEmptyComponent={
+                    selectedParty && !mealsLoading ? (
+                        <View style={styles.emptyMeals}>
+                            <Ionicons name="restaurant-outline" size={48} color={theme.colors.text.tertiary} />
                             <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
-                                No parties yet. Create one!
+                                No meals yet — tap Add meal to plan from your recipes.
                             </Text>
                         </View>
-                    }
-                />
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Create a party"
-                    style={[styles.addPartyButton, { backgroundColor: theme.primary[500] }]}
-                    onPress={() => {
-                        if (!googleSession?.token) promptSignIn();
-                        else setShowCreatePartyModal(true);
-                    }}
-                >
-                    <Ionicons name="add" size={24} color="#FFFFFF" />
-                </TouchableOpacity>
-            </View>
+                    ) : null
+                }
+            />
 
-            {/* Meals List */}
-            {selectedParty ? (
-                <View style={styles.mealsContainer}>
-                    <PartyMembersList
-                        theme={theme}
-                        members={partyMembers}
-                        isOwner={isPartyOwner}
-                        partyId={selectedParty.id}
-                        livePartyId={selectedParty.live_party_id}
-                        syncMode={selectedParty.sync_mode}
-                        onChanged={async () => {
-                            await refreshParty();
-                            await loadPartyMembers(selectedParty.id);
-                        }}
-                        onInviteRotated={async () => {
-                            await refreshParty();
-                        }}
-                    />
-                    <View style={styles.mealsHeader}>
-                        <Text style={[styles.mealsTitle, { color: theme.colors.text.primary }]}>
-                            Meals for {selectedParty.name}
-                        </Text>
-                        <View style={styles.mealsHeaderButtons}>
+            <Modal visible={showRenameModal} transparent animationType="fade" onRequestClose={() => setShowRenameModal(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+                        <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>Rename party</Text>
+                        <TextInput
+                            accessibilityLabel="Party name"
+                            style={[styles.modalInput, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
+                            value={renameValue}
+                            onChangeText={setRenameValue}
+                            placeholder="Party name"
+                            placeholderTextColor={theme.colors.text.tertiary}
+                        />
+                        <View style={styles.modalButtons}>
                             <TouchableOpacity
-                                style={[styles.disbandButton, { backgroundColor: theme.accent.red }]}
-                                onPress={handleDisbandParty}
+                                style={[styles.modalButton, { backgroundColor: theme.colors.border }]}
+                                onPress={() => setShowRenameModal(false)}
                             >
-                                <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
-                                <Text style={styles.disbandButtonText}>Disband</Text>
+                                <Text style={[styles.modalButtonText, { color: theme.colors.text.primary }]}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.inviteButton, { backgroundColor: theme.accent.green }]}
-                                onPress={() => setShowInviteModal(true)}
+                                style={[styles.modalButton, { backgroundColor: theme.primary[500] }]}
+                                onPress={handleRenameParty}
                             >
-                                <Ionicons name="person-add" size={18} color="#FFFFFF" />
-                                <Text style={styles.inviteButtonText}>Invite</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.addMealButton, { backgroundColor: theme.primary[500] }]}
-                                onPress={() => {
-                                    loadRecipesForMeal();
-                                    setShowCreateMealModal(true);
-                                }}
-                            >
-                                <Ionicons name="add" size={20} color="#FFFFFF" />
-                                <Text style={styles.addMealButtonText}>Add Meal</Text>
+                                <Text style={styles.modalButtonText}>Save</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
-                    <FlatList
-                        data={meals}
-                        renderItem={renderMealItem}
-                        keyExtractor={(item) => item.id.toString()}
-                        contentContainerStyle={styles.mealsList}
-                        ListEmptyComponent={
-                            <View style={styles.emptyMeals}>
-                                <Ionicons name="restaurant-outline" size={64} color={theme.colors.text.tertiary} />
-                                <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
-                                    No meals yet. Create one from your recipes!
-                                </Text>
-                            </View>
-                        }
-                    />
                 </View>
-            ) : (
-                <View style={styles.emptyState}>
-                    <Ionicons name="people-outline" size={80} color={theme.colors.text.tertiary} />
-                    <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
-                        No Party Selected
-                    </Text>
-                    <Text style={[styles.emptyDescription, { color: theme.colors.text.secondary }]}>
-                        Create a party to start planning meals with friends!
-                    </Text>
-                </View>
-            )}
+            </Modal>
 
             {/* Create Party Modal */}
             <Modal
@@ -1510,6 +1590,15 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 14,
         fontWeight: '600',
+    },
+    sectionLabel: {
+        fontSize: 13,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+        marginHorizontal: 16,
+        marginBottom: 8,
+        marginTop: 4,
     },
     mealsList: {
         padding: 16,

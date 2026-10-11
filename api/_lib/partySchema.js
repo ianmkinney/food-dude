@@ -64,4 +64,18 @@ export const PARTY_SCHEMA_STATEMENTS = [
     data BYTEA NOT NULL
 )`,
     'CREATE INDEX IF NOT EXISTS idx_user_backups_sub_created ON user_backups(user_sub, created_at DESC)',
+    'ALTER TABLE party_meals ADD COLUMN IF NOT EXISTS recipe_meta JSONB NOT NULL DEFAULT \'{}\'::jsonb',
+    `CREATE TABLE IF NOT EXISTS party_meal_ingredient_claims (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    party_id UUID NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+    meal_id UUID NOT NULL REFERENCES party_meals(id) ON DELETE CASCADE,
+    recipe_id TEXT NOT NULL,
+    ingredient_key TEXT NOT NULL,
+    ingredient_name TEXT NOT NULL,
+    claimed_by_member_id UUID REFERENCES party_members(member_id) ON DELETE SET NULL,
+    claimed_by_display_name TEXT,
+    claimed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (meal_id, recipe_id, ingredient_key)
+)`,
+    'CREATE INDEX IF NOT EXISTS idx_party_meal_claims_meal ON party_meal_ingredient_claims(meal_id)',
 ];

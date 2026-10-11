@@ -1212,15 +1212,17 @@ export const partyMealOperations = {
         try {
             const recipeIdsJson = JSON.stringify(meal.recipeIds || []);
             const syncMealId = meal.syncMealId || `m-${now}-${Math.random().toString(36).slice(2, 9)}`;
+            const recipeMetaJson = JSON.stringify(meal.recipeMeta || {});
             const result = await db.runAsync(
-                `INSERT INTO party_meals (party_id, sync_meal_id, name, description, recipe_ids, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO party_meals (party_id, sync_meal_id, name, description, recipe_ids, recipe_meta, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     meal.partyId,
                     syncMealId,
                     meal.name,
                     meal.description || null,
                     recipeIdsJson,
+                    recipeMetaJson,
                     meal.createdBy || null,
                     now,
                     now,
@@ -1242,9 +1244,10 @@ export const partyMealOperations = {
                 [partyId]
             );
             // Parse recipe_ids JSON
-            return meals.map(meal => ({
+            return meals.map((meal) => ({
                 ...meal,
                 recipeIds: meal.recipe_ids ? JSON.parse(meal.recipe_ids) : [],
+                recipeMeta: meal.recipe_meta ? JSON.parse(meal.recipe_meta) : {},
             }));
         } catch (error) {
             console.error('Error getting party meals:', error);
@@ -1264,6 +1267,7 @@ export const partyMealOperations = {
             return {
                 ...meal,
                 recipeIds: meal.recipe_ids ? JSON.parse(meal.recipe_ids) : [],
+                recipeMeta: meal.recipe_meta ? JSON.parse(meal.recipe_meta) : {},
             };
         } catch (error) {
             console.error('Error getting party meal by ID:', error);
@@ -1604,6 +1608,54 @@ export const partyMealIngredientClaimOperations = {
         } catch (error) {
             console.error('Error removing claim:', error);
             throw error;
+        }
+    },
+
+    async getClaimsByPartyId(partyId) {
+        const db = getDatabase();
+        try {
+            return await db.getAllAsync(
+                `SELECT c.* FROM party_meal_ingredient_claims c
+                 INNER JOIN party_meals m ON m.id = c.party_meal_id
+                 WHERE m.party_id = ?
+                 ORDER BY c.claimed_at`,
+                [partyId]
+            );
+        } catch (error) {
+            console.error('Error getting party claims:', error);
+            throw error;
+        }
+    },
+
+    async syncFromLiveSnapshot(localPartyId, liveClaims) {
+        const db = getDatabase();
+        const meals = await db.getAllAsync('SELECT id, sync_meal_id FROM party_meals WHERE party_id = ?', [localPartyId]);
+        const mealBySync = new Map(meals.map((m) => [String(m.sync_meal_id), m.id]));
+        await db.runAsync(
+            `DELETE FROM party_meal_ingredient_claims WHERE party_meal_id IN (
+                SELECT id FROM party_meals WHERE party_id = ?
+            )`,
+            [localPartyId]
+        );
+        for (const claim of liveClaims) {
+            const localMealId = mealBySync.get(String(claim.mealId));
+            if (!localMealId) continue;
+            await db.runAsync(
+                `INSERT INTO party_meal_ingredient_claims (
+                    party_meal_id, recipe_id, ingredient_name, claimed_by_user_id, claimed_by_user_name,
+                    claimed_by_member_id, live_claim_id, claimed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    localMealId,
+                    claim.recipeId,
+                    claim.ingredientName,
+                    claim.claimedByMemberId || 'live',
+                    claim.claimedByDisplayName || 'Member',
+                    claim.claimedByMemberId || null,
+                    claim.id,
+                    claim.claimedAt || Date.now(),
+                ]
+            );
         }
     },
 };
