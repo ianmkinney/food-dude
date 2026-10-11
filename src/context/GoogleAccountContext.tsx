@@ -103,6 +103,9 @@ function GoogleAccountProviderInner({ children }: { children: React.ReactNode })
             return undefined;
         }
         const stop = startCloudSyncScheduler();
+        import('../services/partyAutoMigrate')
+            .then((m) => m.autoMigrateLocalPartiesAfterSignIn())
+            .catch(() => {});
         return () => {
             stop?.();
             stopCloudSyncScheduler();

@@ -699,6 +699,7 @@ async function handleMigrate(req, res, session) {
             if (!isHumanPartyMember({ displayName })) continue;
             if (added >= MAX_ACTIVE_MEMBERS) break;
             const email = m.email ? String(m.email).trim().toLowerCase().slice(0, MAX_EMAIL_LEN) : null;
+            if (email && email === session.email.toLowerCase()) continue;
             await upsertActivePartyMember(client, {
                 partyId,
                 displayName,

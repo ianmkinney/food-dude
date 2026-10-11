@@ -35,12 +35,17 @@ import {
     attachOrCreateLocalLiveParty,
     createLiveParty,
     joinLiveParty,
-    pushLocalPartyMealsToLive,
-    renameLiveParty,
-    uploadLivePartyImage,
     claimLiveIngredient,
     unclaimLiveIngredient,
 } from '../services/partyLiveSync';
+import { ensurePartyLiveReady } from '../services/partyLiveEnsure';
+import {
+    runPushMealsJob,
+    runRenamePartyJob,
+    runUploadImageJob,
+    runPartyLiveJob,
+} from '../services/partyLiveSyncStatus';
+import PartySyncStatusChip from '../components/party/PartySyncStatusChip';
 import { pickPartyCoverImageBase64 } from '../utils/partyImage';
 
 const PartyScreen = ({ navigation }) => {
@@ -111,7 +116,7 @@ const PartyScreen = ({ navigation }) => {
     );
 
     usePartyLivePoll({
-        livePartyId: selectedParty?.sync_mode === 'live' ? selectedParty?.live_party_id : null,
+        livePartyId: selectedParty?.live_party_id || null,
         enabled: Boolean(selectedParty?.live_party_id),
         onSnapshot: onLiveSnapshot,
     });
@@ -131,6 +136,26 @@ const PartyScreen = ({ navigation }) => {
             loadPartyMembers(selectedParty.id);
         }
     }, [selectedParty]);
+
+    useEffect(() => {
+        let cancelled = false;
+        if (!selectedParty?.id) return undefined;
+        (async () => {
+            const ready = await ensurePartyLiveReady(selectedParty);
+            if (cancelled || !ready) return;
+            if (
+                ready.live_party_id !== selectedParty.live_party_id ||
+                ready.sync_mode !== selectedParty.sync_mode
+            ) {
+                setSelectedParty(ready);
+                await loadMeals(ready.id);
+                await loadPartyMembers(ready.id);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedParty?.id, googleSession?.token]);
 
     const loadPartyMembers = async (partyId) => {
         try {
@@ -391,8 +416,11 @@ const PartyScreen = ({ navigation }) => {
         }
 
         try {
+            const ready = await ensurePartyLiveReady(selectedParty);
+            if (ready) setSelectedParty(ready);
+            const partyId = ready?.id || selectedParty.id;
             await partyMealOperations.create({
-                partyId: selectedParty.id,
+                partyId,
                 name: newMealName.trim(),
                 description: newMealDescription.trim() || null,
                 recipeIds: selectedRecipes,
@@ -402,13 +430,10 @@ const PartyScreen = ({ navigation }) => {
             setNewMealDescription('');
             setSelectedRecipes([]);
             setShowCreateMealModal(false);
-            await partyOperations.updateSyncFields(selectedParty.id, { updated_at: Date.now() });
-            await loadMeals(selectedParty.id);
+            await partyOperations.updateSyncFields(partyId, { updated_at: Date.now() });
+            await loadMeals(partyId);
             await refreshParty();
-            if (selectedParty.sync_mode === 'live' && selectedParty.live_party_id) {
-                const refreshed = await partyOperations.getById(selectedParty.id);
-                await pushLocalPartyMealsToLive(refreshed);
-            }
+            await runPushMealsJob(partyId);
             Alert.alert('Success', 'Meal created!');
         } catch (error) {
             console.error('Error creating meal:', error);
@@ -611,26 +636,29 @@ const PartyScreen = ({ navigation }) => {
                 (c) => c.ingredient_name === ingredientName && String(c.recipe_id) === String(recipeId)
             );
 
-            if (
-                selectedParty?.sync_mode === 'live' &&
-                selectedParty?.live_party_id &&
-                selectedMeal.sync_meal_id
-            ) {
-                if (existingClaim?.live_claim_id) {
-                    await unclaimLiveIngredient({
-                        livePartyId: selectedParty.live_party_id,
-                        claimId: existingClaim.live_claim_id,
-                    });
-                } else if (!existingClaim) {
-                    await claimLiveIngredient({
-                        livePartyId: selectedParty.live_party_id,
-                        mealSyncId: selectedMeal.sync_meal_id,
-                        recipeId,
-                        ingredientName,
-                    });
-                } else {
-                    await partyMealIngredientClaimOperations.removeClaim(existingClaim.id);
-                }
+            const liveParty = await ensurePartyLiveReady(selectedParty);
+            if (liveParty?.live_party_id && selectedMeal.sync_meal_id) {
+                await runPartyLiveJob(liveParty.id, {
+                    run: async () => {
+                        if (existingClaim?.live_claim_id) {
+                            const data = await unclaimLiveIngredient({
+                                livePartyId: liveParty.live_party_id,
+                                claimId: existingClaim.live_claim_id,
+                            });
+                            if (data?.party) await applyLivePartySnapshot(liveParty.id, data.party);
+                        } else if (!existingClaim) {
+                            const data = await claimLiveIngredient({
+                                livePartyId: liveParty.live_party_id,
+                                mealSyncId: selectedMeal.sync_meal_id,
+                                recipeId,
+                                ingredientName,
+                            });
+                            if (data?.party) await applyLivePartySnapshot(liveParty.id, data.party);
+                        } else {
+                            await partyMealIngredientClaimOperations.removeClaim(existingClaim.id);
+                        }
+                    },
+                });
             } else if (existingClaim) {
                 await partyMealIngredientClaimOperations.removeClaim(existingClaim.id);
             } else {
@@ -671,10 +699,13 @@ const PartyScreen = ({ navigation }) => {
         const name = renameValue.trim();
         if (!name || !selectedParty) return;
         try {
-            if (selectedParty.live_party_id) {
-                await renameLiveParty({ livePartyId: selectedParty.live_party_id, name });
-            }
             await partyOperations.update(selectedParty.id, { name });
+            if (selectedParty.live_party_id) {
+                await runRenamePartyJob(selectedParty.id, {
+                    livePartyId: selectedParty.live_party_id,
+                    name,
+                });
+            }
             setShowRenameModal(false);
             await refreshParty();
         } catch (error) {
@@ -690,7 +721,10 @@ const PartyScreen = ({ navigation }) => {
         try {
             const imageBase64 = await pickPartyCoverImageBase64();
             if (!imageBase64) return;
-            await uploadLivePartyImage({ livePartyId: selectedParty.live_party_id, imageBase64 });
+            await runUploadImageJob(selectedParty.id, {
+                livePartyId: selectedParty.live_party_id,
+                imageBase64,
+            });
             await refreshParty();
         } catch (error) {
             Alert.alert('Error', error?.message || 'Could not update photo');
@@ -797,6 +831,7 @@ const PartyScreen = ({ navigation }) => {
         if (!selectedMeal) return;
 
         try {
+            const ready = await ensurePartyLiveReady(selectedParty);
             await partyMealOperations.update(selectedMeal.id, {
                 name: editingMealName.trim(),
                 description: editingMealDescription.trim() || null,
@@ -804,6 +839,7 @@ const PartyScreen = ({ navigation }) => {
             });
             setShowMealDetailModal(false);
             await loadMeals(selectedParty.id);
+            if (ready?.live_party_id) await runPushMealsJob(ready.id);
             Alert.alert('Success', 'Meal updated!');
         } catch (error) {
             console.error('Error updating meal:', error);
@@ -824,9 +860,11 @@ const PartyScreen = ({ navigation }) => {
                     style: 'destructive',
                     onPress: async () => {
                         try {
+                            const ready = await ensurePartyLiveReady(selectedParty);
                             await partyMealOperations.delete(selectedMeal.id);
                             setShowMealDetailModal(false);
                             await loadMeals(selectedParty.id);
+                            if (ready?.live_party_id) await runPushMealsJob(ready.id);
                             Alert.alert('Success', 'Meal deleted!');
                         } catch (error) {
                             console.error('Error deleting meal:', error);
@@ -892,6 +930,9 @@ const PartyScreen = ({ navigation }) => {
                 onInviteRotated={async () => refreshParty()}
             />
             <PartyPrivacyChip theme={theme} />
+            {selectedParty.live_party_id ? (
+                <PartySyncStatusChip partyId={selectedParty.id} theme={theme} />
+            ) : null}
             <Text style={[styles.sectionLabel, { color: theme.colors.text.secondary }]}>Meals</Text>
         </>
     ) : (

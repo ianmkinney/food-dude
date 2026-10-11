@@ -21,9 +21,9 @@ function isHumanName(member) {
 }
 
 function memberKey(member) {
-    if (member.sync_member_id) return `sync:${member.sync_member_id}`;
     const email = member.member_email ? String(member.member_email).toLowerCase() : '';
     if (email) return `email:${email}`;
+    if (member.sync_member_id) return `sync:${member.sync_member_id}`;
     if (member.user_id) return `uid:${member.user_id}`;
     return `id:${member.id}`;
 }

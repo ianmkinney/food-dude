@@ -1142,6 +1142,46 @@ export const partyMemberOperations = {
                 await db.runAsync('DELETE FROM party_members WHERE id = ?', [row.id]);
             }
         }
+        await partyMemberOperations.reconcileLocalPartyMembers(partyId, ownerEmail);
+    },
+
+    async reconcileLocalPartyMembers(partyId, ownerEmail) {
+        const db = getDatabase();
+        const { isHumanPartyMemberRow, normalizePartyMembersForDisplay } = await import(
+            '../utils/partyMemberList'
+        );
+        const rows = await db.getAllAsync('SELECT * FROM party_members WHERE party_id = ?', [partyId]);
+        for (const row of rows) {
+            if (!isHumanPartyMemberRow(row)) {
+                await db.runAsync('DELETE FROM party_members WHERE id = ?', [row.id]);
+            }
+        }
+        const remaining = await db.getAllAsync('SELECT * FROM party_members WHERE party_id = ?', [partyId]);
+        const normalized = normalizePartyMembersForDisplay(remaining, { ownerEmail });
+        const keepIds = new Set(normalized.map((m) => m.id));
+        for (const row of remaining) {
+            if (!keepIds.has(row.id)) {
+                await db.runAsync('DELETE FROM party_members WHERE id = ?', [row.id]);
+            }
+        }
+        const owner = ownerEmail ? String(ownerEmail).toLowerCase() : '';
+        if (owner) {
+            const owners = await db.getAllAsync(
+                `SELECT * FROM party_members WHERE party_id = ? AND role = 'owner'`,
+                [partyId]
+            );
+            const withEmail = owners.filter(
+                (m) => m.member_email && String(m.member_email).toLowerCase() === owner
+            );
+            const survivor = withEmail[0] || owners.find((m) => m.sync_member_id) || owners[0];
+            if (survivor) {
+                for (const row of owners) {
+                    if (row.id !== survivor.id) {
+                        await db.runAsync('DELETE FROM party_members WHERE id = ?', [row.id]);
+                    }
+                }
+            }
+        }
     },
 
     async removeBySyncMemberId(partyId, syncMemberId) {
