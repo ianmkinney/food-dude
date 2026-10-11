@@ -34,13 +34,29 @@ function run(cmd, args, opts = {}) {
     });
 }
 
-async function dismissOnboarding(page) {
-    await page.evaluate(() => {
+async function seedAppState(page) {
+    await page.addInitScript(() => {
         try {
-            localStorage.setItem('amplifood.onboarding.v1', '1');
+            const stamp = JSON.stringify({ completedAt: Date.now() });
+            localStorage.setItem('amplifood.onboarding.v1', stamp);
+            localStorage.setItem('amplifood.legal.accepted', JSON.stringify({ version: '2026-10-09', acceptedAt: Date.now() }));
+            localStorage.setItem('amplifood.dataConsent.v1', JSON.stringify({ anthropic: true, openai: true, xai: true, gemini: true, platform: true }));
             sessionStorage.setItem('af.splash', '1');
         } catch {}
     });
+}
+
+async function finishOnboardingIfVisible(page) {
+    const agree = page.getByRole('button', { name: /I agree/i });
+    if (!(await agree.isVisible().catch(() => false))) return;
+    const toggle = page.getByRole('switch').first();
+    if (await toggle.isVisible().catch(() => false)) {
+        await toggle.click();
+    }
+    if (await agree.isEnabled().catch(() => false)) {
+        await agree.click();
+        await page.waitForTimeout(1200);
+    }
 }
 
 async function capture() {
@@ -61,18 +77,19 @@ async function capture() {
 
         const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, deviceScaleFactor: 2 });
         const mobilePage = await mobile.newPage();
+        await seedAppState(mobilePage);
         await mobilePage.goto(base, { waitUntil: 'networkidle' });
-        await dismissOnboarding(mobilePage);
-        await mobilePage.reload({ waitUntil: 'networkidle' });
-        await mobilePage.waitForTimeout(2500);
+        await finishOnboardingIfVisible(mobilePage);
+        await mobilePage.waitForTimeout(4000);
         await mobilePage.screenshot({ path: mobilePath, fullPage: false });
 
         const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 } });
         const desktopPage = await desktop.newPage();
+        await seedAppState(desktopPage);
         await desktopPage.goto(`${base}/recipes`, { waitUntil: 'networkidle' });
-        await dismissOnboarding(desktopPage);
-        await desktopPage.reload({ waitUntil: 'networkidle' });
-        await desktopPage.waitForTimeout(2500);
+        await finishOnboardingIfVisible(desktopPage);
+        await desktopPage.waitForSelector('text=Recipes', { timeout: 60000 }).catch(() => {});
+        await desktopPage.waitForTimeout(2000);
         await desktopPage.screenshot({ path: desktopPath, fullPage: false });
 
         await browser.close();

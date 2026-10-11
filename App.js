@@ -33,6 +33,8 @@ import { MonetizationProvider } from './src/monetization/MonetizationContext';
 import { GoogleAccountProvider } from './src/context/GoogleAccountContext';
 import WebShell from './src/components/WebShell';
 import ScreenErrorBoundary from './src/components/ScreenErrorBoundary';
+import DesktopNavigationFrame from './src/navigation/DesktopNavigationFrame';
+import { desktopNavFromState } from './src/navigation/desktopNavRoute';
 
 import { ShareIntentProvider } from './src/platform/shareIntent';
 
@@ -239,6 +241,7 @@ function AppContent() {
   const theme = getTheme(isDark);
   const [fontsLoaded, fontError] = useFonts(FONTS);
   const [splashDone, setSplashDone] = useState(!hasStartupOverlay);
+  const [desktopNavRoute, setDesktopNavRoute] = useState(() => desktopNavFromState(undefined));
   const appReady = isReady && !!(fontsLoaded || fontError);
 
   const prepare = useCallback(async () => {
@@ -335,18 +338,25 @@ function AppContent() {
       <ShareIntentProvider>
         <OnboardingGate navigate={navigateToTab}>
           <WebShell>
-            <NavigationContainer ref={navigationRef} linking={linking} documentTitle={documentTitle}>
-              <ScreenErrorBoundary
-                isDark={theme.isDark}
-                onGoBack={() => {
-                  if (navigationRef.isReady()) {
-                    if (navigationRef.canGoBack()) navigationRef.goBack();
-                    else navigationRef.navigate('Main', { screen: 'Recipes' });
-                  }
-                }}
-              >
-                <AppNavigator />
-              </ScreenErrorBoundary>
+            <NavigationContainer
+              ref={navigationRef}
+              linking={linking}
+              documentTitle={documentTitle}
+              onStateChange={(state) => setDesktopNavRoute(desktopNavFromState(state))}
+            >
+              <DesktopNavigationFrame navRoute={desktopNavRoute}>
+                <ScreenErrorBoundary
+                  isDark={theme.isDark}
+                  onGoBack={() => {
+                    if (navigationRef.isReady()) {
+                      if (navigationRef.canGoBack()) navigationRef.goBack();
+                      else navigationRef.navigate('Main', { screen: 'Recipes' });
+                    }
+                  }}
+                >
+                  <AppNavigator />
+                </ScreenErrorBoundary>
+              </DesktopNavigationFrame>
               <StatusBar style={theme.isDark ? 'light' : 'dark'} />
             </NavigationContainer>
           </WebShell>

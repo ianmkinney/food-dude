@@ -1,38 +1,19 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useNavigation, useRoute, type NavigationProp } from '@react-navigation/native';
+import { useNavigation, type NavigationProp } from '@react-navigation/native';
+import { useDesktopNavRoute } from '../../navigation/DesktopNavRouteContext';
 import { Ionicons } from '@expo/vector-icons';
 import { getTheme } from '../../theme';
 import { useTheme } from '../../context/ThemeContext';
 import DesktopGoogleSignIn from './DesktopGoogleSignIn';
 import { desktopShellStyles } from './desktopTheme';
 
-const ROUTE_TITLES: Record<string, string> = {
-    Ampi: 'Ampi',
-    Recipes: 'Recipe Book',
-    Planner: 'Meal Planner',
-    Pantry: 'My Pantry',
-    Grocery: 'Grocery List',
-    Party: 'Parties',
-    Account: 'Account',
-};
-
-function resolveTitle(routeName: string | undefined, params: object | undefined) {
-    if (!routeName) return 'AmpliFood';
-    if (routeName === 'Main' && params && typeof params === 'object' && 'screen' in params) {
-        const screen = (params as { screen?: string }).screen;
-        if (screen && ROUTE_TITLES[screen]) return ROUTE_TITLES[screen];
-    }
-    return ROUTE_TITLES[routeName] ?? routeName;
-}
-
 export default function DesktopHeader() {
     const navigation = useNavigation<NavigationProp<Record<string, object | undefined>>>();
-    const route = useRoute();
+    const { title } = useDesktopNavRoute();
     const { isDark, toggleTheme } = useTheme();
     const theme = getTheme(isDark);
     const c = theme.colors;
-    const title = resolveTitle(route.name, route.params);
 
     return (
         <View style={[desktopShellStyles.header, { borderBottomColor: c.borderSoft, backgroundColor: c.background }]}>

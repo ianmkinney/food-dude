@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useNavigationState, type NavigationProp } from '@react-navigation/native';
+import { useNavigation, type NavigationProp } from '@react-navigation/native';
+import { useDesktopNavRoute } from '../../navigation/DesktopNavRouteContext';
 import { getTheme } from '../../theme';
 import { useTheme } from '../../context/ThemeContext';
 import { BrandMark } from '../Brand';
@@ -24,16 +25,7 @@ export default function DesktopSidebar() {
     const theme = getTheme(isDark);
     const c = theme.colors;
 
-    const activeKey = useNavigationState((state) => {
-        const route = state.routes[state.index];
-        if (route.name === 'Main' && route.state?.type === 'tab') {
-            const tab = route.state.routes[route.state.index ?? 0];
-            return tab?.name ?? ASSISTANT_NAME;
-        }
-        if (route.name === 'Party') return 'Party';
-        if (route.name === 'Account') return 'Account';
-        return route.name;
-    });
+    const { activeKey } = useDesktopNavRoute();
 
     const items: NavItem[] = useMemo(
         () => [
