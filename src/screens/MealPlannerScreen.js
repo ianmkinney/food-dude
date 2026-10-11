@@ -20,10 +20,13 @@ import { formatDisplayDate, getStartOfWeek, getWeekDates, addDays, subtractDays 
 import { mealPlanOperations, partyMealOperations } from '../database/operations';
 import { useQuery } from '../data/queryCache';
 import { mealPlansQuery, recipesQuery, partiesQuery } from '../data/queries';
+import { useLayoutMode } from '../layout/useLayoutMode';
+import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 
 const MealPlannerScreen = ({ route, navigation }) => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const { isDesktop } = useLayoutMode();
     const [currentWeekStart, setCurrentWeekStart] = useState(getStartOfWeek());
     const weekDates = useMemo(() => getWeekDates(currentWeekStart), [currentWeekStart]);
     const plansQuery = useMemo(() => mealPlansQuery(currentWeekStart), [currentWeekStart]);
@@ -326,6 +329,9 @@ const MealPlannerScreen = ({ route, navigation }) => {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            {isDesktop ? (
+                <DesktopPageHeader title="Meal Planner" subtitle="Drag recipes onto your week" />
+            ) : null}
             {/* Week Navigation */}
             <View style={[styles.weekNav, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
                 <AnimatedPressable accessibilityRole="button" accessibilityLabel="Previous" onPress={goToPreviousWeek} style={styles.navButton}>

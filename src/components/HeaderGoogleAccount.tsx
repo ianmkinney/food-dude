@@ -18,7 +18,14 @@ function initialFor(session: { name?: string; email?: string } | null): string {
     return source.charAt(0).toUpperCase();
 }
 
-export default function HeaderGoogleAccount({ tintColor }: { tintColor?: string }) {
+export default function HeaderGoogleAccount({
+    tintColor,
+    showSignInWhenUnconfigured = false,
+}: {
+    tintColor?: string;
+    /** Desktop shell: show the Sign in pill even when Google client IDs are absent in this build. */
+    showSignInWhenUnconfigured?: boolean;
+}) {
     const navigation = useNavigation();
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
@@ -35,13 +42,17 @@ export default function HeaderGoogleAccount({ tintColor }: { tintColor?: string 
 
     const dotColor = useMemo(() => syncDotColor(syncStatus, theme), [syncStatus, theme]);
 
-    if (!configured) return null;
+    if (!configured && !showSignInWhenUnconfigured) return null;
 
     if (!session) {
+        const onSignIn = () => {
+            if (configured) signIn();
+            else openAccount();
+        };
         return (
             <AnimatedPressable
-                onPress={() => signIn()}
-                disabled={busy}
+                onPress={onSignIn}
+                disabled={busy && configured}
                 accessibilityRole="button"
                 accessibilityLabel="Sign in with Google"
                 scaleTo={motion.scale.pressHard}

@@ -18,9 +18,12 @@ function scrollerAt(x, y) {
     return null;
 }
 
-export function installDesktopScroll(column) {
+export function installDesktopScroll(column, options = {}) {
     if (typeof window === 'undefined' || !column || !window.matchMedia) return () => {};
-    const query = window.matchMedia('(min-width: 560px) and (hover: hover) and (pointer: fine)');
+    if (options.wide) return () => {};
+    const query = window.matchMedia(
+        '(min-width: 560px) and (max-width: 1023px) and (hover: hover) and (pointer: fine)'
+    );
     const root = document.documentElement;
     const track = document.createElement('div');
     track.className = 'af-pagebar';

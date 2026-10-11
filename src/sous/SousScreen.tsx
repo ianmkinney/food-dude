@@ -56,6 +56,10 @@ import { CHAT_THREAD_AMPI } from '../chat/chatThreads';
 import { chatOperations } from '../database/operations';
 import { askSous, confirmSousActions, type SousTurn } from './agent';
 import type { SousCard, ToolCall } from './tools';
+import { useLayoutMode } from '../layout/useLayoutMode';
+import DesktopChatSidePanel from '../components/layout/DesktopChatSidePanel';
+import { desktopAmpiStyles } from '../components/layout/desktopTheme';
+import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 
 type Message = {
     id: string;
@@ -121,6 +125,7 @@ type Nav = { navigate: (name: string, params?: object) => void };
 export default function SousScreen() {
     const { isDark, textScale } = useTheme();
     const { height: windowHeight } = useWindowDimensions();
+    const { isDesktop } = useLayoutMode();
     const insets = useSafeAreaInsets();
     const theme = getTheme(isDark, undefined, undefined);
     const navigation = useNavigation() as unknown as Nav;
@@ -136,6 +141,7 @@ export default function SousScreen() {
     const [speakingId, setSpeakingId] = useState<string | null>(null);
     const engineRef = useRef<SpeechEngine | null>(null);
     const listRef = useRef<FlatList<Message>>(null);
+    const [desktopChatViewportH, setDesktopChatViewportH] = useState(0);
     const inputRef = useRef<TextInput>(null);
     const attachRef = useRef<ChatAttachmentPickerHandle>(null);
     const [inputHeight, setInputHeight] = useState(INPUT_MIN_HEIGHT);
@@ -703,6 +709,19 @@ export default function SousScreen() {
 
     const started = messages.length > 0;
 
+    const desktopPanelCard = useMemo((): SousCard | null => {
+        if (!isDesktop) return null;
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const m = messages[i];
+            if (m.role !== 'sous' || !m.cards?.length) continue;
+            const recipe = m.cards.find((c) => c.type === 'recipe');
+            if (recipe) return recipe;
+            const list = m.cards.find((c) => c.type === 'grocery' || c.type === 'pantry');
+            if (list) return list;
+        }
+        return null;
+    }, [messages, isDesktop]);
+
     const hero = (
         <View style={styles.hero}>
             <GuitarMark size={textScale > 1.1 || windowHeight < 760 ? 72 : 112} waves={thinking ? 'thinking' : 'idle'} />
@@ -749,36 +768,50 @@ export default function SousScreen() {
         </ScrollView>
     );
 
-    return (
-        <KeyboardAvoidingView style={[styles.root, { backgroundColor: c.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
-            <View style={styles.iconRow}>
-                {started ? (
-                    <View style={styles.identity}>
-                        <GuitarMark size={32} waves={thinking ? 'thinking' : 'idle'} />
-                        <Text style={[styles.identityName, display, { color: c.text.primary }]}>{ASSISTANT_NAME}</Text>
-                    </View>
-                ) : null}
-                <View style={{ flex: 1 }} />
-                <AiBadge style={{ alignSelf: 'center' }} />
-                <Pressable
-                    onPress={() => navigation.navigate('AiChef')}
-                    style={styles.iconButton}
-                    accessibilityRole="button"
-                    accessibilityLabel="Open AI Chef for recipes from your pantry or a photo"
-                >
-                    <Ionicons name="restaurant-outline" size={20} color={c.text.secondary} />
-                </Pressable>
-                <Pressable
-                    onPress={toggleAutoSpeak}
-                    style={[styles.iconButton, autoSpeak && { backgroundColor: theme.primary[500] + '22' }]}
-                    accessibilityRole="switch"
-                    accessibilityLabel={`Read ${ASSISTANT_NAME} replies aloud`}
-                    accessibilityState={{ checked: autoSpeak }}
-                    aria-checked={autoSpeak}
-                >
-                    <Ionicons name={autoSpeak ? 'volume-high' : 'volume-mute-outline'} size={20} color={autoSpeak ? theme.primary[500] : c.text.secondary} />
-                </Pressable>
-            </View>
+    const chat = (
+        <KeyboardAvoidingView
+            style={[styles.root, { backgroundColor: c.background }, isDesktop && styles.rootDesktop]}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={90}
+        >
+            {!isDesktop ? (
+                <View style={styles.iconRow}>
+                    {started ? (
+                        <View style={styles.identity}>
+                            <GuitarMark size={32} waves={thinking ? 'thinking' : 'idle'} />
+                            <Text style={[styles.identityName, display, { color: c.text.primary }]}>{ASSISTANT_NAME}</Text>
+                        </View>
+                    ) : null}
+                    <View style={{ flex: 1 }} />
+                    <AiBadge style={{ alignSelf: 'center' }} />
+                    <Pressable
+                        onPress={() => navigation.navigate('AiChef')}
+                        style={styles.iconButton}
+                        accessibilityRole="button"
+                        accessibilityLabel="Open AI Chef for recipes from your pantry or a photo"
+                    >
+                        <Ionicons name="restaurant-outline" size={20} color={c.text.secondary} />
+                    </Pressable>
+                    <Pressable
+                        onPress={toggleAutoSpeak}
+                        style={[styles.iconButton, autoSpeak && { backgroundColor: theme.primary[500] + '22' }]}
+                        accessibilityRole="switch"
+                        accessibilityLabel={`Read ${ASSISTANT_NAME} replies aloud`}
+                        accessibilityState={{ checked: autoSpeak }}
+                        aria-checked={autoSpeak}
+                    >
+                        <Ionicons name={autoSpeak ? 'volume-high' : 'volume-mute-outline'} size={20} color={autoSpeak ? theme.primary[500] : c.text.secondary} />
+                    </Pressable>
+                </View>
+            ) : null}
+            <View
+                style={isDesktop ? styles.chatListViewport : styles.chatListViewportNative}
+                onLayout={
+                    isDesktop
+                        ? (e) => setDesktopChatViewportH(e.nativeEvent.layout.height)
+                        : undefined
+                }
+            >
             <FlatList
                 ref={listRef}
                 data={messages}
@@ -787,13 +820,26 @@ export default function SousScreen() {
                 extraData={speakingId}
                 ListEmptyComponent={hero}
                 ListHeaderComponent={
-                    started ? (
+                    isDesktop && started && messages.length > 0 ? (
+                        <View style={styles.desktopChatSpacer} />
+                    ) : started && !isDesktop ? (
                         <View style={styles.disclaimerHeader}>
                             <AiDisclaimer kind="chat" showBadge={false} style={styles.disclaimerInner} />
                         </View>
                     ) : null
                 }
-                contentContainerStyle={[styles.list, !started && styles.listEmpty]}
+                style={isDesktop ? styles.listDesktop : undefined}
+                contentContainerStyle={[
+                    styles.list,
+                    !started && styles.listEmpty,
+                    isDesktop &&
+                        started &&
+                        messages.length > 0 &&
+                        desktopChatViewportH > 0 && {
+                            minHeight: desktopChatViewportH,
+                            flexGrow: 1,
+                        },
+                ]}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
                 onLayout={scrollToLatest}
@@ -814,6 +860,7 @@ export default function SousScreen() {
                     </Enter>
                 ) : null}
             />
+            </View>
             {!!voiceNote && !listening && !mic.error && (
                 <Text style={[styles.micStatus, { color: c.text.secondary }]}>{voiceNote}</Text>
             )}
@@ -991,6 +1038,42 @@ export default function SousScreen() {
             </View>
         </KeyboardAvoidingView>
     );
+
+    if (!isDesktop) return chat;
+
+    return (
+        <View style={{ flex: 1, minHeight: 0, backgroundColor: c.background }}>
+            <DesktopPageHeader title={ASSISTANT_NAME} subtitle={ASSISTANT_TAGLINE}>
+                <AiBadge />
+                <Pressable
+                    onPress={() => navigation.navigate('AiChef')}
+                    style={styles.iconButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open AI Chef for recipes from your pantry or a photo"
+                >
+                    <Ionicons name="restaurant-outline" size={22} color={c.text.secondary} />
+                </Pressable>
+                <Pressable
+                    onPress={toggleAutoSpeak}
+                    style={[styles.iconButton, autoSpeak && { backgroundColor: theme.primary[500] + '22' }]}
+                    accessibilityRole="switch"
+                    accessibilityLabel={`Read ${ASSISTANT_NAME} replies aloud`}
+                    accessibilityState={{ checked: autoSpeak }}
+                    aria-checked={autoSpeak}
+                >
+                    <Ionicons
+                        name={autoSpeak ? 'volume-high' : 'volume-mute-outline'}
+                        size={22}
+                        color={autoSpeak ? theme.primary[500] : c.text.secondary}
+                    />
+                </Pressable>
+            </DesktopPageHeader>
+            <View style={[desktopAmpiStyles.shell, { flex: 1, minHeight: 0 }]}>
+                <View style={[desktopAmpiStyles.chatColumn, { flex: 1 }]}>{chat}</View>
+                <DesktopChatSidePanel card={desktopPanelCard} navigation={navigation} />
+            </View>
+        </View>
+    );
 }
 
 // On the web a mousedown on the send button would move focus off the
@@ -1000,6 +1083,12 @@ const keepComposerFocus =
 
 const styles = StyleSheet.create({
     root: { flex: 1 },
+    rootDesktop: { minHeight: 0 },
+    chatListViewport: { flex: 1, minHeight: 0 },
+    chatListViewportNative: { flex: 1 },
+    listDesktop: { flex: 1, minHeight: 0 },
+    listDesktopPinned: { flexGrow: 1 },
+    desktopChatSpacer: { flexGrow: 1, minHeight: 1 },
     iconRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, minHeight: 52 },
     identity: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 4 },
     identityName: { fontSize: 18 },

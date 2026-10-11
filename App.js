@@ -33,6 +33,8 @@ import { MonetizationProvider } from './src/monetization/MonetizationContext';
 import { GoogleAccountProvider } from './src/context/GoogleAccountContext';
 import WebShell from './src/components/WebShell';
 import ScreenErrorBoundary from './src/components/ScreenErrorBoundary';
+import DesktopNavigationFrame from './src/navigation/DesktopNavigationFrame';
+import { desktopNavFromState } from './src/navigation/desktopNavRoute';
 
 import { ShareIntentProvider } from './src/platform/shareIntent';
 
@@ -239,6 +241,7 @@ function AppContent() {
   const theme = getTheme(isDark);
   const [fontsLoaded, fontError] = useFonts(FONTS);
   const [splashDone, setSplashDone] = useState(!hasStartupOverlay);
+  const [desktopNavRoute, setDesktopNavRoute] = useState(() => desktopNavFromState(undefined));
   const appReady = isReady && !!(fontsLoaded || fontError);
 
   const prepare = useCallback(async () => {
@@ -247,6 +250,10 @@ function AppContent() {
       if (Platform.OS === 'web' && globalThis.__PARTY_SCREENSHOT_SEED__) {
         const { runPartyScreenshotSeed } = await import('./src/demo/runPartyScreenshotSeed');
         await runPartyScreenshotSeed();
+      }
+      if (Platform.OS === 'web' && globalThis.__DESKTOP_SCREENSHOT_SEED__) {
+        const { runDesktopScreenshotSeed } = await import('./src/demo/runDesktopScreenshotSeed');
+        await runDesktopScreenshotSeed();
       }
       console.log('✅ AmpliFood app initialized successfully');
       setDbMode(getDatabaseMode());
@@ -315,6 +322,19 @@ function AppContent() {
   }, [appReady, error]);
 
   useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const syncDesktopNav = () => {
+      if (navigationRef.isReady()) {
+        setDesktopNavRoute(desktopNavFromState(navigationRef.getRootState()));
+      } else {
+        setDesktopNavRoute(desktopNavFromState(undefined));
+      }
+    };
+    window.addEventListener('popstate', syncDesktopNav);
+    return () => window.removeEventListener('popstate', syncDesktopNav);
+  }, [appReady]);
+
+  useEffect(() => {
     if (Platform.OS !== 'web' || !appReady || typeof window === 'undefined') return;
     const hash = window.location.hash || '';
     if (!hash.includes('p=') || !hash.includes('sig=')) return;
@@ -335,18 +355,34 @@ function AppContent() {
       <ShareIntentProvider>
         <OnboardingGate navigate={navigateToTab}>
           <WebShell>
-            <NavigationContainer ref={navigationRef} linking={linking} documentTitle={documentTitle}>
-              <ScreenErrorBoundary
-                isDark={theme.isDark}
-                onGoBack={() => {
-                  if (navigationRef.isReady()) {
-                    if (navigationRef.canGoBack()) navigationRef.goBack();
-                    else navigationRef.navigate('Main', { screen: 'Recipes' });
-                  }
-                }}
-              >
-                <AppNavigator />
-              </ScreenErrorBoundary>
+            <NavigationContainer
+              ref={navigationRef}
+              linking={linking}
+              documentTitle={documentTitle}
+              onReady={() => {
+                if (navigationRef.isReady()) {
+                  setDesktopNavRoute(desktopNavFromState(navigationRef.getRootState()));
+                }
+              }}
+              onStateChange={() => {
+                if (navigationRef.isReady()) {
+                  setDesktopNavRoute(desktopNavFromState(navigationRef.getRootState()));
+                }
+              }}
+            >
+              <DesktopNavigationFrame navRoute={desktopNavRoute}>
+                <ScreenErrorBoundary
+                  isDark={theme.isDark}
+                  onGoBack={() => {
+                    if (navigationRef.isReady()) {
+                      if (navigationRef.canGoBack()) navigationRef.goBack();
+                      else navigationRef.navigate('Main', { screen: 'Recipes' });
+                    }
+                  }}
+                >
+                  <AppNavigator />
+                </ScreenErrorBoundary>
+              </DesktopNavigationFrame>
               <StatusBar style={theme.isDark ? 'light' : 'dark'} />
             </NavigationContainer>
           </WebShell>

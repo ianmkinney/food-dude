@@ -1,4 +1,4 @@
 // Native apps scroll full screen; see desktopScroll.web.js for the browser column.
-export function installDesktopScroll() {
+export function installDesktopScroll(_column, _options) {
     return () => {};
 }
