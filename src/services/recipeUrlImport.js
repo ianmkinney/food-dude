@@ -104,7 +104,7 @@ function mapStructuredPayload(payload, fallbackUrl) {
         ingredients,
         instructions: Array.isArray(payload.steps) ? payload.steps.map(String) : [],
         tags: [],
-        imageUri: null,
+        imageUri: payload.image || null,
         sourceUrl,
         sourcePlatform: platform,
         aiExtracted: Boolean(payload.aiExtracted),
@@ -181,6 +181,8 @@ export async function fetchRecipeImportViaApi(url) {
             sourceUrl: payload.sourceUrl || url,
             sourcePlatform: payload.sourcePlatform,
             author: payload.author,
+            image: payload.image || null,
+            aiExtracted: Boolean(payload.aiExtracted),
         };
     }
     return {
