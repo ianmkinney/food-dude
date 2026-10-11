@@ -11,7 +11,7 @@ type Props = {
 };
 
 const PARTY_COPY =
-    'Parties are the only part of AmpliFood stored online (plus backups you choose to save). This is how we connect you with friends. Everything else stays on your phone.';
+    'When you sign in with Google, AmpliFood can store encrypted copies of your kitchen data (recipes, lists, chat, and memories) so Safari and Chrome stay in sync. Parties and optional manual backups are also stored online. API keys never leave your device.';
 
 /** Plain-language explainer: local storage vs what leaves the device for AI/voice. */
 export default function PrivacyDataExplainer({ theme, variant = 'account' }: Props) {
@@ -30,13 +30,13 @@ export default function PrivacyDataExplainer({ theme, variant = 'account' }: Pro
             )}
             {compact ? (
                 <Text style={[styles.lead, { color: c.text.primary }]} accessibilityRole="header">
-                    Your data stays on your device
+                    Your keys stay on your device
                 </Text>
             ) : null}
             <Text style={[styles.body, { color: c.text.secondary }]}>
-                Recipes, meal plans, pantry and grocery lists, AI chat history, memory, and API keys are stored locally on
-                this device (SQLite in the app; browser storage on web). They are not uploaded to AmpliFood by default and
-                nothing is sold.
+                Recipes, meal plans, pantry and grocery lists, and Ampi chat history live in local SQLite (browser storage on
+                web). API keys stay in the OS keychain or browser storage and are never uploaded. When you sign in with Google,
+                encrypted sync and parties may store kitchen data on our server; you can turn sync off in Account.
             </Text>
             <Text style={[styles.body, { color: c.text.secondary }]}>{PARTY_COPY}</Text>
             <Text style={[styles.body, { color: c.text.secondary }]}>

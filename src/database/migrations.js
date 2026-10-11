@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 14;
+export const CURRENT_SCHEMA_VERSION = 17;
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
@@ -475,6 +475,14 @@ export const MIGRATIONS = [
             await addColumnIfMissing(db, 'party_meals', 'recipe_meta', 'TEXT', "'{}'");
             await addColumnIfMissing(db, 'party_meal_ingredient_claims', 'live_claim_id', 'TEXT');
             await addColumnIfMissing(db, 'party_meal_ingredient_claims', 'claimed_by_member_id', 'TEXT');
+        },
+    },
+    {
+        version: 17,
+        name: 'cloud_sync_meta',
+        up: async (db) => {
+            const { applySyncV17 } = await import('./syncV17.js');
+            await applySyncV17(db);
         },
     },
 ];

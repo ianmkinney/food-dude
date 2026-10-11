@@ -4,6 +4,11 @@
  */
 
 /** @param {SyncRecord | null | undefined} a @param {SyncRecord | null | undefined} b */
+export function incomingWins(existing, incoming) {
+    const winner = pickSyncWinner(existing ?? null, incoming);
+    return winner.updatedAtMs === incoming.updatedAtMs && winner.deviceId === incoming.deviceId;
+}
+
 export function pickSyncWinner(a, b) {
     if (!a) return b ?? null;
     if (!b) return a;
@@ -45,13 +50,12 @@ export function mergePushBatch(serverByKey, incoming) {
                   payload: existing.payload,
               }
             : null;
-        const winner = pickSyncWinner(existingRec, incomingRec);
         if (!existingRec) {
             accepted.push(incomingRec);
             serverByKey.set(key, incomingRec);
             continue;
         }
-        if (winner !== incomingRec) {
+        if (!incomingWins(existingRec, incomingRec)) {
             skipped.push({ collection: row.collection, recordId: row.recordId, reason: 'stale' });
             continue;
         }

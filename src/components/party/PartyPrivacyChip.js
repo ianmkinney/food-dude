@@ -9,7 +9,7 @@ const ONE_LINE =
     'Parties sync online so friends can join — everything else stays on your phone.';
 
 const DETAIL =
-    'Parties are the only part of AmpliFood stored online (plus backups you choose to save). This is how we connect you with friends. Everything else stays on your phone.';
+    'Parties and encrypted sync (when enabled) store kitchen data online; keys stay on your device.';
 
 export default function PartyPrivacyChip({ theme }) {
     const [dismissed, setDismissed] = useState(false);

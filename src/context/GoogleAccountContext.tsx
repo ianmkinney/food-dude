@@ -14,6 +14,8 @@ import {
     signOutGoogleAccount,
     subscribeGoogleAccount,
 } from '../platform/googleAccountAuth';
+import { startCloudSyncScheduler, stopCloudSyncScheduler } from '../sync/engine';
+import { subscribeSyncEngineStatus } from '../sync/syncStatusBridge';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -92,6 +94,20 @@ function GoogleAccountProviderInner({ children }: { children: React.ReactNode })
     useEffect(() => {
         consumePendingWebGoogleSignIn();
     }, []);
+
+    useEffect(() => subscribeSyncEngineStatus(setSyncStatus), []);
+
+    useEffect(() => {
+        if (!session) {
+            stopCloudSyncScheduler();
+            return undefined;
+        }
+        const stop = startCloudSyncScheduler();
+        return () => {
+            stop?.();
+            stopCloudSyncScheduler();
+        };
+    }, [session?.token]);
 
     const signIn = useCallback(async () => {
         setBusy(true);

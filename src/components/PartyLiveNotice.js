@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 const COPY =
-    'Parties are the only part of AmpliFood stored online (plus backups you choose to save). This is how we connect you with friends. Everything else stays on your phone.';
+    'Signed-in Google accounts can use parties, encrypted sync, and optional backups online. API keys never leave your device.';
 
 export default function PartyLiveNotice({ theme }) {
     return (

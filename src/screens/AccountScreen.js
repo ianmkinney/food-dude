@@ -23,6 +23,8 @@ import MemorySettings from '../components/MemorySettings';
 import DataSharingSettings from '../components/DataSharingSettings';
 import AccountGoogleSection from '../components/AccountGoogleSection';
 import CloudBackupSettings from '../components/CloudBackupSettings';
+import CloudSyncSettings from '../components/CloudSyncSettings';
+import { runFullSync } from '../sync/engine';
 import { isGoogleSignInConfigured } from '../platform/ownerSignInConfig';
 import AccountAboutSheet from '../components/AccountAboutSheet';
 import ElevatedCard from '../components/ElevatedCard';
@@ -70,6 +72,7 @@ const AccountScreen = ({ navigation, route }) => {
                     active.blur();
                 }
             }
+            runFullSync().catch(() => undefined);
         }, [])
     );
 
@@ -366,6 +369,7 @@ const AccountScreen = ({ navigation, route }) => {
                 <View onLayout={(e) => setGoogleSectionY(e.nativeEvent.layout.y)}>
                     <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                         <AccountGoogleSection theme={theme} />
+                        <CloudSyncSettings theme={theme} />
                         <CloudBackupSettings theme={theme} />
                     </ElevatedCard>
                 </View>

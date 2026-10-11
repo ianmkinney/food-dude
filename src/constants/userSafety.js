@@ -1,10 +1,10 @@
 export const USER_SAFETY_TITLE = 'Bring Your Own Key — on-device storage';
 
 export const USER_SAFETY_SUMMARY =
-    'Your data stays on this device. API keys are stored in the OS encrypted keychain. Recipes, pantry, and preferences live in a local database that never leaves your phone.';
+    'API keys stay on this device (encrypted keychain or browser storage). Recipes and pantry live locally; optional Google sign-in can encrypt-sync them across browsers. Parties and manual backups are stored online when you use those features.';
 
 export const USER_SAFETY_DETAILS = [
-    'AmpliFood is a Bring Your Own Key (BYOK) app. There is no AmpliFood server for keys or account data.',
+    'AmpliFood is a Bring Your Own Key (BYOK) app for AI. Google sign-in enables parties, optional encrypted sync, and backups — never your API keys.',
     'Keys never leave the device to AmpliFood. Requests go only to the provider you choose (Anthropic, OpenAI, xAI, or Gemini).',
     'Secrets use iOS Keychain / Android Keystore via expo-secure-store. On web, keys stay in this browser only.',
     'Profile, flavor preferences, recipes, and pantry live in on-device SQLite. Theme and UI prefs use on-device AsyncStorage.',
