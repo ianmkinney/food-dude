@@ -94,10 +94,7 @@ const TabNavigator = () => {
                 headerTitle: () => <HeaderTitle />,
                 headerTitleAlign: 'center',
                 headerLeft: (props) => <HeaderPartyButton {...props} />,
-                headerRight:
-                    route.name === ASSISTANT_NAME
-                        ? (props) => <HeaderAccountActions {...props} />
-                        : undefined,
+                headerRight: (props) => <HeaderAccountActions {...props} />,
                 ...(reduceMotion
                     ? { animation: 'none' }
                     : { sceneStyleInterpolator: slideScene, transitionSpec: sceneTransition }),

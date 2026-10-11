@@ -18,7 +18,8 @@
     "test:web-back": "node scripts/test-web-back-after-actions.mjs",
     "test:chat-text": "node scripts/test-chat-text.mjs",
     "test:web-chat": "node scripts/test-web-ampi-chat.mjs",
-    "test:web-safari-composer": "node scripts/test-web-safari-composer.mjs"
+    "test:web-safari-composer": "node scripts/test-web-safari-composer.mjs",
+    "test:sync-merge": "node scripts/test-sync-merge.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/fredoka": "^0.4.1",

@@ -40,5 +40,6 @@ export async function verifyGoogleIdToken(idToken, expectedNonce) {
         sub: String(sub),
         email: String(email),
         name: payload.name ? String(payload.name) : payload.given_name ? String(payload.given_name) : '',
+        picture: payload.picture ? String(payload.picture) : '',
     };
 }

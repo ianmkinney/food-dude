@@ -78,4 +78,22 @@ export const PARTY_SCHEMA_STATEMENTS = [
     UNIQUE (meal_id, recipe_id, ingredient_key)
 )`,
     'CREATE INDEX IF NOT EXISTS idx_party_meal_claims_meal ON party_meal_ingredient_claims(meal_id)',
+    `CREATE TABLE IF NOT EXISTS user_sync_state (
+    user_sub TEXT PRIMARY KEY,
+    next_seq BIGINT NOT NULL DEFAULT 1,
+    last_push_at TIMESTAMPTZ,
+    last_pull_at TIMESTAMPTZ
+)`,
+    `CREATE TABLE IF NOT EXISTS user_sync_records (
+    user_sub TEXT NOT NULL,
+    collection TEXT NOT NULL,
+    record_id TEXT NOT NULL,
+    seq BIGINT NOT NULL,
+    updated_at_ms BIGINT NOT NULL,
+    device_id TEXT NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT false,
+    ciphertext BYTEA NOT NULL,
+    PRIMARY KEY (user_sub, collection, record_id)
+)`,
+    'CREATE INDEX IF NOT EXISTS idx_user_sync_records_seq ON user_sync_records(user_sub, seq)',
 ];

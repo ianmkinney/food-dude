@@ -58,6 +58,10 @@ const modules = [
     '_lib/partySerialize.js',
     '_lib/partyBlob.js',
     '_lib/partyOgRender.js',
+    '_lib/syncCrypto.js',
+    '_lib/syncMerge.js',
+    '_lib/syncConstants.js',
+    '_lib/syncStore.js',
     'p.js',
     'p-og.js',
 ];
@@ -212,6 +216,29 @@ console.log('ok elevenlabs key resolution');
         delete process.env.ELEVENLABS_API_KEY;
     }
     console.log('ok elevenlabs tts model choice, fallback and error detail');
+}
+
+{
+    process.env.SYNC_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
+    const { encryptSyncPayload, decryptSyncPayload } = await import(
+        pathToFileURL(join(apiRoot, '_lib/syncCrypto.js')).href
+    );
+    const payload = { title: 'Test', calories: 12 };
+    const cipher = encryptSyncPayload('user-sub-1', payload);
+    const round = decryptSyncPayload('user-sub-1', cipher);
+    if (round.title !== 'Test' || round.calories !== 12) {
+        throw new Error('sync crypto round-trip failed');
+    }
+    const { incomingWins, mergePushBatch } = await import(pathToFileURL(join(apiRoot, '_lib/syncMerge.js')).href);
+    if (!incomingWins(null, { updatedAtMs: 1, deviceId: 'a' })) {
+        throw new Error('incomingWins expected true for empty server');
+    }
+    const m = mergePushBatch(new Map(), [
+        { collection: 'recipes', recordId: '9', updatedAtMs: 1, deviceId: 'd', deleted: false, payload: {} },
+    ]);
+    if (m.accepted.length !== 1) throw new Error('mergePushBatch should accept first record');
+    console.log('ok sync crypto and merge');
+    delete process.env.SYNC_ENCRYPTION_KEY;
 }
 
 const onDisk = listApiJsFiles(apiRoot);

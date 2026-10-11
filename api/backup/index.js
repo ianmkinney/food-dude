@@ -4,6 +4,8 @@ import { bearerToken, verifySession } from '../_lib/session.js';
 import { getPartySql, isPartyDatabaseConfigured } from '../_lib/partyDb.js';
 import { consumePartyRateLimit } from '../_lib/partyRateLimit.js';
 import { checkMinuteRateLimit } from '../_lib/store.js';
+import { isSyncEncryptionConfigured } from '../_lib/syncCrypto.js';
+import { handleSyncPull, handleSyncPush, handleSyncStatus } from '../_lib/syncStore.js';
 
 const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 const MAX_BACKUPS_PER_USER = 10;
@@ -164,6 +166,60 @@ export default async function handler(req, res) {
             }
             await sql`DELETE FROM user_backups WHERE id = ${backupId}::uuid AND user_sub = ${userSub}`;
             res.status(200).json({ ok: true });
+            return;
+        }
+
+        if (action === 'sync-status' && req.method === 'GET') {
+            if (!isSyncEncryptionConfigured()) {
+                res.status(503).json({
+                    error: 'misconfigured',
+                    message: 'Cloud sync is not available (SYNC_ENCRYPTION_KEY missing).',
+                });
+                return;
+            }
+            const status = await handleSyncStatus(sql, userSub);
+            res.status(200).json(status);
+            return;
+        }
+
+        if (action === 'sync-pull') {
+            if (!isSyncEncryptionConfigured()) {
+                res.status(503).json({
+                    error: 'misconfigured',
+                    message: 'Cloud sync is not available (SYNC_ENCRYPTION_KEY missing).',
+                });
+                return;
+            }
+            if (!(await consumePartyRateLimit(sql, `sync:pull:${userSub}`, 60))) {
+                res.status(429).json({ error: 'rate_limited', message: 'Too many sync pulls.' });
+                return;
+            }
+            const cursor = body.cursor ?? req.query?.cursor ?? 0;
+            const result = await handleSyncPull(sql, userSub, cursor);
+            res.status(200).json(result);
+            return;
+        }
+
+        if (action === 'sync-push') {
+            if (!isSyncEncryptionConfigured()) {
+                res.status(503).json({
+                    error: 'misconfigured',
+                    message: 'Cloud sync is not available (SYNC_ENCRYPTION_KEY missing).',
+                });
+                return;
+            }
+            if (!(await consumePartyRateLimit(sql, `sync:push:${userSub}`, 30))) {
+                res.status(429).json({ error: 'rate_limited', message: 'Too many sync pushes.' });
+                return;
+            }
+            const deviceId = String(body.deviceId || '').slice(0, 64);
+            const records = body.records;
+            const result = await handleSyncPush(sql, userSub, deviceId, records);
+            if (result.error) {
+                res.status(400).json({ error: result.error, message: result.message });
+                return;
+            }
+            res.status(200).json(result);
             return;
         }
 

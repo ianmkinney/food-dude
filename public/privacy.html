@@ -18,21 +18,21 @@
 
     <main>
       <h1>Privacy Policy</h1>
-      <p class="lede">The short version: your recipes and kitchen data stay on your device. Optional Google sign-in connects parties with friends and optional cloud backups. Your AI key goes only to the provider you choose unless your account is allowlisted for platform AI.</p>
-      <p><em>Last updated: October 10, 2026</em></p>
+      <p class="lede">The short version: API keys stay on your device. Optional Google sign-in enables parties, encrypted sync across browsers, and manual cloud backups. Kitchen data is encrypted on our server when sync is on. Platform AI uses OpenRouter only for allowlisted tester accounts.</p>
+      <p><em>Last updated: October 11, 2026</em></p>
 
       <h2>Accounts and sign-in</h2>
       <p><strong>Local profile (no sign-in required):</strong> The name, username, email, and flavor preferences on the Account screen are stored only on your device, as labels for your own use. They are not sent to AmpliFood unless you sign in with Google for parties or backup.</p>
-      <p><strong>Sign in with Google (optional):</strong> In Account you can authenticate with Google to create or join <strong>parties</strong> and use optional <strong>cloud backup</strong>. We receive your Google account ID (<code>sub</code>), email address, and display name, and keep a short-lived session token on your device. Signing in does <strong>not</strong> by itself enable platform AI.</p>
+      <p><strong>Sign in with Google (optional):</strong> Use the header sign-in button or Account to authenticate with Google for <strong>parties</strong>, <strong>encrypted sync</strong> across devices/browsers, and optional <strong>manual cloud backup</strong>. We receive your Google account ID (<code>sub</code>), email address, and display name, and keep a short-lived session token on your device. Signing in does <strong>not</strong> by itself enable platform AI unless your email is allowlisted.</p>
       <p><strong>Platform AI (allowlisted accounts only):</strong> If your Google email is on the server allowlist, you may use AmpliFood's OpenRouter proxy for AI (and optional platform ElevenLabs voice). We do <strong>not</strong> store AI prompts on the server. Requests go through AmpliFood's server to <a href="https://openrouter.ai/privacy">OpenRouter</a> and the underlying model provider.</p>
 
       <h2>Your data stays on your device</h2>
       <ul>
         <li>Recipes, meal plans, pantry items, grocery lists, AI chat history, assistant memory, and your profile are saved in a local SQLite database on your device. In the web version, that database lives in your browser's storage for this site.</li>
-        <li><strong>Parties are the only part of AmpliFood stored online</strong> (plus backups you choose to save). This is how we connect you with friends. Everything else stays on your phone.</li>
+        <li><strong>Online when signed in:</strong> party metadata, optional manual backups, and <strong>encrypted sync</strong> (recipes, lists, profile fields, Ampi chat, and memories) when sync is enabled in Account. API keys and BYOK secrets are never uploaded.</li>
         <li><strong>Ampi memory</strong> stores short facts you ask Ampi to remember (likes, household size, equipment, skill, goals). You can search, edit, delete, or turn memory off in Account. Memories are sent to your AI provider only when you allow AI requests, under the same consent as chat.</li>
         <li>Theme, voice, and display settings are saved locally on your device.</li>
-        <li>We don't upload or sync kitchen data by default. Optional cloud backup (when signed in) stores a compressed export you trigger in Account. If you delete the app or clear the site's data without a backup, local data is gone.</li>
+        <li><strong>Encrypted sync (optional, when signed in):</strong> per-record kitchen data is encrypted on the server (AES-256-GCM) with a server-held key. You can turn sync off in Account; signing out stops sync but keeps local data. Manual cloud backup remains a separate, on-demand gzip export.</li>
         <li>We don't sell your data. Nothing in this list is used for advertising.</li>
       </ul>
 

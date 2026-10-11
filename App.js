@@ -30,6 +30,7 @@ import { AlertHost, installAlertPolyfill } from './src/platform/alert';
 import { ConsentHost } from './src/consent/ConsentHost';
 import OnboardingGate from './src/onboarding/OnboardingGate';
 import { MonetizationProvider } from './src/monetization/MonetizationContext';
+import { GoogleAccountProvider } from './src/context/GoogleAccountContext';
 import WebShell from './src/components/WebShell';
 import ScreenErrorBoundary from './src/components/ScreenErrorBoundary';
 
@@ -378,7 +379,9 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <MonetizationProvider>
-          <AppContent />
+          <GoogleAccountProvider>
+            <AppContent />
+          </GoogleAccountProvider>
         </MonetizationProvider>
       </ThemeProvider>
     </SafeAreaProvider>

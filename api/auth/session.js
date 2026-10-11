@@ -38,6 +38,7 @@ export default async function handler(req, res) {
         res.status(200).json({
             email: session.email,
             name: session.name,
+            picture: session.picture || '',
             sub: session.sub,
             platformAiAllowed,
             elevenlabsAvailable: platformAiAllowed && isElevenLabsConfigured(),

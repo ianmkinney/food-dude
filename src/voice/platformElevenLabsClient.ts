@@ -15,7 +15,7 @@ export class PlatformElevenLabsError extends Error {
     }
 }
 
-const SIGN_IN_MESSAGE = 'Sign in with Google in Account (allowlisted for platform voice).';
+const SIGN_IN_MESSAGE = 'Sign in with Google (top bar). Platform voice needs an allowlisted account.';
 
 export type OwnerVoiceSession = {
     signedIn: boolean;
