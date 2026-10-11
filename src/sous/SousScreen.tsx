@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     AccessibilityInfo,
     FlatList,
@@ -14,14 +14,19 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTheme, motion } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import GuitarMark from '../brand/GuitarMark';
 import AnimatedPressable from '../components/AnimatedPressable';
-import StrumIndicator from '../components/StrumIndicator';
-import WordFade from '../components/WordFade';
-import { Enter, useReducedMotion } from '../motion';
-import { AiBadge, AiDisclaimer, AllergenWarning, AllergyNotice, ReportButton } from '../ai/AiLabel';
+import { Enter } from '../motion';
+import { AiBadge, AiDisclaimer, AllergenWarning, AllergyNotice, reportAiContent } from '../ai/AiLabel';
+import MarkdownText from '../chat/MarkdownText';
+import TypingBubble from '../chat/TypingBubble';
+import { toDisplayText } from '../chat/messageText';
+import { formatChatTime, groupPosition } from '../chat/messageGroups';
+import { setComposerFocused } from '../chat/composerFocus';
+import { useKeyboardViewport } from '../chat/useKeyboardViewport';
 import { useAllergies } from '../safety/useAllergies';
 import { findAllergenMatches } from '../safety/allergens';
 import { MISSING_KEY_MESSAGE } from '../services/aiSettings';
@@ -56,6 +61,7 @@ type Message = {
     id: string;
     role: 'user' | 'sous';
     text: string;
+    createdAt: number;
     cards?: SousCard[];
     needsKey?: boolean;
     attachmentNames?: string[];
@@ -73,6 +79,13 @@ const SUGGESTIONS = [
 
 let nextId = 0;
 const newId = () => `m${Date.now()}-${nextId++}`;
+const sousMessage = (text: string, extra: Partial<Message> = {}): Message => ({
+    id: newId(),
+    role: 'sous',
+    text,
+    createdAt: Date.now(),
+    ...extra,
+});
 
 // How long a new message keeps its entrance treatment if the list re-renders mid-animation.
 const FRESH_MS = 2000;
@@ -83,6 +96,7 @@ type Nav = { navigate: (name: string, params?: object) => void };
 export default function SousScreen() {
     const { isDark, textScale } = useTheme();
     const { height: windowHeight } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
     const theme = getTheme(isDark, undefined, undefined);
     const navigation = useNavigation() as unknown as Nav;
     useOnboardingTour();
@@ -97,8 +111,39 @@ export default function SousScreen() {
     const [speakingId, setSpeakingId] = useState<string | null>(null);
     const engineRef = useRef<SpeechEngine | null>(null);
     const listRef = useRef<FlatList<Message>>(null);
-    const reduceMotion = useReducedMotion();
+    const inputRef = useRef<TextInput>(null);
     const freshUntil = useRef(new Map<string, number>());
+
+    const [composerFocused, setComposerFocusedState] = useState(false);
+    const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const onComposerFocus = useCallback(() => {
+        if (blurTimer.current) clearTimeout(blurTimer.current);
+        setComposerFocusedState(true);
+        setComposerFocused(true);
+    }, []);
+    // Tapping send briefly blurs the field before it's refocused; waiting a
+    // beat keeps the tab bar from flashing back in between.
+    const onComposerBlur = useCallback(() => {
+        if (blurTimer.current) clearTimeout(blurTimer.current);
+        blurTimer.current = setTimeout(() => {
+            setComposerFocusedState(false);
+            setComposerFocused(false);
+        }, 150);
+    }, []);
+    useEffect(
+        () => () => {
+            if (blurTimer.current) clearTimeout(blurTimer.current);
+            setComposerFocused(false);
+        },
+        []
+    );
+    // Like Messages, the conversation stays pinned to the newest message when
+    // the list resizes (keyboard, tab bar) unless the user scrolled up to read.
+    const atBottom = useRef(true);
+    const scrollToLatest = useCallback(() => {
+        if (atBottom.current) listRef.current?.scrollToEnd({ animated: false });
+    }, []);
+    const { keyboardOpen } = useKeyboardViewport(composerFocused, scrollToLatest);
 
     useEffect(() => {
         getVoiceSettings().then((s) => setAutoSpeakState(s.autoSpeak));
@@ -106,10 +151,11 @@ export default function SousScreen() {
             if (!rows.length) return;
             rows.forEach((row: { id: number }) => freshUntil.current.set(String(row.id), 0));
             setMessages(
-                rows.map((row: { id: number; role: string; text: string }) => ({
+                rows.map((row: { id: number; role: string; text: string; created_at?: number }) => ({
                     id: String(row.id),
-                    role: row.role === 'sous' ? 'sous' : 'user',
+                    role: row.role === 'user' ? 'user' : 'sous',
                     text: row.text,
+                    createdAt: Number(row.created_at) || Date.now(),
                 }))
             );
         });
@@ -125,13 +171,14 @@ export default function SousScreen() {
             return;
         }
         setSpeakingId(message.id);
+        setVoiceNote(null);
         try {
             engineRef.current = await getSpeechEngine();
-            await engineRef.current.speak(message.text);
+            await engineRef.current.speak(message.text, { onIssue: setVoiceNote });
         } catch (error) {
             setMessages((prev) => [
                 ...prev,
-                { id: newId(), role: 'sous', text: (error as Error)?.message || "I couldn't read that aloud." },
+                sousMessage((error as Error)?.message || "I couldn't read that aloud."),
             ]);
         } finally {
             setSpeakingId(null);
@@ -143,7 +190,7 @@ export default function SousScreen() {
         if (!permission.granted) {
             setMessages((prev) => [
                 ...prev,
-                { id: newId(), role: 'sous', text: 'Allow photo library access to attach a screen recording.' },
+                sousMessage('Allow photo library access to attach a screen recording.'),
             ]);
             return;
         }
@@ -166,6 +213,7 @@ export default function SousScreen() {
             const attachments = pendingAttachments;
             if ((!text && !attachments.length && !attachedVideo) || thinking) return;
             if (autoSpeak) primeSpeechOnWeb();
+            if (composerFocused) inputRef.current?.focus();
             setInput('');
             setPendingAttachments([]);
             const history: SousTurn[] = messages.map((m) => ({ role: m.role, text: m.text }));
@@ -173,6 +221,7 @@ export default function SousScreen() {
                 id: newId(),
                 role: 'user',
                 text: text || (attachedVideo ? '[Screen recording attached]' : '(attached files)'),
+                createdAt: Date.now(),
                 attachmentNames: attachments.map((a) => a.name),
             };
             setMessages((prev) => [...prev, userMessage]);
@@ -187,6 +236,7 @@ export default function SousScreen() {
                     const reply: Message = {
                         id: newId(),
                         role: 'sous',
+                        createdAt: Date.now(),
                         text:
                             cards[0]?.type === 'recipe'
                                 ? 'Imported — tap the card to review.'
@@ -236,6 +286,7 @@ export default function SousScreen() {
                     const reply: Message = {
                         id: newId(),
                         role: 'sous',
+                        createdAt: Date.now(),
                         text: recipe.sourceUrl
                             ? `I pulled a recipe from your video and credited the creator. Tap the card to review it.`
                             : `I pulled a recipe from your video. Tap the card to review it.`,
@@ -251,6 +302,7 @@ export default function SousScreen() {
                 const reply: Message = {
                     id: newId(),
                     role: 'sous',
+                    createdAt: Date.now(),
                     text: result.reply,
                     cards: result.cards,
                     confirm: result.pendingActions
@@ -263,7 +315,7 @@ export default function SousScreen() {
                 };
                 setMessages((prev) => [...prev, reply]);
                 await persistAmpiExchange(userMessage.text, result.reply);
-                AccessibilityInfo.announceForAccessibility(`${ASSISTANT_NAME} says: ${result.reply}`);
+                AccessibilityInfo.announceForAccessibility(`${ASSISTANT_NAME} says: ${toDisplayText(result.reply)}`);
                 if (autoSpeak && (await shouldSpeak()) && !reply.confirm) speak(reply);
             } catch (error) {
                 const message = (error as Error)?.message || 'Something went wrong.';
@@ -272,6 +324,7 @@ export default function SousScreen() {
                     {
                         id: newId(),
                         role: 'sous',
+                        createdAt: Date.now(),
                         text: message === MISSING_KEY_MESSAGE ? "I need an AI key to think. Add your own key in Account and I'm ready." : message,
                         needsKey: message === MISSING_KEY_MESSAGE,
                     },
@@ -280,7 +333,7 @@ export default function SousScreen() {
                 setThinking(false);
             }
         },
-        [messages, thinking, autoSpeak, speak, attachedVideo, pendingAttachments]
+        [messages, thinking, autoSpeak, speak, attachedVideo, pendingAttachments, composerFocused]
     );
 
     const confirmActions = useCallback(async (messageId: string) => {
@@ -297,7 +350,7 @@ export default function SousScreen() {
         } catch (error) {
             setMessages((prev) => [
                 ...prev,
-                { id: newId(), role: 'sous', text: (error as Error)?.message || 'Could not apply those changes.' },
+                sousMessage((error as Error)?.message || 'Could not apply those changes.'),
             ]);
         } finally {
             setThinking(false);
@@ -457,74 +510,130 @@ export default function SousScreen() {
         return now < until;
     };
 
-    const renderMessage = ({ item }: { item: Message }) => {
+    const renderMessage = ({ item, index }: { item: Message; index: number }) => {
         const fresh = isFresh(item.id);
+        const { first, last, showTime } = groupPosition(messages, index);
+        const spacing = { marginTop: index === 0 ? 0 : first ? 12 : 2 };
+        const time = showTime ? (
+            <Text style={[styles.timestamp, { color: c.text.tertiary }]} accessibilityRole="text">
+                {formatChatTime(item.createdAt)}
+            </Text>
+        ) : null;
         if (item.role === 'user') {
             return (
-                <Enter enabled={fresh} springy distance={24} style={[styles.bubble, styles.userBubble, { backgroundColor: theme.primary[500] }]}>
-                    <Text style={styles.userText}>{item.text}</Text>
-                    {item.attachmentNames?.map((name) => (
-                        <Text key={name} style={styles.userAttach}>📎 {name}</Text>
-                    ))}
-                </Enter>
+                <View style={spacing}>
+                    {time}
+                    <Enter
+                        enabled={fresh}
+                        springy
+                        distance={16}
+                        style={[
+                            styles.bubble,
+                            styles.userBubble,
+                            !first && styles.userJoinedTop,
+                            !last && styles.userJoinedBottom,
+                            { backgroundColor: theme.primary[500] },
+                        ]}
+                    >
+                        <Text style={styles.userText} selectable>
+                            {item.text}
+                        </Text>
+                        {item.attachmentNames?.map((name) => (
+                            <Text key={name} style={styles.userAttach}>📎 {name}</Text>
+                        ))}
+                    </Enter>
+                </View>
             );
         }
+        const shown = toDisplayText(item.text);
+        const speaking = speakingId === item.id;
         return (
-            <Enter enabled={fresh} springy distance={24} style={styles.sousBlock}>
-                <View style={[styles.bubble, styles.sousBubble, { backgroundColor: c.surface, borderColor: c.border }]}>
-                    <WordFade text={item.text} animate={fresh && !reduceMotion} style={[styles.sousText, { color: c.text.primary }]} />
-                    {item.needsKey && (
-                        <Pressable onPress={() => navigation.navigate('Account')} style={[styles.inlineButton, { backgroundColor: theme.primary[500] }]} accessibilityRole="button">
-                            <Text style={styles.inlineButtonText}>Open Account</Text>
-                        </Pressable>
-                    )}
-                </View>
-                {item.cards?.map(renderCard)}
-                {item.confirm && !item.confirmDone && (
-                    <View style={[styles.confirmCard, { backgroundColor: c.surface, borderColor: theme.primary[400] }]}>
-                        <Text style={[styles.confirmTitle, { color: c.text.primary }]}>Apply in AmpliFood?</Text>
-                        <Text style={[styles.confirmBody, { color: c.text.secondary }]}>{item.confirm.summary}</Text>
-                        <View style={styles.confirmRow}>
-                            <Pressable
-                                onPress={() => setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, confirmDone: true, confirm: undefined } : m)))}
-                                style={[styles.confirmBtn, { backgroundColor: c.surfaceMuted }]}
-                                accessibilityRole="button"
-                            >
-                                <Text style={{ color: c.text.primary, fontWeight: '700' }}>Cancel</Text>
+            <View style={spacing}>
+                {time}
+                <Enter enabled={fresh} springy distance={16} style={styles.sousBlock}>
+                    <View
+                        style={[
+                            styles.bubble,
+                            styles.sousBubble,
+                            !first && styles.sousJoinedTop,
+                            !last && styles.sousJoinedBottom,
+                            { backgroundColor: c.surface, borderColor: c.border },
+                        ]}
+                    >
+                        <MarkdownText
+                            text={shown}
+                            color={c.text.primary}
+                            mutedColor={c.text.secondary}
+                            linkColor={theme.primary[600]}
+                            codeBackground={c.surfaceMuted}
+                            style={styles.sousText}
+                        />
+                        {item.needsKey && (
+                            <Pressable onPress={() => navigation.navigate('Account')} style={[styles.inlineButton, { backgroundColor: theme.primary[500] }]} accessibilityRole="button">
+                                <Text style={styles.inlineButtonText}>Open Account</Text>
                             </Pressable>
+                        )}
+                    </View>
+                    {item.cards?.map(renderCard)}
+                    {item.confirm && !item.confirmDone && (
+                        <View style={[styles.confirmCard, { backgroundColor: c.surface, borderColor: theme.primary[400] }]}>
+                            <Text style={[styles.confirmTitle, { color: c.text.primary }]}>Apply in AmpliFood?</Text>
+                            <Text style={[styles.confirmBody, { color: c.text.secondary }]}>{item.confirm.summary}</Text>
+                            <View style={styles.confirmRow}>
+                                <Pressable
+                                    onPress={() => setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, confirmDone: true, confirm: undefined } : m)))}
+                                    style={[styles.confirmBtn, { backgroundColor: c.surfaceMuted }]}
+                                    accessibilityRole="button"
+                                >
+                                    <Text style={{ color: c.text.primary, fontWeight: '700' }}>Cancel</Text>
+                                </Pressable>
+                                <Pressable
+                                    onPress={() => confirmActions(item.id)}
+                                    style={[styles.confirmBtn, { backgroundColor: theme.primary[500] }]}
+                                    accessibilityRole="button"
+                                >
+                                    <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Confirm</Text>
+                                </Pressable>
+                            </View>
+                        </View>
+                    )}
+                    {!item.needsKey && (
+                        <View style={styles.footer}>
+                            <View style={styles.footerItem} accessible accessibilityRole="text" accessibilityLabel="AI-generated">
+                                <Ionicons name="sparkles" size={10} color={c.text.tertiary} />
+                                <Text style={[styles.footerText, { color: c.text.tertiary }]}>AI-generated</Text>
+                            </View>
+                            <Text style={[styles.footerText, { color: c.text.tertiary }]} aria-hidden>·</Text>
                             <Pressable
-                                onPress={() => confirmActions(item.id)}
-                                style={[styles.confirmBtn, { backgroundColor: theme.primary[500] }]}
+                                onPress={() => reportAiContent({ kind: 'chat', content: shown })}
+                                hitSlop={{ top: 12, bottom: 12, left: 6, right: 6 }}
                                 accessibilityRole="button"
+                                accessibilityLabel="Report this AI response"
                             >
-                                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Confirm</Text>
+                                <Text style={[styles.footerText, styles.footerLink, { color: c.text.tertiary }]}>Report</Text>
+                            </Pressable>
+                            <Text style={[styles.footerText, { color: c.text.tertiary }]} aria-hidden>·</Text>
+                            <Pressable
+                                onPress={() => {
+                                    if (speaking) {
+                                        engineRef.current?.stop();
+                                        return;
+                                    }
+                                    primeSpeechOnWeb();
+                                    speak(item);
+                                }}
+                                hitSlop={{ top: 12, bottom: 12, left: 10, right: 14 }}
+                                style={styles.footerItem}
+                                accessibilityRole="button"
+                                accessibilityLabel={speaking ? 'Stop reading aloud' : 'Read this reply aloud'}
+                            >
+                                <Ionicons name={speaking ? 'stop-circle-outline' : 'volume-high-outline'} size={14} color={speaking ? theme.primary[500] : c.text.tertiary} />
+                                <Text style={[styles.footerText, { color: speaking ? theme.primary[500] : c.text.tertiary }]}>{speaking ? 'Stop' : 'Listen'}</Text>
                             </Pressable>
                         </View>
-                    </View>
-                )}
-                {!item.needsKey && (
-                    <View style={styles.meta}>
-                        <AiBadge />
-                        <ReportButton target={{ kind: 'chat', content: item.text }} />
-                        <Pressable
-                            onPress={() => {
-                                if (speakingId === item.id) {
-                                    engineRef.current?.stop();
-                                    return;
-                                }
-                                primeSpeechOnWeb();
-                                speak(item);
-                            }}
-                            style={styles.metaButton}
-                            accessibilityRole="button"
-                            accessibilityLabel={speakingId === item.id ? 'Stop reading aloud' : 'Read this reply aloud'}
-                        >
-                            <Ionicons name={speakingId === item.id ? 'stop-circle-outline' : 'volume-high-outline'} size={18} color={c.text.tertiary} />
-                        </Pressable>
-                    </View>
-                )}
-                {!item.needsKey && <AiDisclaimer kind="chat" showBadge={false} style={{ paddingLeft: 4, maxWidth: '92%' }} />}
-            </Enter>
+                    )}
+                </Enter>
+            </View>
         );
     };
 
@@ -611,15 +720,33 @@ export default function SousScreen() {
                 data={messages}
                 keyExtractor={(m) => m.id}
                 renderItem={renderMessage}
+                extraData={speakingId}
                 ListEmptyComponent={hero}
+                ListHeaderComponent={
+                    started ? (
+                        <View style={styles.disclaimerHeader}>
+                            <AiDisclaimer kind="chat" showBadge={false} style={styles.disclaimerInner} />
+                        </View>
+                    ) : null
+                }
                 contentContainerStyle={[styles.list, !started && styles.listEmpty]}
                 keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                onLayout={scrollToLatest}
+                onContentSizeChange={scrollToLatest}
+                onScroll={(e) => {
+                    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+                    atBottom.current = contentSize.height - (contentOffset.y + layoutMeasurement.height) < 48;
+                }}
+                scrollEventThrottle={64}
                 ListFooterComponent={thinking ? (
-                    <Enter springy distance={24} style={styles.thinking} accessibilityLiveRegion="polite">
-                        <View style={[styles.thinkingBubble, { backgroundColor: c.surface, borderColor: c.border }]}>
-                            <StrumIndicator color={theme.primary[500]} />
-                        </View>
-                        <Text style={[styles.thinkingText, { color: c.text.tertiary }]}>{ASSISTANT_NAME} is on it…</Text>
+                    <Enter springy distance={16} style={styles.thinking}>
+                        <TypingBubble
+                            background={c.surface}
+                            border={c.border}
+                            dot={c.text.tertiary}
+                            label={`${ASSISTANT_NAME} is typing`}
+                        />
                     </Enter>
                 ) : null}
             />
@@ -646,7 +773,18 @@ export default function SousScreen() {
                     </Pressable>
                 </View>
             ) : null}
-            <View style={[styles.composerWrap, { borderTopColor: c.borderSoft, backgroundColor: c.background }]}>
+            <View
+                style={[
+                    styles.composerWrap,
+                    {
+                        borderTopColor: c.borderSoft,
+                        backgroundColor: c.background,
+                        // The tab bar normally covers the home indicator; while it's hidden for
+                        // typing (and no keyboard is up, e.g. a hardware keyboard) the composer must.
+                        paddingBottom: composerFocused && !keyboardOpen && Platform.OS === 'web' ? Math.max(insets.bottom, 8) : 8,
+                    },
+                ]}
+            >
                 {micTip && (
                     <Enter springy distance={8} style={styles.micTipWrap}>
                         <Pressable
@@ -699,8 +837,11 @@ export default function SousScreen() {
                     </Pressable>
                 ) : null}
                 <TextInput
+                    ref={inputRef}
                     value={draft}
                     onChangeText={setInput}
+                    onFocus={onComposerFocus}
+                    onBlur={onComposerBlur}
                     placeholder={`Message ${ASSISTANT_NAME}…`}
                     accessibilityLabel={`Message to ${ASSISTANT_NAME}`}
                     placeholderTextColor={c.text.tertiary}
@@ -709,8 +850,21 @@ export default function SousScreen() {
                     numberOfLines={Platform.OS === 'web' ? 1 : undefined}
                     editable={!listening}
                     onSubmitEditing={() => send(input)}
-                    blurOnSubmit
+                    // On the web Enter sends without dropping the keyboard (Shift+Enter is a new line).
+                    blurOnSubmit={Platform.OS !== 'web'}
+                    onKeyPress={
+                        Platform.OS === 'web'
+                            ? (e) => {
+                                  const key = e.nativeEvent as unknown as { key: string; shiftKey?: boolean; isComposing?: boolean };
+                                  if (key.key === 'Enter' && !key.shiftKey && !key.isComposing) {
+                                      e.preventDefault();
+                                      send(input);
+                                  }
+                              }
+                            : undefined
+                    }
                 />
+                <View {...keepComposerFocus}>
                 <AnimatedPressable
                     onPress={() => send(listening ? mic.transcript : input)}
                     disabled={(!input.trim() && !pendingAttachments.length && !attachedVideo) || thinking}
@@ -729,10 +883,16 @@ export default function SousScreen() {
                     <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
                 </AnimatedPressable>
                 </View>
+                </View>
             </View>
         </KeyboardAvoidingView>
     );
 }
+
+// On the web a mousedown on the send button would move focus off the
+// textarea and close the phone keyboard between messages.
+const keepComposerFocus =
+    Platform.OS === 'web' ? ({ onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault() } as object) : {};
 
 const styles = StyleSheet.create({
     root: { flex: 1 },
@@ -740,7 +900,7 @@ const styles = StyleSheet.create({
     identity: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 4 },
     identityName: { fontSize: 18 },
     iconButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-    list: { paddingHorizontal: 16, paddingVertical: 8, gap: 16 },
+    list: { paddingHorizontal: 12, paddingVertical: 8 },
     listEmpty: { flexGrow: 1, justifyContent: 'flex-end' },
     hero: { alignItems: 'center', paddingHorizontal: 8, paddingBottom: 8 },
     hello: { fontSize: 30, marginTop: 16, textAlign: 'center' },
@@ -751,20 +911,29 @@ const styles = StyleSheet.create({
     chipRow: { flexDirection: 'row', gap: 8 },
     chip: { minHeight: 44, borderWidth: 1, borderRadius: 22, paddingHorizontal: 16, justifyContent: 'center' },
     chipText: { fontSize: 15, fontWeight: '600' },
-    bubble: { borderRadius: 24, paddingHorizontal: 16, paddingVertical: 12, maxWidth: '88%' },
-    userBubble: { alignSelf: 'flex-end', borderBottomRightRadius: 8 },
-    userText: { color: '#FFFFFF', fontSize: 16, lineHeight: 24 },
+    bubble: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 9, maxWidth: '84%' },
+    userBubble: { alignSelf: 'flex-end', borderBottomRightRadius: 6 },
+    userJoinedTop: { borderTopRightRadius: 6 },
+    userJoinedBottom: { borderBottomRightRadius: 6 },
+    userText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22 },
+    timestamp: { alignSelf: 'center', fontSize: 11, fontWeight: '600', marginTop: 6, marginBottom: 8, letterSpacing: 0.2 },
+    disclaimerHeader: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 4, paddingBottom: 10 },
+    disclaimerInner: { maxWidth: 340, alignItems: 'center' },
     userAttach: { color: '#FFFFFF', fontSize: 13, marginTop: 6, opacity: 0.92 },
     confirmCard: { borderWidth: 1, borderRadius: 16, padding: 14, width: '92%', gap: 8 },
     confirmTitle: { fontSize: 16, fontWeight: '800' },
     confirmBody: { fontSize: 14, lineHeight: 20 },
     confirmRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
     confirmBtn: { minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' },
-    sousBlock: { gap: 8, alignItems: 'flex-start' },
-    sousBubble: { borderWidth: 1, borderBottomLeftRadius: 8 },
-    sousText: { fontSize: 16, lineHeight: 24 },
-    meta: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 4 },
-    metaButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -8 },
+    sousBlock: { gap: 4, alignItems: 'flex-start' },
+    sousBubble: { borderWidth: 1, borderBottomLeftRadius: 6 },
+    sousJoinedTop: { borderTopLeftRadius: 6 },
+    sousJoinedBottom: { borderBottomLeftRadius: 6 },
+    sousText: { fontSize: 16, lineHeight: 22 },
+    footer: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 6, minHeight: 20 },
+    footerItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+    footerText: { fontSize: 11, lineHeight: 14, fontWeight: '600' },
+    footerLink: { textDecorationLine: 'underline' },
     card: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 8, width: '92%' },
     cardTitle: { fontSize: 14, fontWeight: '800' },
     cardKicker: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -777,9 +946,7 @@ const styles = StyleSheet.create({
     costNote: { fontSize: 12, marginTop: 8, fontStyle: 'italic' },
     inlineButton: { marginTop: 8, alignSelf: 'flex-start', borderRadius: 22, paddingHorizontal: 16, minHeight: 44, justifyContent: 'center' },
     inlineButtonText: { color: '#FFFFFF', fontWeight: '800' },
-    thinking: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    thinkingBubble: { borderWidth: 1, borderRadius: 24, borderBottomLeftRadius: 8, paddingHorizontal: 16, paddingVertical: 14 },
-    thinkingText: { fontSize: 14 },
+    thinking: { marginTop: 12, alignItems: 'flex-start' },
     micTipWrap: { position: 'absolute', left: 12, bottom: '100%', marginBottom: 6, zIndex: 2 },
     micTip: { maxWidth: 300, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, ...Platform.select({ web: { boxShadow: '0 6px 20px rgba(0,0,0,0.18)' }, default: {} }) },
     micTipText: { fontSize: 13, lineHeight: 19 },

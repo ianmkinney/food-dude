@@ -13,8 +13,11 @@ import { useTheme } from '../context/ThemeContext';
 import { getTheme, motion } from '../theme';
 import { useTourTarget } from '../onboarding/tourTargets';
 import { useReducedMotion } from '../motion';
+import { useComposerFocused } from '../chat/composerFocus';
 
 const PILL_WIDTH = 56;
+const touchWeb =
+    Platform.OS === 'web' && typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches);
 const PILL_HEIGHT = 32;
 
 function TabItem({ route, label, icon, focused, onPress, onLongPress, theme, reduceMotion }) {
@@ -74,6 +77,11 @@ export default function AppTabBar({ state, descriptors, navigation, icons }) {
     }, [state.index, tabWidth, ready, reduceMotion, pillX]);
 
     const pillStyle = useAnimatedStyle(() => ({ transform: [{ translateX: pillX.value }] }));
+    const composerFocused = useComposerFocused();
+
+    // Like Messages: while typing in chat on a phone browser the keyboard takes
+    // the tab bar's place (native apps keep their own keyboard handling).
+    if (touchWeb && composerFocused) return null;
 
     return (
         <View
