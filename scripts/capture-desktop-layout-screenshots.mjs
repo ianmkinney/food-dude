@@ -138,12 +138,19 @@ async function capture() {
 
         await desktop.goto(`${base}/recipes`, { waitUntil: 'networkidle' });
         await waitForAppReady(desktop);
-        const card = desktop.getByText(/Tomato Pasta|Sheet-Pan|recipe/i).first();
-        if (await card.isVisible().catch(() => false)) {
-            await card.click();
-            await desktop.waitForTimeout(2000);
-            paths.desktopRecipeDetail = await shot(desktop, 'desktop-1440x900-recipe-detail.png');
-        }
+        await desktop.waitForTimeout(2000);
+        const recipeCard = desktop.getByText('Weeknight Tomato Pasta', { exact: true });
+        await recipeCard.waitFor({ state: 'visible', timeout: 20000 });
+        await recipeCard.click();
+        await desktop.waitForURL(/\/recipe\/\d+/, { timeout: 20000 });
+        await desktop.waitForFunction(
+            () =>
+                document.body?.innerText?.includes('Weeknight Tomato Pasta') &&
+                document.body?.innerText?.includes('Ingredients'),
+            { timeout: 20000 }
+        );
+        await desktop.waitForTimeout(1000);
+        paths.desktopRecipeDetail = await shot(desktop, 'desktop-1440x900-recipe-detail.png');
 
         await browser.close();
         console.log(JSON.stringify(paths, null, 2));

@@ -18,7 +18,7 @@ export default function DesktopHeader() {
     return (
         <View style={[desktopShellStyles.header, { borderBottomColor: c.borderSoft, backgroundColor: c.background }]}>
             <View style={styles.spacer} />
-            <HeaderGoogleAccount tintColor={c.text.primary} />
+            <HeaderGoogleAccount tintColor={c.text.primary} showSignInWhenUnconfigured />
             <Pressable
                 onPress={toggleTheme}
                 accessibilityRole="button"

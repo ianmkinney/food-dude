@@ -4,6 +4,7 @@ import {
     Text,
     StyleSheet,
     FlatList,
+    ScrollView,
     TextInput,
     Alert,
     Image,
@@ -22,32 +23,46 @@ import { ASSISTANT_NAME } from '../config/assistant';
 import { useLayoutMode } from '../layout/useLayoutMode';
 import { desktopPageStyles, desktopRecipeStyles } from '../components/layout/desktopTheme';
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
-import { useWindowDimensions } from 'react-native';
+import RecipeBookDesktopGrid from './RecipeBookDesktopGrid';
 
-const RecipeCard = ({ item, index, theme, navigation, gridColumns = 1 }) => {
+const RecipeCard = ({ item, index, theme, navigation, layout = 'horizontal' }) => {
     const thumbRef = useRef(null);
     const cooked = item.is_cooked === 1 || item.is_cooked === true;
+    const vertical = layout === 'vertical';
     return (
         <ElevatedCard
             theme={theme}
             index={index}
-            style={[styles.recipeCard, gridColumns > 1 && desktopRecipeStyles.gridCard, cooked && { opacity: 0.72 }]}
+            wrapperStyle={vertical ? desktopRecipeStyles.gridItemWrap : undefined}
+            style={[
+                styles.recipeCard,
+                vertical && desktopRecipeStyles.gridCard,
+                cooked && { opacity: 0.72 },
+            ]}
             onPress={() => navigateWithTransition(
                 () => navigation.navigate('RecipeDetail', { recipeId: item.id }),
                 { sourceRef: thumbRef, name: 'recipe-hero' },
             )}
         >
-            <View style={styles.recipeCardContent}>
-                <View ref={thumbRef} style={styles.thumb}>
+            <View style={[styles.recipeCardContent, vertical && styles.recipeCardContentVertical]}>
+                <View ref={thumbRef} style={vertical ? desktopRecipeStyles.gridCardImage : styles.thumb}>
                     {item.image_uri ? (
-                        <Image source={{ uri: item.image_uri }} style={styles.recipeImage} />
+                        <Image
+                            source={{ uri: item.image_uri }}
+                            style={vertical ? desktopRecipeStyles.gridCardImageFill : styles.recipeImage}
+                        />
                     ) : (
-                        <View style={[styles.placeholderImage, { backgroundColor: theme.primary[100] }]}>
-                            <Ionicons name="restaurant" size={32} color={theme.primary[500]} />
+                        <View
+                            style={[
+                                vertical ? desktopRecipeStyles.gridPlaceholder : styles.placeholderImage,
+                                { backgroundColor: theme.primary[100] },
+                            ]}
+                        >
+                            <Ionicons name="restaurant" size={vertical ? 40 : 32} color={theme.primary[500]} />
                         </View>
                     )}
                 </View>
-                <View style={styles.recipeInfo}>
+                <View style={[styles.recipeInfo, vertical && styles.recipeInfoVertical]}>
                     <View style={styles.recipeTitleRow}>
                         <Text style={[styles.recipeTitle, { color: theme.colors.text.primary }]} numberOfLines={2}>
                             {item.title}
@@ -87,8 +102,6 @@ const RecipeBookScreen = ({ navigation }) => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
     const { isDesktop } = useLayoutMode();
-    const { width } = useWindowDimensions();
-    const gridColumns = isDesktop ? (width >= 1200 ? 4 : 3) : 1;
     const [recipes, setRecipes] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
@@ -177,8 +190,8 @@ const RecipeBookScreen = ({ navigation }) => {
     const recipeKey = useCallback((item) => item.id.toString(), []);
 
     const renderRecipeCard = useCallback(({ item, index }) => (
-        <RecipeCard item={item} index={index} theme={theme} navigation={navigation} gridColumns={gridColumns} />
-    ), [navigation, theme, gridColumns]);
+        <RecipeCard item={item} index={index} theme={theme} navigation={navigation} layout="horizontal" />
+    ), [navigation, theme]);
 
     const renderEmptyState = () => (
         <EmptyState
@@ -243,7 +256,13 @@ const RecipeBookScreen = ({ navigation }) => {
             ) : null}
 
             {!isEmptyLibrary && (
-            <View style={[styles.filterContainer, { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft }]}>
+            <View
+                style={[
+                    styles.filterContainer,
+                    isDesktop && desktopRecipeStyles.filterRowDesktop,
+                    { backgroundColor: theme.colors.surfaceGlass, borderBottomColor: theme.colors.borderSoft },
+                ]}
+            >
                 <AnimatedPressable
                     style={[
                         styles.filterButton,
@@ -315,22 +334,41 @@ const RecipeBookScreen = ({ navigation }) => {
             </View>
             )}
 
-            {/* Recipe List */}
-            <FlatList
-                key={gridColumns > 1 ? `grid-${gridColumns}` : 'list'}
-                data={recipes}
-                renderItem={renderRecipeCard}
-                keyExtractor={recipeKey}
-                numColumns={gridColumns}
-                columnWrapperStyle={gridColumns > 1 ? desktopRecipeStyles.columnWrapper : undefined}
-                initialNumToRender={8}
-                maxToRenderPerBatch={6}
-                windowSize={7}
-                contentContainerStyle={styles.listContent}
-                ListEmptyComponent={!loading && renderEmptyState()}
-                refreshing={loading}
-                onRefresh={loadRecipes}
-            />
+            {isDesktop ? (
+                <ScrollView
+                    contentContainerStyle={[styles.listContent, desktopRecipeStyles.gridScroll]}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {recipes.length === 0 && !loading ? renderEmptyState() : null}
+                    {recipes.length > 0 ? (
+                        <RecipeBookDesktopGrid>
+                            {recipes.map((item, index) => (
+                                <RecipeCard
+                                    key={recipeKey(item)}
+                                    item={item}
+                                    index={index}
+                                    theme={theme}
+                                    navigation={navigation}
+                                    layout="vertical"
+                                />
+                            ))}
+                        </RecipeBookDesktopGrid>
+                    ) : null}
+                </ScrollView>
+            ) : (
+                <FlatList
+                    data={recipes}
+                    renderItem={renderRecipeCard}
+                    keyExtractor={recipeKey}
+                    initialNumToRender={8}
+                    maxToRenderPerBatch={6}
+                    windowSize={7}
+                    contentContainerStyle={styles.listContent}
+                    ListEmptyComponent={!loading && renderEmptyState()}
+                    refreshing={loading}
+                    onRefresh={loadRecipes}
+                />
+            )}
 
             {!isDesktop ? (
                 <FloatingActionButton
@@ -397,9 +435,18 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'flex-start',
     },
+    recipeCardContentVertical: {
+        flexDirection: 'column',
+        alignItems: 'stretch',
+    },
     recipeInfo: {
         flex: 1,
         marginLeft: 16,
+        minWidth: 0,
+    },
+    recipeInfoVertical: {
+        marginLeft: 0,
+        width: '100%',
     },
     recipeTitleRow: {
         flexDirection: 'row',

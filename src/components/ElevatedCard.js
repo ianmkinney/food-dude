@@ -10,6 +10,7 @@ const ElevatedCard = ({
     variant = 'card',
     onPress,
     style,
+    wrapperStyle,
     children,
     index,
     disabled,
@@ -23,7 +24,7 @@ const ElevatedCard = ({
 
     if (onPress) {
         return (
-            <Animated.View layout={layout} style={enterStyle}>
+            <Animated.View layout={layout} style={[enterStyle, wrapperStyle]}>
                 <AnimatedPressable
                     onPress={onPress}
                     disabled={disabled}

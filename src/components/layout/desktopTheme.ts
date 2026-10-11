@@ -78,30 +78,68 @@ export const desktopAmpiStyles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         minHeight: 0,
+        alignItems: 'stretch',
     },
     chatColumn: {
         flex: 1,
         maxWidth: DESKTOP_CHAT_COLUMN_MAX,
-        alignSelf: 'center',
         width: '100%',
         minWidth: 0,
+        minHeight: 0,
+        alignSelf: 'stretch',
     },
     sidePanel: {
         width: DESKTOP_CHAT_PANEL_WIDTH,
         borderLeftWidth: StyleSheet.hairlineWidth,
         padding: spacing.md,
+        alignSelf: 'stretch',
+        minHeight: 0,
+        height: '100%',
     },
 });
 
 export const desktopRecipeStyles = StyleSheet.create({
-    columnWrapper: {
-        gap: spacing.md,
-        paddingHorizontal: spacing.md,
+    gridScroll: {
+        paddingBottom: spacing.lg,
+    },
+    grid: {
+        width: '100%',
+        maxWidth: '100%',
+    },
+    gridItemWrap: {
+        width: '100%',
+        minWidth: 0,
+        maxWidth: '100%',
     },
     gridCard: {
-        flex: 1,
-        marginBottom: spacing.md,
+        width: '100%',
         minWidth: 0,
+        maxWidth: '100%',
+        marginBottom: 0,
+        padding: spacing.md,
+        overflow: 'hidden',
+        boxSizing: 'border-box',
+    },
+    gridCardImage: {
+        width: '100%',
+        aspectRatio: 16 / 10,
+        borderRadius: borderRadius.md,
+        overflow: 'hidden',
+        marginBottom: spacing.sm,
+    },
+    gridCardImageFill: {
+        width: '100%',
+        height: '100%',
+    },
+    gridPlaceholder: {
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    filterRowDesktop: {
+        paddingHorizontal: 0,
+        marginBottom: spacing.sm,
     },
 });
 
