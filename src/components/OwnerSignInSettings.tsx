@@ -17,6 +17,7 @@ import {
 } from '../platform/googleWebAuth';
 import { testOwnerAi } from '../monetization/livePlatformAi';
 import { autoMigrateLocalPartiesAfterSignIn } from '../services/partyAutoMigrate';
+import OwnerModelPickers from './OwnerModelPickers';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -193,6 +194,7 @@ function OwnerSignInSettingsInner({ theme }: Props) {
                                     {testResult.text}
                                 </Text>
                             ) : null}
+                            <OwnerModelPickers theme={theme} />
                         </>
                     ) : null}
                     <Pressable

@@ -10,12 +10,20 @@ import { bearerToken, verifySession } from '../_lib/session.js';
 import {
     IMAGE_REQUESTS_PER_MINUTE,
     OpenRouterImageError,
-    getOpenRouterImageModel,
     openRouterGenerateImage,
     validateImagePrompt,
 } from '../_lib/openRouterImage.js';
 import { checkMinuteRateLimit } from '../_lib/store.js';
 import { handleElevenLabsMode } from '../_lib/elevenLabs.js';
+import {
+    fetchOpenRouterModelCatalog,
+    getPlatformModelDefaults,
+    isChatCatalogModel,
+    isImageCatalogModel,
+    resolveOwnerChatModel,
+    resolveOwnerImageModel,
+    toPublicModelRow,
+} from '../_lib/openRouterModels.js';
 
 const DAILY_CREDIT_MSG = 'Daily AI limit reached. Try again tomorrow or ask Ian to raise your OpenRouter credit limit.';
 
@@ -226,6 +234,25 @@ export default async function handler(req, res) {
         return;
     }
 
+    if (mode === 'models') {
+        try {
+            const catalog = await fetchOpenRouterModelCatalog(apiKey);
+            const defaults = getPlatformModelDefaults();
+            res.status(200).json({
+                defaults,
+                chatModels: catalog.models.filter(isChatCatalogModel).map(toPublicModelRow),
+                imageModels: catalog.models.filter(isImageCatalogModel).map(toPublicModelRow),
+            });
+        } catch (error) {
+            console.error('[ai/chat] models list failed:', error?.message || error);
+            res.status(502).json({
+                error: 'upstream_failed',
+                message: MSG.upstream_failed,
+            });
+        }
+        return;
+    }
+
     if (req.body?.mode === 'image') {
         let prompt;
         try {
@@ -241,7 +268,7 @@ export default async function handler(req, res) {
             return;
         }
 
-        const model = getOpenRouterImageModel();
+        const { model } = await resolveOwnerImageModel(req.body?.model, apiKey);
         const startedAt = Date.now();
 
         try {
@@ -269,10 +296,7 @@ export default async function handler(req, res) {
         return;
     }
 
-    const { defaultModel, allowedModels, fallbackModels } = getOpenRouterConfig();
-    const requested = req.body?.model;
-    const primary =
-        requested && allowedModels.includes(requested) ? requested : defaultModel;
+    const { primary, fallbackModels } = await resolveOwnerChatModel(req.body?.model, apiKey);
     const models = [primary, ...fallbackModels.filter((m) => m !== primary)];
     const isTest = req.body?.test === true;
     const maxTokens = isTest
@@ -367,7 +391,12 @@ export default async function handler(req, res) {
             }
             res.status(502).json({
                 error: 'upstream_failed',
-                message: MSG.upstream_failed,
+                message: reason
+                    ? upstreamStatus != null && upstreamStatus > 0
+                        ? `OpenRouter ${upstreamStatus}: ${reason}`
+                        : reason
+                    : MSG.upstream_failed,
+                ...(upstreamStatus != null && upstreamStatus > 0 ? { upstreamStatus } : {}),
             });
         } else {
             res.end();
