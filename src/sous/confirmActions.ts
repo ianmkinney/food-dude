@@ -1,7 +1,6 @@
 import type { ToolCall } from './tools';
 
 const MUTATING = new Set([
-    'import_recipe',
     'create_recipe',
     'update_recipe',
     'add_to_meal_plan',

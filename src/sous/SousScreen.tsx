@@ -34,7 +34,13 @@ import { useSpeechInput } from '../voice/useSpeechInput';
 import { WEB_SPEECH_NOTICE } from '../voice/webSpeechRecognition';
 import * as ImagePicker from 'expo-image-picker';
 import { recipeOperations } from '../database/operations';
-import { importRecipeFromVideoAsset, extractSocialUrlFromText } from '../services/recipeVideoImport';
+import {
+    importRecipeFromVideoAsset,
+    extractSocialUrlFromText,
+    extractRecipeImportUrl,
+} from '../services/recipeVideoImport';
+import { runTools } from './tools';
+import { recordChatRecipes } from '../chat/chatRecipes';
 import { isSocialPostUrl, isTikTokPostUrl, isInstagramPostUrl } from '../services/recipeUrlImport';
 import ChatAttachmentPicker from '../components/ChatAttachmentPicker';
 import { ATTACHMENT_SOURCE_LABEL } from './attachmentLimits';
@@ -174,6 +180,28 @@ export default function SousScreen() {
             const videoAsset = attachedVideo;
             setAttachedVideo(null);
             try {
+                const linkImportUrl =
+                    !attachments.length && !videoAsset ? extractRecipeImportUrl(text) : null;
+                if (linkImportUrl) {
+                    const cards = await runTools([{ tool: 'import_recipe', args: { url: linkImportUrl } }]);
+                    const reply: Message = {
+                        id: newId(),
+                        role: 'sous',
+                        text:
+                            cards[0]?.type === 'recipe'
+                                ? 'Imported — tap the card to review.'
+                                : cards[0]?.type === 'error'
+                                  ? cards[0].message
+                                  : 'Done.',
+                        cards,
+                    };
+                    setMessages((prev) => [...prev, reply]);
+                    await persistAmpiExchange(userMessage.text, reply.text, {
+                        recipes: recipeEventsFromCards(cards),
+                    });
+                    if (autoSpeak && (await shouldSpeak()) && reply.text) speak(reply);
+                    return;
+                }
                 if (videoAsset) {
                     const socialUrl =
                         extractSocialUrlFromText(text) || (isSocialPostUrl(text) ? text : null);

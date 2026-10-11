@@ -8,7 +8,12 @@ export function isTikTokPostUrl(url) {
         const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
         if (host === 'vm.tiktok.com' || host === 'vt.tiktok.com') return true;
         if (!host.endsWith('tiktok.com')) return false;
-        return /\/@[^/]+\/video\/\d+/i.test(parsed.pathname) || /\/video\/\d+/i.test(parsed.pathname) || /\/t\/\w+/i.test(parsed.pathname);
+        return (
+            /\/@[^/]+\/video\/\d+/i.test(parsed.pathname) ||
+            /\/@[^/]+\/photo\/\d+/i.test(parsed.pathname) ||
+            /\/video\/\d+/i.test(parsed.pathname) ||
+            /\/t\/\w+/i.test(parsed.pathname)
+        );
     } catch {
         return false;
     }

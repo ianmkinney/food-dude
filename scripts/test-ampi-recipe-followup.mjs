@@ -64,21 +64,22 @@ const test = (name, fn) => tests.push({ name, fn });
 test('import, then "You choose" renames the imported recipe instead of creating a new dish', async () => {
     ampiTest.reset();
 
-    ampiTest.model = reply('I can import that Instagram recipe — confirm below.', [
+    ampiTest.importResult = LASAGNA_SOUP;
+    const { runTools } = await import('../src/sous/tools.ts');
+    const imported = await runTools([
         { tool: 'import_recipe', args: { url: 'https://www.instagram.com/p/lasagna-soup/' } },
     ]);
-    const first = await sendTurn('Save this https://www.instagram.com/p/lasagna-soup/');
-    assert.equal(first.pendingActions?.[0]?.tool, 'import_recipe');
-
-    ampiTest.importResult = LASAGNA_SOUP;
-    const imported = await confirmSousActions(first.pendingActions, null);
     assert.equal(imported[0].type, 'recipe');
     assert.equal(imported[0].savedAs, 'imported');
     const importedId = imported[0].recipe.id;
     assert.equal(ampiTest.recipes.size, 1);
 
+    await persistAmpiExchange('Save this https://www.instagram.com/p/lasagna-soup/', 'Imported — tap the card to review.', {
+        recipes: [{ id: importedId, title: 'Lasagna Soup', action: 'imported' }],
+    });
+
     const logRow = ampiTest.chatRows.at(-1);
-    assert.equal(logRow.text, 'Imported “Lasagna Soup” into your recipe book.');
+    assert.equal(logRow.text, 'Imported — tap the card to review.');
     assert.deepEqual(JSON.parse(logRow.meta_json).recipes, [{ id: importedId, title: 'Lasagna Soup', action: 'imported' }]);
 
     let seenPrompt = '';
@@ -93,7 +94,7 @@ test('import, then "You choose" renames the imported recipe instead of creating 
 
     assert.match(seenPrompt, /Recipes saved in this conversation/);
     assert.match(seenPrompt, new RegExp(`#${importedId} “Lasagna Soup” \\(imported in this chat; key ingredients: Italian sausage, lasagna noodles, crushed tomatoes`));
-    assert.match(seenPrompt, /Ampi: Imported “Lasagna Soup” into your recipe book\./);
+    assert.match(seenPrompt, /Ampi: Imported — tap the card to review\./);
     assert.match(seenPrompt, /update_recipe \{"recipe_id": number/);
     assert.match(seenPrompt, /Never invent a different dish/);
     assert.match(seenPrompt, /Don't ask the user to name a recipe that was imported with a title/);
