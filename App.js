@@ -243,6 +243,10 @@ function AppContent() {
   const prepare = useCallback(async () => {
     try {
       await initDatabase();
+      if (Platform.OS === 'web' && globalThis.__PARTY_SCREENSHOT_SEED__) {
+        const { runPartyScreenshotSeed } = await import('./src/demo/runPartyScreenshotSeed');
+        await runPartyScreenshotSeed();
+      }
       console.log('✅ AmpliFood app initialized successfully');
       setDbMode(getDatabaseMode());
       setError(null);
