@@ -1,5 +1,6 @@
 import { applyCors } from '../_lib/cors.js';
 import { isEmailAllowed, isGoogleSignInConfigured, requireSecrets } from '../_lib/env.js';
+import { tryResolveAuthTestProfile } from '../_lib/authTestMode.js';
 import { verifyGoogleIdToken } from '../_lib/google.js';
 import { signSession } from '../_lib/session.js';
 const MSG = {
@@ -46,20 +47,14 @@ export default async function handler(req, res) {
     }
 
     try {
-        let profile;
-        if (
-            process.env.AUTH_TEST_MODE === '1' &&
-            idToken === 'amplifood-test-id-token' &&
-            nonce === 'amplifood-test-nonce'
-        ) {
-            const email = String(req.body?.testEmail || 'owner@example.com').trim();
-            profile = {
-                sub: String(req.body?.testSub || 'test-google-sub'),
-                email,
-                name: String(req.body?.testName || 'Test Owner'),
-                picture: '',
-            };
-        } else {
+        let profile = tryResolveAuthTestProfile({
+            idToken,
+            nonce,
+            testEmail: req.body?.testEmail,
+            testSub: req.body?.testSub,
+            testName: req.body?.testName,
+        });
+        if (!profile) {
             profile = await verifyGoogleIdToken(idToken, nonce);
         }
         const token = await signSession(profile);
@@ -72,6 +67,11 @@ export default async function handler(req, res) {
             platformAiAllowed: isEmailAllowed(profile.email),
         });
     } catch (error) {
+        if (error?.code === 'auth_test_allowlisted_forbidden') {
+            console.warn('[auth/google] auth test mode rejected allowlisted email');
+            res.status(403).json({ error: 'forbidden', message: 'Test sign-in cannot use an allowlisted owner email.' });
+            return;
+        }
         console.error('[auth/google] verify failed:', error?.message || error);
         jsonError(res, 401, 'auth_failed');
     }

@@ -63,6 +63,7 @@ const modules = [
     '_lib/syncMerge.js',
     '_lib/syncConstants.js',
     '_lib/syncStore.js',
+    '_lib/authTestMode.js',
     '_lib/partyMembers.js',
     'p.js',
     'p-og.js',
@@ -241,6 +242,63 @@ console.log('ok elevenlabs key resolution');
     if (m.accepted.length !== 1) throw new Error('mergePushBatch should accept first record');
     console.log('ok sync crypto and merge');
     delete process.env.SYNC_ENCRYPTION_KEY;
+}
+
+{
+    process.env.ALLOWED_EMAILS = 'owner@example.com,ikinney51@gmail.com';
+    const { isLocalAuthTestModeEnabled, tryResolveAuthTestProfile, AUTH_TEST_ID_TOKEN, AUTH_TEST_NONCE } =
+        await import(pathToFileURL(join(apiRoot, '_lib/authTestMode.js')).href);
+
+    const saved = {
+        AUTH_TEST_MODE: process.env.AUTH_TEST_MODE,
+        VERCEL_ENV: process.env.VERCEL_ENV,
+        NODE_ENV: process.env.NODE_ENV,
+    };
+    try {
+        process.env.AUTH_TEST_MODE = '1';
+        delete process.env.VERCEL_ENV;
+        process.env.NODE_ENV = 'test';
+        if (!isLocalAuthTestModeEnabled()) throw new Error('auth test mode should be enabled locally');
+        const ok = tryResolveAuthTestProfile({
+            idToken: AUTH_TEST_ID_TOKEN,
+            nonce: AUTH_TEST_NONCE,
+            testEmail: 'stranger@example.com',
+        });
+        if (!ok || ok.email !== 'stranger@example.com') throw new Error('auth test profile for non-allowlisted email');
+        let blocked = false;
+        try {
+            tryResolveAuthTestProfile({
+                idToken: AUTH_TEST_ID_TOKEN,
+                nonce: AUTH_TEST_NONCE,
+                testEmail: 'owner@example.com',
+            });
+        } catch (e) {
+            blocked = e?.code === 'auth_test_allowlisted_forbidden';
+        }
+        if (!blocked) throw new Error('auth test mode must reject allowlisted emails');
+
+        process.env.VERCEL_ENV = 'production';
+        if (isLocalAuthTestModeEnabled()) throw new Error('auth test mode must be off when VERCEL_ENV is set');
+        if (
+            tryResolveAuthTestProfile({
+                idToken: AUTH_TEST_ID_TOKEN,
+                nonce: AUTH_TEST_NONCE,
+                testEmail: 'stranger@example.com',
+            }) !== null
+        ) {
+            throw new Error('auth test profile must be null on Vercel');
+        }
+
+        delete process.env.VERCEL_ENV;
+        process.env.NODE_ENV = 'production';
+        if (isLocalAuthTestModeEnabled()) throw new Error('auth test mode must be off when NODE_ENV=production');
+    } finally {
+        for (const [k, v] of Object.entries(saved)) {
+            if (v === undefined) delete process.env[k];
+            else process.env[k] = v;
+        }
+    }
+    console.log('ok auth test mode local-only and allowlist guard');
 }
 
 const onDisk = listApiJsFiles(apiRoot);
