@@ -45,6 +45,26 @@ Pickers are **hidden** for signed-out users and for signed-in users who are not 
 | `src/components/OwnerModelPickers.tsx` | Searchable UI on Account |
 | `src/monetization/livePlatformAi.ts` | Attaches saved `model` to owner requests |
 
+## OpenRouter stats card (Account)
+
+Allowlisted owners see an **OpenRouter usage** card (with **Refresh**) above the model pickers.
+
+- Client: `POST /api/ai/chat` with `{ "mode": "stats", "refresh"?: true }`.
+- Server aggregates OpenRouter account data with the **same per-user API key** used for chat (`resolveOpenRouterApiKey`). Keys are never sent to the client.
+- Responses are cached **~60 seconds** per signed-in email; `refresh: true` bypasses the cache.
+
+| Stat | OpenRouter endpoint | Notes |
+| --- | --- | --- |
+| Credit balance | `GET /v1/credits` | `total_credits − total_usage` (USD) |
+| Spend today / week / month | `GET /v1/key` | `usage_daily`, `usage_weekly`, `usage_monthly`, plus `limit` / `limit_remaining` when present |
+| API calls this week | `GET /v1/activity` | Sum of `requests` for UTC dates in the current week (Monday–Sunday) |
+
+**Calls this week** requires a server-side **management / provisioning key**: set `OPENROUTER_PROVISIONING_KEY` in Vercel (OpenRouter dashboard → create a management key with activity access). When unset, the calls row is hidden and the card shows a one-line note. Activity requests use the provisioning key only; optional `api_key_hash` filters to the tester’s key when `/v1/key` returns a hash.
+
+If a single stat fails upstream, the card shows a short friendly error for that row and still renders the rest.
+
+Implementation: `api/_lib/openRouterStats.js`, `src/components/OwnerOpenRouterStatsCard.tsx`.
+
 ## ElevenLabs (owner voice)
 
 Voice list / TTS also use `/api/ai/chat` with `mode: 'voices'` or `mode: 'tts'` so the Hobby 12-function limit is not exceeded.

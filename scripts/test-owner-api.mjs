@@ -6,12 +6,15 @@ process.env.SESSION_SECRET = 'local-test-secret';
 process.env.OPENROUTER_API_KEY = 'sk-or-fake';
 process.env.ALLOWED_EMAILS = 'owner@example.com';
 process.env.OPENROUTER_DEFAULT_MODEL = 'google/gemini-2.0-flash-001';
+process.env.OPENROUTER_PROVISIONING_KEY = 'sk-or-mgmt';
 
 const { signSession } = await import('../api/_lib/session.js');
 const { resetOpenRouterModelCache } = await import('../api/_lib/openRouterModels.js');
+const { resetOpenRouterStatsCache } = await import('../api/_lib/openRouterStats.js');
 const { default: chat } = await import('../api/ai/chat.js');
 
 resetOpenRouterModelCache();
+resetOpenRouterStatsCache();
 
 const retired = new Set(['google/gemini-2.0-flash-001']);
 const catalog = [
@@ -47,6 +50,38 @@ globalThis.fetch = async (url, init) => {
     if (url === 'https://openrouter.ai/api/v1/models') {
         assert.equal(init.headers.Authorization, 'Bearer sk-or-fake');
         return new Response(JSON.stringify({ data: catalog }), { status: 200 });
+    }
+    if (url === 'https://openrouter.ai/api/v1/credits') {
+        assert.equal(init.headers.Authorization, 'Bearer sk-or-fake');
+        return new Response(JSON.stringify({ data: { total_credits: 10, total_usage: 2.5 } }), { status: 200 });
+    }
+    if (url === 'https://openrouter.ai/api/v1/key') {
+        assert.equal(init.headers.Authorization, 'Bearer sk-or-fake');
+        return new Response(
+            JSON.stringify({
+                data: {
+                    usage_daily: 0.5,
+                    usage_weekly: 1.25,
+                    usage_monthly: 2.5,
+                    limit: 100,
+                    limit_remaining: 97.5,
+                    hash: 'deadbeef',
+                },
+            }),
+            { status: 200 }
+        );
+    }
+    if (String(url).startsWith('https://openrouter.ai/api/v1/activity')) {
+        assert.equal(init.headers.Authorization, 'Bearer sk-or-mgmt');
+        return new Response(
+            JSON.stringify({
+                data: [
+                    { date: new Date().toISOString().slice(0, 10), requests: 4 },
+                    { date: '2020-01-01', requests: 99 },
+                ],
+            }),
+            { status: 200 }
+        );
     }
     assert.equal(url, 'https://openrouter.ai/api/v1/chat/completions');
     assert.equal(init.headers.Authorization, 'Bearer sk-or-fake');
@@ -111,6 +146,14 @@ assert.ok(r.body.chatModels.some((m) => m.id === 'google/gemini-2.5-flash'));
 assert.ok(r.body.imageModels.some((m) => m.id === 'google/gemini-2.5-flash-image'));
 assert.equal(typeof r.body.chatModels[0].pricePerMillion, 'number');
 console.log('models list     ->', r.status, r.body.chatModels.length, 'chat', r.body.imageModels.length, 'image');
+
+r = await call({ token: owner, body: { mode: 'stats' } });
+assert.equal(r.status, 200);
+assert.equal(r.body.credits.value, 7.5);
+assert.equal(r.body.spendToday.value, 0.5);
+assert.equal(r.body.callsThisWeek.value, 4);
+assert.ok(r.body.cachedAt);
+console.log('stats           ->', r.status, r.body.credits, r.body.callsThisWeek);
 
 r = await call({ token: owner, body: { prompt: 'hi', stream: false, model: 'google/gemini-2.5-flash' } });
 assert.equal(r.status, 200);

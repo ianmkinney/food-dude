@@ -24,6 +24,7 @@ import {
     resolveOwnerImageModel,
     toPublicModelRow,
 } from '../_lib/openRouterModels.js';
+import { fetchOpenRouterStats } from '../_lib/openRouterStats.js';
 
 const DAILY_CREDIT_MSG = 'Daily AI limit reached. Try again tomorrow or ask Ian to raise your OpenRouter credit limit.';
 
@@ -245,6 +246,24 @@ export default async function handler(req, res) {
             });
         } catch (error) {
             console.error('[ai/chat] models list failed:', error?.message || error);
+            res.status(502).json({
+                error: 'upstream_failed',
+                message: MSG.upstream_failed,
+            });
+        }
+        return;
+    }
+
+    if (mode === 'stats') {
+        try {
+            const stats = await fetchOpenRouterStats({
+                email: session.email,
+                apiKey,
+                refresh: Boolean(req.body?.refresh),
+            });
+            res.status(200).json(stats);
+        } catch (error) {
+            console.error('[ai/chat] stats failed:', error?.message || error);
             res.status(502).json({
                 error: 'upstream_failed',
                 message: MSG.upstream_failed,

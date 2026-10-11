@@ -30,6 +30,7 @@ const modules = [
     '_lib/store.js',
     '_lib/openRouterImage.js',
     '_lib/openRouterModels.js',
+    '_lib/openRouterStats.js',
     '_lib/elevenLabs.js',
     'auth/google.js',
     'auth/session.js',
