@@ -97,7 +97,7 @@ test('import, then "You choose" renames the imported recipe instead of creating 
     assert.match(seenPrompt, /Ampi: Imported — tap the card to review\./);
     assert.match(seenPrompt, /update_recipe \{"recipe_id": number/);
     assert.match(seenPrompt, /Never invent a different dish/);
-    assert.match(seenPrompt, /Don't ask the user to name a recipe that was imported with a title/);
+    assert.match(seenPrompt, /Do not ask what to name it/);
     assert.match(seenPrompt, /matches that recipe's actual ingredients/);
     assert.match(seenPrompt, /Only call create_recipe when the user asks for a new recipe/);
 

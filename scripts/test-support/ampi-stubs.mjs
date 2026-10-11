@@ -11,6 +11,8 @@ export const ampiTest = {
     model: null,
     /** What parseRecipeFromUrl returns for the next import. */
     importResult: null,
+    preparedAttachments: null,
+    lastMultimodal: null,
     reset() {
         this.recipes.clear();
         this.chatRows = [];
@@ -19,6 +21,8 @@ export const ampiTest = {
         this.prompts = [];
         this.model = null;
         this.importResult = null;
+        this.preparedAttachments = null;
+        this.lastMultimodal = null;
         pantryOperations.rows = [];
         groceryOperations.rows = [];
         groceryOperations.nextId = 1;
@@ -149,10 +153,18 @@ export async function generateText(prompt) {
     if (!ampiTest.model) throw new Error('No scripted model reply for this turn');
     return ampiTest.model(prompt);
 }
-export const generateMultimodal = ({ prompt }) => generateText(prompt);
+export async function generateMultimodal(opts) {
+    ampiTest.lastMultimodal = opts;
+    return generateText(opts?.turns?.[opts.turns.length - 1]?.text || opts?.prompt || '');
+}
+
+export const peekMultimodalVisionNote = () => null;
 
 export const getIncludeHealthData = async () => false;
-export const prepareAttachmentPayload = async () => ({ promptExtra: '', images: [], attachments: [] });
+export async function prepareAttachmentPayload() {
+    if (ampiTest.preparedAttachments) return ampiTest.preparedAttachments;
+    return { promptExtra: '', images: [], attachments: [] };
+}
 
 export async function parseRecipeFromUrl(url) {
     if (!ampiTest.importResult) throw new Error(`No scripted import for ${url}`);

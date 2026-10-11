@@ -7,16 +7,32 @@ const CACHE_MS = 60 * 60 * 1000;
 /** @type {{ fetchedAt: number, models: NormalizedModel[], byId: Map<string, NormalizedModel> }} */
 let cache = { fetchedAt: 0, models: [], byId: new Map() };
 
+export const VISION_FALLBACK_CHAT_MODEL = 'google/gemini-2.5-flash';
+
 /**
- * @typedef {{ id: string, name: string, outputModalities: string[], pricePerMillionPrompt: number | null, pricePerMillionCompletion: number | null }} NormalizedModel
+ * @typedef {{ id: string, name: string, inputModalities: string[], outputModalities: string[], pricePerMillionPrompt: number | null, pricePerMillionCompletion: number | null }} NormalizedModel
  */
 
-function outputModalities(raw) {
-    const arch = raw?.architecture?.output_modalities;
+function modalityList(raw, key) {
+    const arch = raw?.architecture?.[key];
     if (Array.isArray(arch) && arch.length) return arch.map(String);
-    const top = raw?.top_provider?.output_modalities;
+    const top = raw?.top_provider?.[key];
     if (Array.isArray(top) && top.length) return top.map(String);
-    return ['text'];
+    return null;
+}
+
+function outputModalities(raw) {
+    return modalityList(raw, 'output_modalities') || ['text'];
+}
+
+function inputModalities(raw) {
+    return modalityList(raw, 'input_modalities') || ['text'];
+}
+
+export function modelSupportsVision(model) {
+    if (!model) return false;
+    const inputs = model.inputModalities || ['text'];
+    return inputs.includes('image') || inputs.includes('file');
 }
 
 function pricePerMillionUsd(perToken) {
@@ -32,6 +48,7 @@ function normalizeModel(raw) {
     return {
         id,
         name: String(raw?.name || id).trim(),
+        inputModalities: inputModalities(raw),
         outputModalities: outputModalities(raw),
         pricePerMillionPrompt: pricePerMillionUsd(pricing.prompt),
         pricePerMillionCompletion: pricePerMillionUsd(pricing.completion),
@@ -115,6 +132,34 @@ export async function resolveOwnerChatModel(requested, apiKey) {
         return { primary: trimmed, fallbackModels, fromRequest: true };
     }
     return { primary: defaultModel, fallbackModels, fromRequest: false };
+}
+
+/**
+ * When the request includes images, ensure the primary model accepts vision input.
+ * @returns {Promise<{ primary: string, fallbackModels: string[], visionNote: string | null, visionFallbackFrom: string | null }>}
+ */
+export async function resolveOwnerChatModelForVision({ requested, apiKey, hasImages }) {
+    const base = await resolveOwnerChatModel(requested, apiKey);
+    if (!hasImages) {
+        return { ...base, visionNote: null, visionFallbackFrom: null };
+    }
+    const { byId } = await fetchOpenRouterModelCatalog(apiKey);
+    const primaryRow = byId.get(base.primary);
+    if (modelSupportsVision(primaryRow)) {
+        return { ...base, visionNote: null, visionFallbackFrom: null };
+    }
+    const vision = VISION_FALLBACK_CHAT_MODEL;
+    const fallbacks = [base.primary, ...base.fallbackModels.filter((m) => m !== vision && m !== base.primary)];
+    const note = base.fromRequest
+        ? `Using ${vision} to read your images (${base.primary} doesn't accept image input).`
+        : `Using ${vision} to read your images.`;
+    return {
+        primary: vision,
+        fallbackModels: fallbacks,
+        fromRequest: base.fromRequest,
+        visionNote: note,
+        visionFallbackFrom: base.primary,
+    };
 }
 
 export async function resolveOwnerImageModel(requested, apiKey) {

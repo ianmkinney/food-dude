@@ -3,20 +3,43 @@ import { generateText } from '../services/aiClient';
 import { isMemoryEnabled } from '../memory/memorySettings';
 import { CHAT_THREAD_AMPI, CHAT_THREAD_AI_CHEF } from './chatThreads';
 
-export type ChatTurn = { role: 'user' | 'sous' | 'assistant'; text: string };
+export type ChatImage = { data: string; mimeType: string };
+
+export type ChatTurn = {
+    role: 'user' | 'sous' | 'assistant';
+    text: string;
+    images?: ChatImage[];
+};
+
+function parseChatImages(metaJson: string | null | undefined): ChatImage[] | undefined {
+    if (!metaJson) return undefined;
+    try {
+        const meta = JSON.parse(metaJson) as { chat_images?: ChatImage[] };
+        if (Array.isArray(meta.chat_images) && meta.chat_images.length) return meta.chat_images;
+    } catch {
+        // ignore
+    }
+    return undefined;
+}
 
 export async function loadThreadTurns(threadId: string, limit = 24): Promise<{ history: ChatTurn[]; summary: string }> {
     const rows = await chatOperations.getRecent(threadId, limit);
     const summary = await chatOperations.getSummary(threadId);
-    const history = rows.map((row: { role: string; text: string }) => ({
+    const history = rows.map((row: { role: string; text: string; meta_json?: string | null }) => ({
         role: row.role === 'assistant' ? 'assistant' : row.role === 'sous' ? 'sous' : 'user',
         text: row.text,
+        images: row.role === 'user' ? parseChatImages(row.meta_json) : undefined,
     }));
     return { history, summary };
 }
 
-export async function persistAmpiExchange(userText: string, sousText: string, sousMeta: object | null = null) {
-    await chatOperations.addMessage(CHAT_THREAD_AMPI, { role: 'user', text: userText });
+export async function persistAmpiExchange(
+    userText: string,
+    sousText: string,
+    sousMeta: object | null = null,
+    userMeta: object | null = null
+) {
+    await chatOperations.addMessage(CHAT_THREAD_AMPI, { role: 'user', text: userText, meta: userMeta });
     await chatOperations.addMessage(CHAT_THREAD_AMPI, { role: 'sous', text: sousText, meta: sousMeta });
     await refreshThreadSummary(CHAT_THREAD_AMPI);
 }

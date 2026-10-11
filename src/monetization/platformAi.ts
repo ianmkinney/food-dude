@@ -8,9 +8,17 @@ import type { StorePurchase } from './entitlements';
 export type PlatformImage = { data: string; mimeType: string };
 
 export type PlatformTextRequest = { prompt: string; feature: PlatformAiFeature };
+export type PlatformChatTurn = {
+    role: 'user' | 'assistant';
+    text: string;
+    images?: PlatformImage[];
+};
+
 export type PlatformMultimodalRequest = PlatformTextRequest & {
     images?: PlatformImage[];
     video?: PlatformImage | null;
+    system?: string;
+    turns?: PlatformChatTurn[];
 };
 export type PlatformImageRequest = { prompt: string };
 

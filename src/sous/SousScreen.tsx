@@ -356,7 +356,12 @@ export default function SousScreen() {
                         : undefined,
                 };
                 setMessages((prev) => [...prev, reply]);
-                await persistAmpiExchange(userMessage.text, result.reply);
+                await persistAmpiExchange(
+                    userMessage.text,
+                    result.reply,
+                    null,
+                    result.userChatImages?.length ? { chat_images: result.userChatImages } : null
+                );
                 AccessibilityInfo.announceForAccessibility(`${ASSISTANT_NAME} says: ${toDisplayText(result.reply)}`);
                 if (autoSpeak && (await shouldSpeak()) && !reply.confirm) speak(reply);
             } catch (error) {

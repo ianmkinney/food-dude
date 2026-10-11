@@ -20,10 +20,11 @@ import {
     getPlatformModelDefaults,
     isChatCatalogModel,
     isImageCatalogModel,
-    resolveOwnerChatModel,
+    resolveOwnerChatModelForVision,
     resolveOwnerImageModel,
     toPublicModelRow,
 } from '../_lib/openRouterModels.js';
+import { buildOpenRouterMessages, bodyHasImages } from '../_lib/chatOpenRouterMessages.js';
 import { fetchOpenRouterStats } from '../_lib/openRouterStats.js';
 
 const DAILY_CREDIT_MSG = 'Daily AI limit reached. Try again tomorrow or ask Ian to raise your OpenRouter credit limit.';
@@ -81,7 +82,13 @@ function validateImages(images) {
 const MAX_TOTAL_IMAGE_BYTES = 4.5 * 1024 * 1024;
 
 function validateMultimodalBody(body) {
-    const images = Array.isArray(body?.images) ? body.images : [];
+    const images = [];
+    if (Array.isArray(body?.images)) images.push(...body.images);
+    if (Array.isArray(body?.turns)) {
+        for (const turn of body.turns) {
+            if (Array.isArray(turn?.images)) images.push(...turn.images);
+        }
+    }
     if (images.length > MAX_IMAGES) {
         throw new Error(`Too many images (max ${MAX_IMAGES}).`);
     }
@@ -95,21 +102,23 @@ function validateMultimodalBody(body) {
     }
 }
 
+function normalizeBodyImages(body) {
+    if (!body || typeof body !== 'object') return body;
+    const out = { ...body };
+    if (Array.isArray(body.images)) {
+        out.images = validateImages(body.images);
+    }
+    if (Array.isArray(body.turns)) {
+        out.turns = body.turns.map((turn) => ({
+            ...turn,
+            images: turn.images ? validateImages(turn.images) : undefined,
+        }));
+    }
+    return out;
+}
+
 function buildMessages(body) {
-    const prompt = body?.prompt;
-    if (!prompt || typeof prompt !== 'string') {
-        throw new Error('Missing prompt');
-    }
-    const images = validateImages(body?.images);
-    if (!images.length) {
-        return [{ role: 'user', content: prompt }];
-    }
-    const parts = [{ type: 'text', text: prompt }];
-    for (const img of images) {
-        const url = `data:${img.mimeType};base64,${img.data}`;
-        parts.push({ type: 'image_url', image_url: { url } });
-    }
-    return [{ role: 'user', content: parts }];
+    return buildOpenRouterMessages(body);
 }
 
 class UpstreamError extends Error {
@@ -315,9 +324,14 @@ export default async function handler(req, res) {
         return;
     }
 
-    const { primary, fallbackModels } = await resolveOwnerChatModel(req.body?.model, apiKey);
-    const models = [primary, ...fallbackModels.filter((m) => m !== primary)];
     const isTest = req.body?.test === true;
+    const hasImages = !isTest && bodyHasImages(req.body);
+    const { primary, fallbackModels, visionNote } = await resolveOwnerChatModelForVision({
+        requested: req.body?.model,
+        apiKey,
+        hasImages,
+    });
+    const models = [primary, ...fallbackModels.filter((m) => m !== primary)];
     const maxTokens = isTest
         ? 16
         : Math.min(8192, Math.max(256, Number(process.env.OPENROUTER_MAX_OUTPUT_TOKENS || 4096)));
@@ -325,7 +339,8 @@ export default async function handler(req, res) {
     let messages;
     try {
         if (!isTest) validateMultimodalBody(req.body);
-        messages = buildMessages(isTest ? { prompt: 'Reply with the single word: OK' } : req.body);
+        const normalized = isTest ? { prompt: 'Reply with the single word: OK' } : normalizeBodyImages(req.body);
+        messages = buildMessages(normalized);
     } catch (error) {
         console.warn('[ai/chat] bad request:', error?.message || error);
         reject(res, 400, 'bad_request');
@@ -371,6 +386,7 @@ export default async function handler(req, res) {
             res.status(200).json({
                 text: full,
                 model,
+                ...(visionNote ? { visionNote } : null),
                 ...(model !== primary ? { fallbackFrom: primary } : null),
                 ...(isTest ? { latencyMs: Date.now() - startedAt } : null),
             });

@@ -18,6 +18,8 @@ import { userOperations } from '../database/operations';
 import { safetyPreamble } from '../safety/foodSafety';
 import { ensureConsent, getIncludeHealthData } from '../consent/consentStore';
 import { platformAi } from '../monetization/platformAi';
+import { platformOwnerMultimodal } from '../monetization/livePlatformAi';
+import { resolveByokVisionModel } from './visionModelPick';
 import { describeMimeType, isImageMimeSupportedBy, normalizeMimeType } from './mediaTypes';
 
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -354,15 +356,208 @@ export async function generateText(rawPrompt, options = {}) {
     }
 }
 
-export async function generateMultimodal({ prompt: rawPrompt, images, video, feature = 'imageImport' }) {
-    const { creds, prompt } = await prepareRequest(rawPrompt);
-    if (creds.route === 'platform') {
-        return platformAi.generateMultimodal({ prompt, images, video, feature });
+let lastMultimodalVisionNote = null;
+
+/** Short UI note when we switched to a vision-capable model (consumed once). */
+export function peekMultimodalVisionNote() {
+    const note = lastMultimodalVisionNote;
+    lastMultimodalVisionNote = null;
+    return note;
+}
+
+function turnsHaveImages(turns) {
+    return (turns || []).some((t) => Array.isArray(t.images) && t.images.length > 0);
+}
+
+async function anthropicChatTurns({ apiKey, model, system, turns }) {
+    const messages = [];
+    for (const turn of turns) {
+        if (turn.role === 'assistant') {
+            messages.push({ role: 'assistant', content: turn.text });
+            continue;
+        }
+        const content = [];
+        for (const image of turn.images || []) {
+            content.push({
+                type: 'image',
+                source: {
+                    type: 'base64',
+                    media_type: requireImageMimeType('anthropic', image),
+                    data: image.data,
+                },
+            });
+        }
+        content.push({ type: 'text', text: turn.text });
+        messages.push({ role: 'user', content });
     }
-    const model = creds.model || defaultModelFor(creds.provider);
+    const json = await fetchJson('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            ...anthropicHeaders(apiKey),
+        },
+        body: JSON.stringify({
+            model,
+            max_tokens: 8192,
+            system,
+            messages,
+        }),
+    });
+    const text = (json.content || [])
+        .filter((part) => part.type === 'text')
+        .map((part) => part.text)
+        .join('\n')
+        .trim();
+    if (!text) throw new Error('The model returned an empty response.');
+    return text;
+}
+
+async function openAiChatTurns({ baseUrl, apiKey, model, provider, system, turns }) {
+    const messages = [];
+    if (system) messages.push({ role: 'system', content: system });
+    for (const turn of turns) {
+        if (turn.role === 'assistant') {
+            messages.push({ role: 'assistant', content: turn.text });
+            continue;
+        }
+        const imgs = turn.images || [];
+        if (imgs.length) {
+            messages.push({
+                role: 'user',
+                content: [
+                    { type: 'text', text: turn.text },
+                    ...imgs.map((image) => ({
+                        type: 'image_url',
+                        image_url: {
+                            url: `data:${requireImageMimeType(provider, image)};base64,${image.data}`,
+                        },
+                    })),
+                ],
+            });
+        } else {
+            messages.push({ role: 'user', content: turn.text });
+        }
+    }
+    const json = await fetchJson(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ model, messages }),
+    });
+    const text = json.choices?.[0]?.message?.content;
+    if (!text || typeof text !== 'string') throw new Error('The model returned an empty response.');
+    return text.trim();
+}
+
+async function geminiChatTurns({ apiKey, model, system, turns }) {
+    const genAI = geminiClient(apiKey);
+    const generativeModel = genAI.getGenerativeModel({ model, systemInstruction: system });
+    const parts = [];
+    for (const turn of turns) {
+        const prefix = turn.role === 'assistant' ? 'Ampi:' : 'User:';
+        parts.push(`${prefix} ${turn.text}`);
+        if (turn.role === 'user') {
+            for (const image of turn.images || []) {
+                parts.push({
+                    inlineData: {
+                        data: image.data,
+                        mimeType: requireImageMimeType('gemini', image),
+                    },
+                });
+            }
+        }
+    }
+    const result = await generativeModel.generateContent(parts);
+    const response = await result.response;
+    const text = response.text();
+    if (!text) throw new Error('The model returned an empty response.');
+    return text;
+}
+
+export async function generateMultimodal({
+    prompt: rawPrompt,
+    images,
+    video,
+    feature = 'imageImport',
+    system,
+    turns,
+}) {
+    const userLine =
+        (turns?.length ? turns[turns.length - 1]?.text : null) || rawPrompt || 'Please use the attached images.';
+    const { creds, prompt } = await prepareRequest(userLine);
+    lastMultimodalVisionNote = null;
+
+    const hasVisionInput = (images?.length || 0) > 0 || turnsHaveImages(turns);
+
+    if (creds.route === 'platform') {
+        const safetyPrefix = prompt.replace(`\n\n${userLine}`, '').trim();
+        const result =
+            system && turns?.length
+                ? await platformOwnerMultimodal({
+                      feature,
+                      system: `${safetyPrefix}\n\n${system}`,
+                      turns,
+                  })
+                : await platformOwnerMultimodal({
+                      feature,
+                      prompt,
+                      images,
+                  });
+        lastMultimodalVisionNote = result.visionNote || null;
+        return result.text;
+    }
+
+    let model = creds.model || defaultModelFor(creds.provider);
+    if (hasVisionInput) {
+        const picked = resolveByokVisionModel(creds.provider, model);
+        model = picked.model;
+        lastMultimodalVisionNote = picked.visionNote;
+    }
 
     if (video && creds.provider !== 'gemini') {
         throw new Error('Video analysis is only available with Google Gemini. Switch provider in Account.');
+    }
+
+    const safetyPrefix = prompt.replace(`\n\n${userLine}`, '').trim();
+    const fullSystem = system ? `${safetyPrefix}\n\n${system}` : prompt;
+
+    if (turns?.length) {
+        const readyTurns = await Promise.all(
+            turns.map(async (t) => ({
+                ...t,
+                images: t.images?.length
+                    ? await coerceImagesForProvider(t.images, creds.provider)
+                    : undefined,
+            }))
+        );
+        switch (creds.provider) {
+            case 'anthropic':
+                return anthropicChatTurns({ apiKey: creds.apiKey, model, system: fullSystem, turns: readyTurns });
+            case 'openai':
+                return openAiChatTurns({
+                    provider: 'openai',
+                    baseUrl: 'https://api.openai.com/v1',
+                    apiKey: creds.apiKey,
+                    model,
+                    system: fullSystem,
+                    turns: readyTurns,
+                });
+            case 'xai':
+                return openAiChatTurns({
+                    provider: 'xai',
+                    baseUrl: 'https://api.x.ai/v1',
+                    apiKey: creds.apiKey,
+                    model,
+                    system: fullSystem,
+                    turns: readyTurns,
+                });
+            case 'gemini':
+                return geminiChatTurns({ apiKey: creds.apiKey, model, system: fullSystem, turns: readyTurns });
+            default:
+                throw new Error('Unknown AI provider. Pick one in Account.');
+        }
     }
 
     const readyImages = await coerceImagesForProvider(images, creds.provider);
