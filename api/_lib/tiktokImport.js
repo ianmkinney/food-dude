@@ -41,7 +41,12 @@ export function isTikTokPostUrl(rawUrl) {
         const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
         if (host === 'vm.tiktok.com' || host === 'vt.tiktok.com') return true;
         if (!isTikTokHost(host)) return false;
-        return /\/@[^/]+\/video\/\d+/i.test(parsed.pathname) || /\/video\/\d+/i.test(parsed.pathname) || /\/t\/\w+/i.test(parsed.pathname);
+        return (
+            /\/@[^/]+\/video\/\d+/i.test(parsed.pathname) ||
+            /\/@[^/]+\/photo\/\d+/i.test(parsed.pathname) ||
+            /\/video\/\d+/i.test(parsed.pathname) ||
+            /\/t\/\w+/i.test(parsed.pathname)
+        );
     } catch {
         return false;
     }
@@ -66,7 +71,12 @@ export async function resolveTikTokUrl(inputUrl) {
         throw new Error('invalid_tiktok_url');
     }
     const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-    if (host === 'vm.tiktok.com' || host === 'vt.tiktok.com' || !/\/video\//i.test(parsed.pathname)) {
+    const needsResolve =
+        host === 'vm.tiktok.com' ||
+        host === 'vt.tiktok.com' ||
+        /\/t\/\w+/i.test(parsed.pathname) ||
+        !/\/(video|photo)\//i.test(parsed.pathname);
+    if (needsResolve) {
         const { finalUrl } = await safeFetchHtml(trimmed, { userAgent: MOBILE_UA });
         assertTikTokFinalUrl(finalUrl);
         return finalUrl;
@@ -111,7 +121,7 @@ function walkForItemStruct(node, found = []) {
     if (node.itemStruct && typeof node.itemStruct === 'object') {
         found.push(node.itemStruct);
     }
-    if (node.desc && node.id && (node.video || node.author)) {
+    if (node.desc && node.id && (node.video || node.imagePost || node.images || node.author)) {
         found.push(node);
     }
     for (const value of Object.values(node)) {
@@ -137,6 +147,18 @@ function extractAuthorFromStruct(item, oembed) {
     if (item?.author?.nickname) return String(item.author.nickname);
     if (oembed?.author_name) return String(oembed.author_name).replace(/^@/, '');
     return null;
+}
+
+function extractCoverImageFromStruct(item, oembed, html) {
+    if (oembed?.thumbnail_url) return oembed.thumbnail_url;
+    const fromPost = item?.video?.cover || item?.video?.originCover || item?.imagePost?.cover?.imageURL?.urlList?.[0];
+    if (fromPost && String(fromPost).startsWith('http')) return String(fromPost);
+    const images = item?.imagePost?.images || item?.images?.imageURL?.urlList;
+    if (Array.isArray(images) && images[0]) {
+        const first = images[0]?.urlList?.[0] || images[0];
+        if (first && String(first).startsWith('http')) return String(first);
+    }
+    return metaContent(html, 'og:image');
 }
 
 function extractVideoUrlFromStruct(item, html) {
@@ -208,29 +230,46 @@ function buildTextPayload({ text, image, author, sourceUrl }) {
 /**
  * @param {{ apiKey?: string, onHeavyRateLimit?: () => boolean }} options
  */
-export async function importTikTokPost(inputUrl, options = {}) {
-    const sourceUrl = await resolveTikTokUrl(inputUrl);
-
-    let oembed = null;
-    try {
-        oembed = await fetchTikTokOembed(sourceUrl);
-    } catch {
-        // continue with page HTML only
+async function fetchOembedForUrls(...urls) {
+    for (const pageUrl of urls) {
+        if (!pageUrl) continue;
+        try {
+            return await fetchTikTokOembed(pageUrl);
+        } catch {
+            // try next URL
+        }
     }
+    return null;
+}
+
+export async function importTikTokPost(inputUrl, options = {}) {
+    const trimmedInput = String(inputUrl).trim();
+    const sourceUrl = await resolveTikTokUrl(trimmedInput);
+
+    const oembed = await fetchOembedForUrls(sourceUrl, trimmedInput);
 
     let html = '';
     let item = null;
-    try {
-        const fetched = await safeFetchHtml(sourceUrl, { userAgent: MOBILE_UA });
-        html = fetched.html;
-        item = pickBestItemStruct(parseUniversalData(html));
-    } catch {
-        if (!oembed?.title) throw new Error('tiktok_no_caption');
+    const pageUrls = [sourceUrl, trimmedInput].filter((u, i, arr) => u && arr.indexOf(u) === i);
+    for (const pageUrl of pageUrls) {
+        try {
+            const fetched = await safeFetchHtml(pageUrl, { userAgent: MOBILE_UA });
+            html = fetched.html;
+            item = pickBestItemStruct(parseUniversalData(html));
+            if (item || metaContent(html, 'og:description')) break;
+        } catch {
+            // try alternate URL or fall back to oEmbed-only
+        }
+    }
+
+    const oembedText = cleanText(oembed?.title || oembed?.author_name || '');
+    if (!html && !item && !oembedText) {
+        throw new Error('tiktok_no_caption');
     }
 
     const bundle = await buildTikTokTextBundle({ html, oembed, item });
     const author = extractAuthorFromStruct(item, oembed);
-    const image = oembed?.thumbnail_url || metaContent(html, 'og:image');
+    const image = extractCoverImageFromStruct(item, oembed, html);
     const videoUrl = extractVideoUrlFromStruct(item, html);
 
     if (looksLikeFullRecipe(bundle)) {
@@ -239,7 +278,7 @@ export async function importTikTokPost(inputUrl, options = {}) {
     }
 
     const partial = cleanText(bundle);
-    if (partial && options.apiKey && videoUrl) {
+    if (options.apiKey && videoUrl) {
         if (options.onHeavyRateLimit && !options.onHeavyRateLimit()) {
             throw new Error('rate_limited');
         }
@@ -254,7 +293,7 @@ export async function importTikTokPost(inputUrl, options = {}) {
                 apiKey: options.apiKey,
                 mimeType,
                 base64: buffer.toString('base64'),
-                extraContext: partial || `TikTok by @${author || 'unknown'}`,
+                extraContext: partial || oembedText || `TikTok by @${author || 'unknown'}`,
                 meta: { sourceUrl, sourcePlatform: 'tiktok', author },
             });
         } catch (error) {
@@ -262,7 +301,7 @@ export async function importTikTokPost(inputUrl, options = {}) {
         }
     }
 
-    const payload = buildTextPayload({ text: bundle, image, author, sourceUrl });
+    const payload = buildTextPayload({ text: bundle || oembedText, image, author, sourceUrl });
     if (!payload) throw new Error('tiktok_no_caption');
     return payload;
 }

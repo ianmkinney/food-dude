@@ -130,10 +130,21 @@ export function extractInstagramUrlFromText(text) {
 }
 
 export function extractTikTokUrlFromText(text) {
-    const match = String(text || '').match(/https?:\/\/(?:vm|vt|www\.)?tiktok\.com\/[^\s]+/i);
-    return match ? match[0].replace(/[),.]+$/, '') : null;
+    const match = String(text || '').match(/https?:\/\/(?:[a-z0-9-]+\.)*tiktok\.com\/[^\s]+/i);
+    return match ? match[0].replace(/[),.!?]+$/, '') : null;
 }
 
 export function extractSocialUrlFromText(text) {
     return extractInstagramUrlFromText(text) || extractTikTokUrlFromText(text);
+}
+
+/** First http(s) URL in a chat message, or the whole message when it is only a URL. */
+export function extractRecipeImportUrl(text) {
+    const trimmed = String(text || '').trim();
+    if (!trimmed) return null;
+    const social = extractSocialUrlFromText(trimmed);
+    if (social) return social;
+    if (/^https?:\/\/\S+$/i.test(trimmed)) return trimmed.replace(/[),.!?]+$/, '');
+    const match = trimmed.match(/https?:\/\/\S+/i);
+    return match ? match[0].replace(/[),.!?]+$/, '') : null;
 }
