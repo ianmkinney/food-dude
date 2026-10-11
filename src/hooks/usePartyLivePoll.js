@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
     fetchLiveChanges,
+    fetchLivePartySnapshot,
     getStoredLiveVersion,
     setStoredLiveVersion,
 } from '../services/partyLiveSync';
@@ -19,19 +20,34 @@ export function usePartyLivePoll({ livePartyId, enabled = true, onSnapshot }) {
     const focusedRef = useRef(false);
     const appActiveRef = useRef(true);
 
-    const pollOnce = useCallback(async () => {
-        if (!livePartyId || !enabled) return;
-        try {
-            const since = await getStoredLiveVersion(livePartyId);
-            const result = await fetchLiveChanges({ livePartyId, sinceVersion: since });
-            if (result.changed && result.party) {
-                await setStoredLiveVersion(livePartyId, result.version);
-                onSnapshot?.(result.party);
+    const pollOnce = useCallback(
+        async (forceFull = false) => {
+            if (!livePartyId || !enabled) return;
+            try {
+                const since = await getStoredLiveVersion(livePartyId);
+                if (forceFull) {
+                    const party = await fetchLivePartySnapshot(livePartyId);
+                    if (party?.version != null) {
+                        await setStoredLiveVersion(livePartyId, party.version);
+                    }
+                    onSnapshot?.(party);
+                    return;
+                }
+                const result = await fetchLiveChanges({ livePartyId, sinceVersion: since });
+                if (Number(result.version) > since) {
+                    const party =
+                        result.changed && result.party
+                            ? result.party
+                            : await fetchLivePartySnapshot(livePartyId);
+                    await setStoredLiveVersion(livePartyId, result.version ?? party.version);
+                    onSnapshot?.(party);
+                }
+            } catch (error) {
+                console.warn('[party live poll]', error?.message || error);
             }
-        } catch (error) {
-            console.warn('[party live poll]', error?.message || error);
-        }
-    }, [livePartyId, enabled, onSnapshot]);
+        },
+        [livePartyId, enabled, onSnapshot]
+    );
 
     const schedule = useCallback(() => {
         if (timerRef.current) clearTimeout(timerRef.current);
@@ -45,7 +61,7 @@ export function usePartyLivePoll({ livePartyId, enabled = true, onSnapshot }) {
     useFocusEffect(
         useCallback(() => {
             focusedRef.current = true;
-            pollOnce();
+            pollOnce(true);
             schedule();
             return () => {
                 focusedRef.current = false;

@@ -104,6 +104,26 @@ export async function migrateLocalPartyToLive({ name, meals, members, imageBase6
     return data;
 }
 
+export async function fetchLivePartySnapshot(livePartyId) {
+    const memberToken = await getStoredMemberToken(livePartyId);
+    const sessionToken = await getOwnerSessionToken();
+    const query = new URLSearchParams({
+        action: 'get',
+        partyId: livePartyId,
+    });
+    const headers = {};
+    if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`;
+    if (memberToken) headers['X-Party-Member-Token'] = memberToken;
+    const res = await fetch(`${apiBase()}/party?${query}`, { method: 'GET', headers });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const err = new Error(data.message || 'Could not load party');
+        err.code = data.error;
+        throw err;
+    }
+    return data.party;
+}
+
 export async function fetchLiveChanges({ livePartyId, sinceVersion, memberToken, sessionToken }) {
     const token = memberToken || (await getStoredMemberToken(livePartyId));
     const ownerToken = sessionToken || (await getOwnerSessionToken());
@@ -237,6 +257,7 @@ export async function applyLivePartySnapshot(localPartyId, snapshot) {
         });
     }
     await partyMealIngredientClaimOperations.syncFromLiveSnapshot(localPartyId, snapshot.ingredientClaims || []);
+    await partyMemberOperations.reconcileLocalPartyMembers(localPartyId, snapshot.ownerEmail);
 }
 
 export async function attachOrCreateLocalLiveParty(snapshot) {

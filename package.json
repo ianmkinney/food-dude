@@ -20,7 +20,8 @@
     "test:web-chat": "node scripts/test-web-ampi-chat.mjs",
     "test:web-safari-composer": "node scripts/test-web-safari-composer.mjs",
     "test:sync-merge": "node scripts/test-sync-merge.mjs",
-    "test:party-members": "node scripts/test-party-members.mjs"
+    "test:party-members": "node scripts/test-party-members.mjs",
+    "test:party-live-sync": "node scripts/test-party-live-sync.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/fredoka": "^0.4.1",

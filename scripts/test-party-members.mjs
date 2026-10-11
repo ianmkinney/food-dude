@@ -53,6 +53,10 @@ const local = normalizePartyMembersForDisplay(
 );
 check('client dedupe owner duplicate email', local.length === 1);
 check('client rejects Ampi row', !isHumanPartyMemberRow({ user_name: 'AmpliFood' }));
+check(
+    'client rejects AmpliFood Cook placeholder',
+    !isHumanPartyMemberRow({ user_name: 'AmpliFood Cook', role: 'owner' })
+);
 
 if (failures) {
     console.error(`${failures} check(s) failed`);
