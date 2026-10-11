@@ -1,27 +1,26 @@
-import { deviceSpeechEngine, toSpokenText, type SpeechEngine } from './speech';
+import { toElevenLabsText } from '../chat/messageText';
+import { deviceSpeechEngine, describeVoiceError, type SpeakOptions, type SpeechEngine } from './speech';
 import { getPlatformElevenLabsConfig } from './platformElevenLabsSettings';
-import { playElevenLabsFromResponse, stopElevenLabsPlayback } from './elevenLabsPlayback';
-import { requestPlatformElevenLabsTts } from './platformElevenLabsClient';
+import { speakInChunks, stopElevenLabsPlayback } from './elevenLabsPlayback';
+import { synthesizePlatformTts } from './platformElevenLabsClient';
 
 export function createPlatformElevenLabsEngine(): SpeechEngine {
     return {
         id: 'elevenlabs',
-        speak: async (text) => {
+        speak: async (text, options?: SpeakOptions) => {
             const { voiceId } = await getPlatformElevenLabsConfig();
             if (!voiceId) {
-                await deviceSpeechEngine.speak(text);
-                return;
-            }
-            stopElevenLabsPlayback();
-            const spoken = toSpokenText(text);
-            const res = await requestPlatformElevenLabsTts(spoken, voiceId);
-            if (!res.ok) {
+                const message = 'Pick an owner voice in Account → Ampi voice first.';
+                if (options?.strict) throw new Error(message);
+                options?.onIssue?.(message);
                 await deviceSpeechEngine.speak(text);
                 return;
             }
             try {
-                await playElevenLabsFromResponse(res, Math.min(120_000, spoken.length * 120));
-            } catch {
+                await speakInChunks(toElevenLabsText(text), (chunk) => synthesizePlatformTts(chunk, voiceId));
+            } catch (error) {
+                if (options?.strict) throw error;
+                options?.onIssue?.(`${describeVoiceError(error)} Using the built-in voice instead.`);
                 await deviceSpeechEngine.speak(text);
             }
         },

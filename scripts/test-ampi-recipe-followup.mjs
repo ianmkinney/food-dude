@@ -169,6 +169,46 @@ test('update_recipe edits ingredients in place and rejects unknown ids and no-op
     assert.equal(ampiTest.recipes.size, 1);
 });
 
+test('clearing grocery items calls update_grocery_list and shows a card', async () => {
+    ampiTest.reset();
+    const { groceryOperations } = await import('./test-support/ampi-stubs.mjs');
+    await groceryOperations.add({ name: 'tomato paste' });
+    await groceryOperations.add({ name: 'chicken broth' });
+    await groceryOperations.add({ name: 'basil' });
+
+    let seenPrompt = '';
+    ampiTest.model = (prompt) => {
+        seenPrompt = prompt;
+        return JSON.stringify({
+            reply: 'Cleared tomato paste and chicken broth from your grocery list.',
+            actions: [{ tool: 'update_grocery_list', args: { remove: ['tomato paste', 'chicken broth'] } }],
+        });
+    };
+    const result = await sendTurn('We have tomato paste and chicken broth, clear those off');
+    assert.match(seenPrompt, /Grocery list:.*tomato paste/);
+    assert.match(seenPrompt, /Never claim you added, removed/);
+    assert.deepEqual(result.cards?.[0], {
+        type: 'grocery',
+        items: ['tomato paste', 'chicken broth'],
+        action: 'removed',
+    });
+    assert.equal(groceryOperations.rows.length, 1);
+    assert.equal(groceryOperations.rows[0].name, 'basil');
+});
+
+test('update_grocery_list can move bought items into the pantry', async () => {
+    ampiTest.reset();
+    const { groceryOperations, pantryOperations } = await import('./test-support/ampi-stubs.mjs');
+    await groceryOperations.add({ name: 'eggs', quantity: '1', unit: 'dozen' });
+    const [card] = await runTools([
+        { tool: 'update_grocery_list', args: { remove: ['eggs'], add_to_pantry: true } },
+    ]);
+    assert.equal(card.action, 'removed');
+    assert.equal(groceryOperations.rows.length, 0);
+    assert.equal(pantryOperations.rows.length, 1);
+    assert.equal(pantryOperations.rows[0].name, 'eggs');
+});
+
 test('create_recipe confirm card says it is a new recipe', async () => {
     ampiTest.reset();
     ampiTest.model = reply('Here is a new one.', [

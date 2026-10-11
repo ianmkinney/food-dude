@@ -52,6 +52,7 @@ export type ToolCall =
     | { tool: 'add_to_meal_plan'; args: { recipe_id?: number; recipe_title?: string; date: string; meal_type: MealType } }
     | { tool: 'add_to_pantry'; args: { items: ItemArg[] } }
     | { tool: 'add_to_grocery'; args: { items: ItemArg[] } }
+    | { tool: 'update_grocery_list'; args: { remove: string[]; add_to_pantry?: boolean } }
     | { tool: 'estimate_cost'; args: { store?: string } }
     | { tool: 'remember_fact'; args: { fact: string; category: string } };
 
@@ -71,7 +72,8 @@ export type SousCard =
       }
     | { type: 'meal_plan'; recipeTitle: string; date: string; mealType: MealType }
     | { type: 'pantry'; items: string[] }
-    | { type: 'grocery'; items: string[] }
+    | { type: 'grocery'; items: string[]; action?: 'added' | 'removed' }
+    | { type: 'import_assist'; code: string; message: string }
     | {
           type: 'cost';
           total: number | null;
@@ -92,6 +94,7 @@ If the user attached a photo, the app uses it as the recipe image automatically;
 - add_to_meal_plan {"recipe_id"?: number, "recipe_title"?: string, "date": "YYYY-MM-DD", "meal_type": "breakfast"|"lunch"|"dinner"}: schedule a saved recipe.
 - add_to_pantry {"items": [{"name", "quantity"?, "unit"?, "category"?}]}: record items the user has at home.
 - add_to_grocery {"items": [{"name", "quantity"?, "unit"?}]}: add items to the shopping list.
+- update_grocery_list {"remove": [string], "add_to_pantry"?: boolean}: remove or check off items already on the grocery list (fuzzy name match). Set add_to_pantry true when the user bought them and wants them recorded at home.
 - estimate_cost {"store"?: string}: estimate what the current grocery list will cost (run after add_to_grocery when pricing a meal).
 - remember_fact {"fact": string, "category": "likes"|"dislikes"|"household"|"equipment"|"skill"|"goals"}: save a durable fact about the user (not allergies — those stay in Account).`.trim();
 
@@ -99,6 +102,22 @@ const MEMORY_CATEGORIES = new Set(['likes', 'dislikes', 'household', 'equipment'
 
 const asText = (value: unknown) => (value == null || value === '' ? null : String(value));
 const isUrl = (value?: string) => !!value && /^https?:\/\/\S+$/i.test(value.trim());
+
+const normalizeItemName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
+
+function matchGroceryRow<T extends { id: number; name: string }>(query: string, rows: T[]): T | null {
+    const q = normalizeItemName(query);
+    if (!q) return null;
+    const exact = rows.find((row) => normalizeItemName(row.name) === q);
+    if (exact) return exact;
+    const partial = rows.find((row) => {
+        const n = normalizeItemName(row.name);
+        return n.includes(q) || q.includes(n);
+    });
+    return partial ?? null;
+}
+
+const IMPORT_ASSIST_CODES = new Set(['instagram_login_wall', 'instagram_no_caption']);
 
 async function findRecipe(args: { recipe_id?: number; recipe_title?: string }): Promise<RecipeSummary | null> {
     if (args.recipe_id) {
@@ -160,6 +179,10 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
             const result = isUrl(source) ? await parseRecipeFromUrl(source.trim()) : await parseRecipe(source);
             if (!result?.success || !result.recipe) {
                 const err = 'error' in result ? result.error : undefined;
+                const code = 'errorCode' in result && result.errorCode ? String(result.errorCode) : '';
+                if (IMPORT_ASSIST_CODES.has(code)) {
+                    return { type: 'import_assist', code, message: err || "Couldn't read that Instagram post." };
+                }
                 throw new Error(err || "Couldn't read a recipe from that.");
             }
             const aiExtracted = Boolean(
@@ -291,7 +314,53 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
             }
             const labels = toAdd.map((item) => item.name);
             if (skipped) labels.push(`(${skipped} already in pantry)`);
-            return { type: 'grocery', items: labels };
+            return { type: 'grocery', items: labels, action: 'added' };
+        }
+        case 'update_grocery_list': {
+            const queries = (call.args.remove || []).map((name) => String(name).trim()).filter(Boolean);
+            if (!queries.length) throw new Error('Tell me which grocery items to remove or check off.');
+            const list = (await groceryOperations.getAll()) as {
+                id: number;
+                name: string;
+                quantity?: string | null;
+                unit?: string | null;
+                category?: string | null;
+            }[];
+            const removed: string[] = [];
+            const missing: string[] = [];
+            const usedIds = new Set<number>();
+            for (const query of queries) {
+                const match = matchGroceryRow(
+                    query,
+                    list.filter((row) => !usedIds.has(row.id))
+                );
+                if (!match) {
+                    missing.push(query);
+                    continue;
+                }
+                usedIds.add(match.id);
+                if (call.args.add_to_pantry) {
+                    await pantryOperations.add({
+                        name: match.name,
+                        quantity: asText(match.quantity),
+                        unit: match.unit || null,
+                        category: match.category || null,
+                    });
+                }
+                await groceryOperations.delete(match.id);
+                removed.push(match.name);
+            }
+            if (!removed.length) {
+                throw new Error(
+                    missing.length
+                        ? `I couldn't find ${missing.join(', ')} on your grocery list.`
+                        : 'Nothing matched on your grocery list.'
+                );
+            }
+            const labels = [...removed];
+            if (missing.length) labels.push(`(not on list: ${missing.join(', ')})`);
+            if (call.args.add_to_pantry && removed.length) labels.push('(also added to pantry)');
+            return { type: 'grocery', items: labels, action: 'removed' };
         }
         case 'remember_fact': {
             if (!(await isMemoryEnabled())) {

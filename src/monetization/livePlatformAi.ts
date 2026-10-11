@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from '../config/api';
 import { getOwnerSessionToken } from '../platform/ownerSession';
+import { getOwnerChatModelPreference, getOwnerImageModelPreference } from '../platform/ownerModelPreferences';
 import type {
     CreditBalance,
     PlatformAiClient,
@@ -71,8 +72,13 @@ async function postOwnerChat(body: Record<string, unknown>): Promise<ChatPayload
     return payload;
 }
 
+async function ownerChatBody(extra: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const model = await getOwnerChatModelPreference();
+    return model ? { ...extra, model } : extra;
+}
+
 async function ownerChat(body: Record<string, unknown>): Promise<string> {
-    const payload = await postOwnerChat(body);
+    const payload = await postOwnerChat(await ownerChatBody(body));
     const text = payload?.text;
     if (!text) {
         throw new Error('The model returned an empty response.');
@@ -85,7 +91,7 @@ export type OwnerAiTestResult = { model: string; latencyMs: number; fallbackFrom
 /** One tiny request through the owner proxy, for the Account status "Test" button. */
 export async function testOwnerAi(): Promise<OwnerAiTestResult> {
     const started = Date.now();
-    const payload = await postOwnerChat({ test: true, prompt: 'test' });
+    const payload = await postOwnerChat(await ownerChatBody({ test: true, prompt: 'test' }));
     return {
         model: payload.model || 'unknown',
         latencyMs: payload.latencyMs ?? Date.now() - started,
@@ -110,7 +116,12 @@ export const livePlatformAi: PlatformAiClient = {
             images: request.images?.map((img) => ({ data: img.data, mimeType: img.mimeType })),
         }),
     generateImage: async (request: PlatformImageRequest) => {
-        const payload = await postOwnerChat({ mode: 'image', prompt: request.prompt });
+        const imageModel = await getOwnerImageModelPreference();
+        const payload = await postOwnerChat({
+            mode: 'image',
+            prompt: request.prompt,
+            ...(imageModel ? { model: imageModel } : null),
+        });
         const imageUri = payload?.imageUri;
         if (!imageUri) {
             throw new Error('The image model returned no photo. Try again later.');

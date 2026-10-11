@@ -1,87 +1,52 @@
-import { Platform } from 'react-native';
-import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
-import * as FileSystem from 'expo-file-system/legacy';
+import { chunkForSpeech } from '../chat/messageText';
+import { playAudioBytes, playAudioUrl, stopAudio } from './audioOut';
 
-let player: AudioPlayer | null = null;
-let webObjectUrl: string | null = null;
+export type SynthesizedAudio = { bytes: ArrayBuffer; mime: string };
 
-function releaseWebUrl() {
-    if (webObjectUrl && typeof URL !== 'undefined') {
-        URL.revokeObjectURL(webObjectUrl);
-        webObjectUrl = null;
-    }
-}
+// Bumped by every stop or new reply, so a reply that's still fetching audio
+// doesn't start talking over the next one.
+let generation = 0;
 
 export function stopElevenLabsPlayback() {
-    player?.remove();
-    player = null;
-    releaseWebUrl();
+    generation += 1;
+    stopAudio();
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-        binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    }
-    if (typeof globalThis.btoa === 'function') {
-        return globalThis.btoa(binary);
-    }
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Buffer } = require('buffer') as { Buffer: { from: (b: string, enc: string) => { toString: (e: string) => string } } };
-    return Buffer.from(binary, 'binary').toString('base64');
-}
-
-async function uriFromFetch(res: Response, mime = 'audio/mpeg'): Promise<string> {
-    const bytes = await res.arrayBuffer();
-    if (Platform.OS === 'web') {
-        const blob = new Blob([bytes], { type: mime });
-        webObjectUrl = URL.createObjectURL(blob);
-        return webObjectUrl;
-    }
-    const base64 = arrayBufferToBase64(bytes);
-    const path = `${FileSystem.cacheDirectory ?? ''}elevenlabs-play-${Date.now()}.mp3`;
-    await FileSystem.writeAsStringAsync(path, base64, { encoding: 'base64' });
-    return path;
-}
-
-export async function playElevenLabsFromResponse(res: Response, maxMs = 30_000): Promise<void> {
-    if (!res.ok) throw new Error('Could not play audio.');
-    const playUri = await uriFromFetch(res);
-    await playElevenLabsAudio(playUri, maxMs);
-}
-
-/** Play a remote HTTPS preview or a local file URI; stops any prior clip. */
+/** Play a remote HTTPS preview clip; stops any prior clip. */
 export async function playElevenLabsAudio(uri: string, maxMs = 30_000): Promise<void> {
     stopElevenLabsPlayback();
-    let playUri = uri;
-    if (uri.startsWith('http')) {
-        const res = await fetch(uri);
-        if (!res.ok) throw new Error('Could not play voice preview.');
-        playUri = await uriFromFetch(res);
+    await playAudioUrl(uri, maxMs);
+}
+
+/** Reads a TTS response body as audio, or throws with what came back instead. */
+export async function readAudioResponse(res: Response): Promise<SynthesizedAudio> {
+    const mime = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    const bytes = await res.arrayBuffer();
+    if (!mime.startsWith('audio/')) {
+        throw new Error(`Expected audio but got ${mime || 'no content type'} (${bytes.byteLength} bytes).`);
     }
-    await new Promise<void>((resolve, reject) => {
-        try {
-            player = createAudioPlayer({ uri: playUri });
-            player.play();
-            const finish = () => {
-                stopElevenLabsPlayback();
-                resolve();
-            };
-            const sub = player.addListener('playbackStatusUpdate', (status) => {
-                if (status.didJustFinish) {
-                    sub.remove();
-                    finish();
-                }
-            });
-            setTimeout(() => {
-                sub.remove();
-                finish();
-            }, maxMs);
-        } catch (error) {
-            stopElevenLabsPlayback();
-            reject(error);
+    if (!bytes.byteLength) throw new Error('The voice service returned empty audio.');
+    return { bytes, mime };
+}
+
+/**
+ * Speaks `text` in TTS-sized chunks, fetching the next chunk while the current
+ * one plays. Resolves when done or when playback is stopped.
+ */
+export async function speakInChunks(text: string, synthesize: (chunk: string) => Promise<SynthesizedAudio>): Promise<void> {
+    stopElevenLabsPlayback();
+    const mine = generation;
+    const chunks = chunkForSpeech(text, 800);
+    if (!chunks.length) return;
+    let pending = synthesize(chunks[0]);
+    for (let i = 0; i < chunks.length; i += 1) {
+        const audio = await pending;
+        if (mine !== generation) return;
+        if (i + 1 < chunks.length) {
+            pending = synthesize(chunks[i + 1]);
+            pending.catch(() => undefined);
         }
-    });
+        await playAudioBytes(audio.bytes, audio.mime, Math.min(180_000, 20_000 + chunks[i].length * 150));
+        if (mine !== generation) return;
+    }
 }

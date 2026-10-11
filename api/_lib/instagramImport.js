@@ -7,6 +7,9 @@ const INSTAGRAM_HOSTS = new Set(['instagram.com', 'www.instagram.com', 'm.instag
 const MOBILE_UA =
     'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1';
 
+const DESKTOP_UA =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
 const GENERIC_OG_DESCRIPTIONS = [
     'view this post on instagram',
     'see instagram photos and videos',
@@ -47,6 +50,25 @@ export function canonicalInstagramPostUrl(shortcode) {
 
 export function embedCaptionedUrl(shortcode) {
     return `https://www.instagram.com/p/${shortcode}/embed/captioned/`;
+}
+
+export function embedReelCaptionedUrl(shortcode) {
+    return `https://www.instagram.com/reel/${shortcode}/embed/captioned/`;
+}
+
+/** Unique fetch URLs to try before giving up on an Instagram post. */
+export function instagramFetchCandidates(inputUrl, shortcode) {
+    const sourceUrl = canonicalInstagramPostUrl(shortcode);
+    const parsed = String(inputUrl).trim();
+    const out = [];
+    const push = (url) => {
+        if (url && !out.includes(url)) out.push(url);
+    };
+    push(parsed);
+    push(sourceUrl);
+    push(embedCaptionedUrl(shortcode));
+    push(embedReelCaptionedUrl(shortcode));
+    return out;
 }
 
 function decodeJsonString(raw) {
@@ -278,39 +300,40 @@ export async function importInstagramPost(inputUrl, options = {}) {
         throw new Error('invalid_instagram_url');
     }
     const sourceUrl = canonicalInstagramPostUrl(shortcode);
-    const candidates = [sourceUrl, embedCaptionedUrl(shortcode)];
-    if (parsed.toString() !== sourceUrl) {
-        candidates.unshift(parsed.toString());
-    }
+    const candidates = instagramFetchCandidates(parsed.toString(), shortcode);
+    const userAgents = [MOBILE_UA, DESKTOP_UA];
 
     let bestHtml = '';
     let best = { bundle: '', image: null, author: null, loginWall: false, videoUrl: null };
 
     for (const fetchUrl of candidates) {
-        try {
-            const { html } = await safeFetchHtml(fetchUrl, { userAgent: MOBILE_UA });
-            if (looksLikeLoginWall(html)) {
-                best.loginWall = true;
-                continue;
+        for (const userAgent of userAgents) {
+            try {
+                const { html } = await safeFetchHtml(fetchUrl, { userAgent });
+                if (looksLikeLoginWall(html)) {
+                    best.loginWall = true;
+                    continue;
+                }
+                const bundle = await buildInstagramTextBundle(html);
+                const author = extractAuthorFromHtml(html);
+                const image = extractOgImage(html);
+                const videoUrl = extractVideoUrlFromHtml(html);
+                if (bundle.length > best.bundle.length) {
+                    best = { bundle, image, author, loginWall: false, videoUrl };
+                    bestHtml = html;
+                } else if (!best.author && author) {
+                    best.author = author;
+                } else if (!best.image && image) {
+                    best.image = image;
+                } else if (!best.videoUrl && videoUrl) {
+                    best.videoUrl = videoUrl;
+                }
+                if (best.bundle.length > 80) break;
+            } catch {
+                // try next candidate URL / UA
             }
-            const bundle = await buildInstagramTextBundle(html);
-            const author = extractAuthorFromHtml(html);
-            const image = extractOgImage(html);
-            const videoUrl = extractVideoUrlFromHtml(html);
-            if (bundle.length > best.bundle.length) {
-                best = { bundle, image, author, loginWall: false, videoUrl };
-                bestHtml = html;
-            } else if (!best.author && author) {
-                best.author = author;
-            } else if (!best.image && image) {
-                best.image = image;
-            } else if (!best.videoUrl && videoUrl) {
-                best.videoUrl = videoUrl;
-            }
-            if (best.bundle.length > 80) break;
-        } catch {
-            // try next candidate URL
         }
+        if (best.bundle.length > 80) break;
     }
 
     if (!bestHtml && best.loginWall) {

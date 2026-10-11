@@ -19,6 +19,9 @@ export const ampiTest = {
         this.prompts = [];
         this.model = null;
         this.importResult = null;
+        pantryOperations.rows = [];
+        groceryOperations.rows = [];
+        groceryOperations.nextId = 1;
     },
 };
 
@@ -99,8 +102,43 @@ export const chatOperations = {
     async setSummary() {},
 };
 
-export const pantryOperations = { getAll: async () => [], add: async () => undefined };
-export const groceryOperations = { getAll: async () => [], add: async () => undefined };
+export const pantryOperations = {
+    rows: [],
+    async getAll() {
+        return this.rows.map((row) => ({ ...row }));
+    },
+    async add(item) {
+        this.rows.push({
+            name: item.name,
+            quantity: item.quantity ?? null,
+            unit: item.unit ?? null,
+            category: item.category ?? null,
+        });
+    },
+};
+
+export const groceryOperations = {
+    rows: [],
+    nextId: 1,
+    async getAll() {
+        return this.rows.map((row) => ({ ...row }));
+    },
+    async add(item) {
+        const id = this.nextId++;
+        this.rows.push({
+            id,
+            name: item.name,
+            quantity: item.quantity ?? null,
+            unit: item.unit ?? null,
+            category: item.category ?? null,
+            is_checked: 0,
+        });
+        return id;
+    },
+    async delete(id) {
+        this.rows = this.rows.filter((row) => row.id !== Number(id));
+    },
+};
 export const mealPlanOperations = { add: async () => undefined };
 export const userOperations = { getCurrent: async () => null };
 export const memoryOperations = { list: async () => [], upsert: async () => undefined };

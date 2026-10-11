@@ -15,7 +15,8 @@ import ThemedSwitch from './ThemedSwitch';
 import { ASSISTANT_NAME } from '../config/assistant';
 
 type Theme = ReturnType<typeof import('../theme').getTheme>;
-import { getSpeechEngine, primeSpeechOnWeb, shouldSpeak } from '../voice/speech';
+import { describeVoiceError, getSpeechEngine, primeSpeechOnWeb, shouldSpeak } from '../voice/speech';
+import { runOwnerVoiceCheck, type VoiceCheckStep } from '../voice/voiceCheck';
 import { getVoiceSettings, setAutoSpeak, setVoiceMuted } from '../voice/voiceSettings';
 import { playElevenLabsAudio, stopElevenLabsPlayback } from '../voice/elevenLabsPlayback';
 import {
@@ -30,7 +31,7 @@ import {
 } from '../voice/elevenLabsSettings';
 import { getOwnerSession } from '../platform/ownerSession';
 import {
-    fetchOwnerSessionElevenLabsAvailable,
+    fetchOwnerVoiceSession,
     listPlatformElevenLabsVoices,
     PlatformElevenLabsError,
 } from '../voice/platformElevenLabsClient';
@@ -74,6 +75,10 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
     const [loadingPlatformVoices, setLoadingPlatformVoices] = useState(false);
     const [platformPreviewingId, setPlatformPreviewingId] = useState<string | null>(null);
     const [platformStatus, setPlatformStatus] = useState('');
+    const [platformUnavailableReason, setPlatformUnavailableReason] = useState('');
+    const [checkSteps, setCheckSteps] = useState<VoiceCheckStep[]>([]);
+    const [checking, setChecking] = useState(false);
+    const [testStatus, setTestStatus] = useState('');
     const platformVoiceIdRef = useRef<string | null>(null);
 
     const load = useCallback(() => {
@@ -101,7 +106,16 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
                 setPlatformAvailable(false);
                 return;
             }
-            setPlatformAvailable(await fetchOwnerSessionElevenLabsAvailable());
+            const voiceSession = await fetchOwnerVoiceSession();
+            setPlatformAvailable(voiceSession.elevenlabsAvailable);
+            setPlatformUnavailableReason(
+                voiceSession.error ||
+                    (!voiceSession.platformAiAllowed
+                        ? "This Google account isn't allowlisted for platform voice."
+                        : !voiceSession.elevenlabsAvailable
+                          ? "The server doesn't have an ElevenLabs key for this deployment."
+                          : '')
+            );
         });
     }, []);
 
@@ -254,9 +268,39 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
 
     const testEleven = async () => {
         primeSpeechOnWeb();
-        if (!(await shouldSpeak())) return;
+        setTestStatus('');
+        if (!(await shouldSpeak())) {
+            setTestStatus(`Voice is muted. Turn off "Mute voice" to test.`);
+            return;
+        }
         const engine = await getSpeechEngine();
-        await engine.speak(`This is ${ASSISTANT_NAME} using your ElevenLabs voice.`);
+        if (engine.id !== 'elevenlabs') {
+            setTestStatus('ElevenLabs is not active, so this used the built-in voice. Save a key or switch on the owner voice and pick a voice.');
+            await engine.speak(`This is ${ASSISTANT_NAME} using the built-in voice.`);
+            return;
+        }
+        setTestStatus('Playing…');
+        try {
+            await engine.speak(`[warmly] This is ${ASSISTANT_NAME} using your ElevenLabs voice.`, { strict: true });
+            setTestStatus('ElevenLabs voice played.');
+        } catch (error) {
+            setTestStatus(describeVoiceError(error));
+        }
+    };
+
+    const runCheck = async () => {
+        // Must stay synchronous up to here so iOS counts playback as part of this tap.
+        primeSpeechOnWeb();
+        setChecking(true);
+        setCheckSteps([]);
+        try {
+            await runOwnerVoiceCheck(setCheckSteps);
+        } catch (error) {
+            setCheckSteps((prev) => [...prev, { label: 'Voice check', level: 'fail', detail: (error as Error).message }]);
+        } finally {
+            setChecking(false);
+            load();
+        }
     };
 
     const togglePlatformVoice = async (next: boolean) => {
@@ -332,6 +376,44 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
             <Pressable onPress={preview} style={[styles.button, { borderColor: c.border }]} accessibilityRole="button">
                 <Text style={{ color: c.text.primary }}>Preview voice</Text>
             </Pressable>
+
+            {ownerSignedIn ? (
+                <>
+                    <View style={[styles.divider, { borderColor: c.border }]} />
+                    <Text style={[styles.subtitle, { color: c.text.primary }]}>Voice check</Text>
+                    <Text style={[styles.body, { color: c.text.secondary }]}>
+                        Tests the owner ElevenLabs voice step by step and plays a short clip on this device.
+                    </Text>
+                    {!platformAvailable && platformUnavailableReason ? (
+                        <Text style={[styles.body, { color: c.error }]}>{platformUnavailableReason}</Text>
+                    ) : null}
+                    <Pressable
+                        onPress={runCheck}
+                        disabled={checking}
+                        style={[styles.button, { borderColor: c.border, opacity: checking ? 0.6 : 1 }]}
+                        accessibilityRole="button"
+                    >
+                        <Text style={{ color: c.text.primary }}>{checking ? 'Checking…' : 'Run voice check'}</Text>
+                    </Pressable>
+                    {checkSteps.length ? (
+                        <View style={styles.checkList} accessibilityLiveRegion="polite" aria-live="polite">
+                            {checkSteps.map((step) => (
+                                <View key={step.label} style={styles.checkRow}>
+                                    <Ionicons
+                                        name={step.level === 'ok' ? 'checkmark-circle' : step.level === 'warn' ? 'alert-circle' : 'close-circle'}
+                                        size={18}
+                                        color={step.level === 'ok' ? theme.colors.success || theme.primary[500] : step.level === 'warn' ? c.text.secondary : c.error}
+                                    />
+                                    <Text style={[styles.checkText, { color: c.text.primary }]}>
+                                        <Text style={styles.checkLabel}>{step.label}: </Text>
+                                        {step.detail}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    ) : null}
+                </>
+            ) : null}
 
             {ownerSignedIn && platformAvailable ? (
                 <>
@@ -607,6 +689,11 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
             >
                 <Text style={{ color: c.text.primary }}>Test voice</Text>
             </Pressable>
+            {testStatus ? (
+                <Text style={[styles.body, { color: c.text.secondary }]} accessibilityLiveRegion="polite">
+                    {testStatus}
+                </Text>
+            ) : null}
             {elStatus ? <Text style={[styles.body, { color: c.text.tertiary }]}>{elStatus}</Text> : null}
         </View>
     );
@@ -642,6 +729,10 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     voiceScroll: { maxHeight: 280, borderWidth: 1, borderRadius: 12 },
+    checkList: { gap: 8, marginTop: 12 },
+    checkRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+    checkText: { flex: 1, fontSize: 14, lineHeight: 20 },
+    checkLabel: { fontWeight: '700' },
     voiceRow: {
         flexDirection: 'row',
         alignItems: 'center',

@@ -1,19 +1,35 @@
 import { AccessibilityInfo, Platform } from 'react-native';
 import * as DeviceSpeech from 'expo-speech';
-import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION } from '../config/assistant';
+import { toSpokenText } from '../chat/messageText';
 import { isVoiceMuted } from './voiceSettings';
 import { getElevenLabsConfig } from './elevenLabsSettings';
 import { createElevenLabsEngine } from './elevenLabsEngine';
-import { getOwnerSessionToken } from '../platform/ownerSession';
 import { isPlatformElevenLabsActive } from './platformElevenLabsSettings';
 import { createPlatformElevenLabsEngine } from './platformElevenLabsEngine';
+import { unlockAudio } from './audioOut';
+import { VoicePlaybackError } from './voiceErrors';
+
+export { toSpokenText };
 
 // On-device text-to-speech via expo-speech, or optional ElevenLabs BYOK from the device.
 
+export type SpeakOptions = {
+    /** Called when the premium voice failed and the built-in voice was used instead. */
+    onIssue?: (message: string) => void;
+    /** Throw instead of falling back (Account voice test). */
+    strict?: boolean;
+};
+
 export interface SpeechEngine {
     readonly id: 'device' | 'elevenlabs';
-    speak(text: string): Promise<void>;
+    speak(text: string, options?: SpeakOptions): Promise<void>;
     stop(): void;
+}
+
+export function describeVoiceError(error: unknown): string {
+    if (error instanceof VoicePlaybackError) return error.message;
+    const message = (error as Error)?.message;
+    return message ? `ElevenLabs voice failed: ${message}` : 'ElevenLabs voice failed.';
 }
 
 /**
@@ -30,17 +46,6 @@ export async function shouldSpeak(): Promise<boolean> {
         // Not available everywhere; keep going.
     }
     return true;
-}
-
-/** Respell the assistant name so TTS says "AM-pee", not "ah-MEE". */
-export function toSpokenText(text: string): string {
-    const spokenName = ASSISTANT_PRONUNCIATION.replace(/-/g, ' ');
-    return text
-        .replace(new RegExp(`\\b${ASSISTANT_NAME}\\b`, 'g'), spokenName)
-        .replace(/[*_`#>]+/g, '')
-        .replace(/\[(.*?)\]\((.*?)\)/g, '$1')
-        .replace(/\s+/g, ' ')
-        .trim();
 }
 
 export const deviceSpeechEngine: SpeechEngine = {
@@ -62,12 +67,15 @@ export const deviceSpeechEngine: SpeechEngine = {
 let webSpeechPrimed = false;
 
 /**
- * iOS Safari only lets speechSynthesis talk after it has been used inside a
- * user gesture, and replies arrive after an async AI call. Call this
- * synchronously from a tap (send, mic, voice toggle) so later replies can speak.
+ * iOS Safari only lets speechSynthesis and <audio> play after they have been
+ * used inside a user gesture, and replies arrive after an async AI call. Call
+ * this synchronously from a tap (send, mic, speaker, voice toggle) so later
+ * replies can speak.
  */
 export function primeSpeechOnWeb(): void {
-    if (Platform.OS !== 'web' || webSpeechPrimed || typeof window === 'undefined') return;
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    unlockAudio();
+    if (webSpeechPrimed) return;
     const synth = window.speechSynthesis;
     if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return;
     try {

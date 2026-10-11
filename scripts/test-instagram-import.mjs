@@ -7,12 +7,22 @@ import assert from 'node:assert/strict';
 
 const {
     buildInstagramImportPayload,
+    embedCaptionedUrl,
+    embedReelCaptionedUrl,
     extractAuthorFromHtml,
     extractAllCaptionsFromHtml,
     importInstagramPost,
+    instagramFetchCandidates,
     isInstagramPostUrl,
     looksLikeFullRecipe,
 } = await import('../api/_lib/instagramImport.js');
+
+assert.equal(embedCaptionedUrl('ABC'), 'https://www.instagram.com/p/ABC/embed/captioned/');
+assert.equal(embedReelCaptionedUrl('ABC'), 'https://www.instagram.com/reel/ABC/embed/captioned/');
+const candidates = instagramFetchCandidates('https://www.instagram.com/reel/Dd2Hms2B9l8/', 'Dd2Hms2B9l8');
+assert.ok(candidates.includes('https://www.instagram.com/p/Dd2Hms2B9l8/'));
+assert.ok(candidates.includes(embedCaptionedUrl('Dd2Hms2B9l8')));
+assert.ok(candidates.includes(embedReelCaptionedUrl('Dd2Hms2B9l8')));
 
 const FIXTURE = `<!DOCTYPE html><html><head>
 <meta property="og:title" content="ChefNina on Instagram: &quot;Creamy tuscan chicken&quot;" />
