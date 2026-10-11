@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { acquireTabLock, requestPeersCloseDatabase } from './tabGuard';
+import { acquireTabLock, consumePreferMirrorAfterTakeover, requestPeersCloseDatabase } from './tabGuard';
 import { closeRegisteredDatabase } from './dbRegistry';
 import { loadDatabaseSnapshot } from './webDbMirror';
 
@@ -18,10 +18,16 @@ export const isRecoverableWebDbOpenError = (error) =>
     isOpfsBusyError(error) || isInvalidVfsStateError(error) || error?.name === 'TabLockedError';
 
 const RETRY_DELAYS_MS = [200, 400, 800, 1600, 3200, 5000];
+const OPEN_ATTEMPT_TIMEOUT_MS = 4500;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function tryOpenPersistent(fileName, { useNewConnection = false } = {}) {
-    return SQLite.openDatabaseAsync(fileName, { useNewConnection });
+function withTimeout(promise, ms, label) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            setTimeout(() => reject(new Error(`${label || 'open'} timed out after ${ms}ms`)), ms);
+        }),
+    ]);
 }
 
 async function tryOpenFromIndexedDbSnapshot() {
@@ -43,21 +49,29 @@ async function tryOpenFromIndexedDbSnapshot() {
 export async function openAppDatabase(fileName) {
     await acquireTabLock();
 
+    const fastMirror = consumePreferMirrorAfterTakeover();
+    const retryDelays = fastMirror ? [150, 300] : RETRY_DELAYS_MS;
+    const openTimeout = fastMirror ? 2000 : OPEN_ATTEMPT_TIMEOUT_MS;
+
     let lastError = null;
-    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
+    for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
         try {
             await closeRegisteredDatabase();
             if (attempt > 0) {
                 await requestPeersCloseDatabase();
             }
             const useNewConnection = attempt > 0;
-            const db = await tryOpenPersistent(fileName, { useNewConnection });
+            const db = await withTimeout(
+                SQLite.openDatabaseAsync(fileName, { useNewConnection }),
+                openTimeout,
+                'OPFS open'
+            );
             return { db, mode: 'persistent' };
         } catch (error) {
             lastError = error;
-            if (!isRecoverableWebDbOpenError(error) || attempt === RETRY_DELAYS_MS.length) break;
+            if (!isRecoverableWebDbOpenError(error) || attempt === retryDelays.length) break;
             console.warn(`[db] ${fileName} open failed (attempt ${attempt + 1}), retrying`, error?.message);
-            await sleep(RETRY_DELAYS_MS[attempt]);
+            await sleep(retryDelays[attempt]);
         }
     }
 
