@@ -264,17 +264,20 @@ export const parseRecipeFromUrl = async (url) => {
                     return parsed;
                 }
                 const sourceUrl = viaApi.sourceUrl || url;
+                const aiExtracted = Boolean(viaApi.aiExtracted);
                 return {
                     success: true,
+                    aiExtracted,
                     recipe: {
                         ...parsed.recipe,
-                        imageUri: null,
+                        imageUri: viaApi.image || null,
                         sourceUrl,
                         sourcePlatform: sourcePlatformLabel({
                             sourceUrl,
                             sourcePlatform: viaApi.sourcePlatform,
                             author: viaApi.author,
                         }),
+                        aiExtracted,
                     },
                 };
             }

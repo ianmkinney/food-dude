@@ -16,11 +16,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
-import { parseRecipe, parseRecipeFromUrl, parseRecipeFromImages } from '../services/recipeParser';
+import { parseRecipe, parseRecipeFromImages } from '../services/recipeParser';
 import { friendlyMediaErrorMessage } from '../services/mediaTypes';
 import { recipeOperations } from '../database/operations';
 import FunLoader from '../components/FunLoader';
-import { isSocialPostUrl, socialImportFallbackHint } from '../services/recipeUrlImport';
+import { importRecipeFromLink } from '../services/recipeLinkImportFlow';
+import RecipeImportReviewForm from '../components/RecipeImportReviewForm';
 
 const ImportRecipeScreen = () => {
     const navigation = useNavigation();
@@ -82,15 +83,14 @@ const ImportRecipeScreen = () => {
                 const isUrl = /^(http|https):\/\/[^ "]+$/.test(input.trim());
 
                 if (isUrl) {
-                    const trimmedUrl = input.trim();
-                    setImportStatus(
-                        trimmedUrl.includes('tiktok.com')
-                            ? 'Reading TikTok description…'
-                            : trimmedUrl.includes('instagram.com')
-                              ? 'Reading Instagram caption…'
-                              : 'Extracting recipe from URL...'
-                    );
-                    result = await parseRecipeFromUrl(input.trim());
+                    result = await importRecipeFromLink(input.trim(), {
+                        onStatus: (msg) => setImportStatus(msg),
+                    });
+                    if (result.success) {
+                        result = { success: true, recipe: result.recipe, aiExtracted: result.aiExtracted };
+                    } else {
+                        result = { success: false, error: result.error, needsSignIn: result.needsSignIn };
+                    }
                 } else {
                     setImportStatus('Parsing recipe text with AI...');
                     result = await parseRecipe(input.trim());
@@ -102,16 +102,7 @@ const ImportRecipeScreen = () => {
                 setParsedRecipe(result.recipe);
             } else {
                 console.error('[Import Recipe] Import failed:', result.error);
-                const friendly = friendlyMediaErrorMessage(result.error) || result.error || 'Failed to parse recipe';
-                const isUrlImport = !images.length && /^(http|https):\/\//i.test(input.trim());
-                const isSocial = isUrlImport && isSocialPostUrl(input.trim());
-                const hint =
-                    isUrlImport && (Platform.OS === 'web' || isSocial)
-                        ? isSocial
-                            ? socialImportFallbackHint(input.trim())
-                            : ' Try pasting the recipe text below, or use Import with a screenshot or PDF.'
-                        : '';
-                setError(`${friendly}${hint}`);
+                setError(result.error || friendlyMediaErrorMessage(result.error) || 'Failed to parse recipe');
             }
         } catch (e) {
             console.error('[Import Recipe] Import threw:', e);
@@ -122,13 +113,13 @@ const ImportRecipeScreen = () => {
         }
     };
 
-    const handleSave = async () => {
-        if (!parsedRecipe) return;
+    const handleSave = async (recipeToSave = parsedRecipe) => {
+        if (!recipeToSave) return;
 
         try {
             setIsLoading(true);
-            const recipeId = await recipeOperations.create(parsedRecipe);
-            if (parsedRecipe.aiExtracted) {
+            const recipeId = await recipeOperations.create(recipeToSave);
+            if (recipeToSave.aiExtracted) {
                 await recipeOperations.setProvenance(recipeId, { isAiGenerated: true });
             }
             // Ensure recipe is fully saved and database is ready
@@ -228,41 +219,16 @@ const ImportRecipeScreen = () => {
                 )}
 
                 {parsedRecipe && (
-                    <View style={[styles.resultContainer, { backgroundColor: theme.colors.surface }]}>
-                        <Text style={[styles.resultTitle, { color: theme.colors.text.primary }]}>
-                            {parsedRecipe.title}
-                        </Text>
-
-                        {parsedRecipe.description && (
-                            <Text style={[styles.resultDescription, { color: theme.colors.text.secondary }]}>
-                                {parsedRecipe.description}
-                            </Text>
-                        )}
-
-                        <View style={styles.statsRow}>
-                            <View style={styles.stat}>
-                                <Ionicons name="time-outline" size={16} color={theme.colors.text.tertiary} />
-                                <Text style={[styles.statText, { color: theme.colors.text.secondary }]}>
-                                    {parsedRecipe.totalTime || parsedRecipe.cookTime || '--'} min
-                                </Text>
-                            </View>
-                            <View style={styles.stat}>
-                                <Ionicons name="restaurant-outline" size={16} color={theme.colors.text.tertiary} />
-                                <Text style={[styles.statText, { color: theme.colors.text.secondary }]}>
-                                    {parsedRecipe.ingredients?.length || 0} ingredients
-                                </Text>
-                            </View>
-                        </View>
-
-                        <TouchableOpacity
-                            style={[styles.saveButton, { backgroundColor: theme.colors.success }]}
-                            onPress={handleSave}
-                            disabled={isLoading}
-                        >
-                            <Ionicons name="save-outline" size={20} color="#FFF" style={{ marginRight: 8 }} />
-                            <Text style={styles.buttonText}>Save to Cookbook</Text>
-                        </TouchableOpacity>
-                    </View>
+                    <RecipeImportReviewForm
+                        recipe={parsedRecipe}
+                        onChange={setParsedRecipe}
+                        onSave={(draft) => {
+                            setParsedRecipe(draft);
+                            handleSave(draft);
+                        }}
+                        saving={isLoading}
+                        saveLabel="Save to Cookbook"
+                    />
                 )}
             </ScrollView>
         </KeyboardAvoidingView>
