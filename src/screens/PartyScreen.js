@@ -966,7 +966,15 @@ const PartyScreen = ({ navigation }) => {
                 <PartySyncStatusChip partyId={selectedParty.id} theme={theme} />
             ) : null}
             {selectedParty.live_party_id ? (
-                <View style={styles.sectionTabs}>
+                <View
+                    style={[
+                        styles.sectionTabs,
+                        {
+                            backgroundColor: theme.colors.surfaceMuted,
+                            borderColor: theme.colors.border,
+                        },
+                    ]}
+                >
                     <TouchableOpacity
                         onPress={() => setPartySection('meals')}
                         style={[
@@ -1748,6 +1756,25 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 14,
         fontWeight: '600',
+    },
+    sectionTabs: {
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        marginHorizontal: 16,
+        marginTop: 8,
+        marginBottom: 8,
+        padding: 4,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+        gap: 4,
+    },
+    sectionTab: {
+        flex: 1,
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 10,
+        paddingHorizontal: 12,
     },
     sectionLabel: {
         fontSize: 13,

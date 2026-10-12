@@ -85,9 +85,14 @@ async function preparePartyPage(page, appUrl, themeMode) {
     await page.waitForTimeout(2000);
     await page.getByText('Weekend BBQ', { exact: true }).first().waitFor({ timeout: 20_000 });
     await page.getByText('Saturday Dinner', { exact: true }).first().waitFor({ timeout: 15_000 });
-    await page.getByRole('tab', { name: 'Chat' }).click({ timeout: 8000 }).catch(() => {});
-    await page.waitForTimeout(800);
+    await page.getByRole('tab', { name: 'Meals' }).click({ timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(600);
 };
+
+async function openPartyChatTab(page) {
+    await page.getByRole('tab', { name: 'Chat' }).click({ timeout: 8000 });
+    await page.waitForTimeout(800);
+}
 
 async function main() {
     mkdirSync(outDir, { recursive: true });
@@ -109,13 +114,18 @@ async function main() {
 
             await preparePartyPage(page, url, theme);
 
-            const collapsedPath = join(outDir, `party-screen-390-${theme}-collapsed.png`);
-            await page.screenshot({ path: collapsedPath, fullPage: true });
-            console.log('Wrote', collapsedPath);
+            const mealsPath = join(outDir, `party-meals-390-${theme}.png`);
+            await page.screenshot({ path: mealsPath, fullPage: true });
+            console.log('Wrote', mealsPath);
 
+            await openPartyChatTab(page);
             const chatPath = join(outDir, `party-chat-390-${theme}.png`);
             await page.screenshot({ path: chatPath, fullPage: true });
             console.log('Wrote', chatPath);
+
+            const collapsedPath = join(outDir, `party-screen-390-${theme}-collapsed.png`);
+            await page.screenshot({ path: collapsedPath, fullPage: true });
+            console.log('Wrote', collapsedPath);
 
             await page.getByText(/\d+ members/).first().click();
             await page.waitForTimeout(600);

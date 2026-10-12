@@ -11,6 +11,7 @@ import {
     View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { AiBadge } from '../../ai/AiLabel';
@@ -18,6 +19,7 @@ import AnimatedPressable from '../AnimatedPressable';
 import { formatChatTime, groupPosition } from '../../chat/messageGroups';
 import { useKeyboardViewport } from '../../chat/useKeyboardViewport';
 import { ASSISTANT_NAME } from '../../config/assistant';
+import { motion } from '../../theme';
 import {
     deletePartyChatMessage,
     mergePartyChatMessages,
@@ -27,8 +29,11 @@ import { messageMentionsAmpi, runPartyAmpiReply } from '../../services/partyAmpi
 import { savePartyChatAttachmentLocal, loadPartyChatAttachmentLocal } from '../../party/partyChatLocalFiles';
 
 const MENTION_RE = /@ampi\b/i;
-const INPUT_MIN = 44;
-const INPUT_MAX = 120;
+const INPUT_LINE_HEIGHT = 20;
+const INPUT_MAX_LINES = 6;
+const INPUT_MIN_HEIGHT = 40;
+const INPUT_MAX_HEIGHT = INPUT_LINE_HEIGHT * INPUT_MAX_LINES + 16;
+const INPUT_V_PAD = 8;
 
 function avatarColor(name, theme) {
     const palette = [theme.primary[500], theme.colors.error, '#4F802F', '#8B5CF6'];
@@ -39,20 +44,74 @@ function avatarColor(name, theme) {
 
 function PartyChatBubble({ message, theme, position, isOwn, onDelete, canDelete }) {
     const c = theme.colors;
-    const align = isOwn ? 'flex-end' : 'flex-start';
-    const bg = message.isAmpi ? theme.primary[100] : isOwn ? theme.primary[500] : c.surfaceElevated;
-    const textColor = isOwn && !message.isAmpi ? '#FFFFFF' : c.text.primary;
+    const isAmpi = message.isAmpi;
+    const joinedTop = !position.first;
+    const joinedBottom = !position.last;
+    const time = position.showTime ? (
+        <Text style={[styles.timestamp, { color: c.text.tertiary }]}>{formatChatTime(message.createdAt)}</Text>
+    ) : null;
+
+    if (isOwn && !isAmpi) {
+        return (
+            <View style={{ marginBottom: position.last ? 10 : 2 }}>
+                {time}
+                {!position.first ? null : (
+                    <Text style={[styles.sender, { color: c.text.secondary, alignSelf: 'flex-end' }]}>You</Text>
+                )}
+                <View
+                    style={[
+                        styles.bubble,
+                        styles.userBubble,
+                        joinedTop && styles.userJoinedTop,
+                        joinedBottom && styles.userJoinedBottom,
+                        { backgroundColor: theme.primary[500], alignSelf: 'flex-end' },
+                    ]}
+                >
+                    {message.body ? (
+                        <Text style={styles.userText} selectable>
+                            {message.body}
+                        </Text>
+                    ) : null}
+                    {message.attachment?.fileName ? (
+                        <Text style={styles.userAttach}>📎 {message.attachment.fileName}</Text>
+                    ) : null}
+                </View>
+                {canDelete ? (
+                    <Pressable onPress={onDelete} accessibilityRole="button" accessibilityLabel="Delete message">
+                        <Text style={{ color: c.error, fontSize: 12, marginTop: 2, textAlign: 'right' }}>Delete</Text>
+                    </Pressable>
+                ) : null}
+            </View>
+        );
+    }
+
     return (
-        <View style={{ alignItems: align, marginBottom: position.last ? 10 : 2, paddingHorizontal: 12 }}>
-            {position.showTime ? (
-                <Text style={[styles.time, { color: c.text.tertiary }]}>{formatChatTime(message.createdAt)}</Text>
+        <View style={{ marginBottom: position.last ? 10 : 2 }}>
+            {time}
+            {position.first ? (
+                <Text style={[styles.sender, { color: c.text.secondary }]}>
+                    {isAmpi ? ASSISTANT_NAME : message.senderDisplayName}
+                </Text>
             ) : null}
-            {!isOwn && position.first ? (
-                <Text style={[styles.sender, { color: c.text.secondary }]}>{message.senderDisplayName}</Text>
-            ) : null}
-            <View style={[styles.bubble, { backgroundColor: bg, borderColor: c.borderSoft }]}>
-                {message.isAmpi ? <AiBadge style={{ marginBottom: 4 }} /> : null}
-                {message.body ? <Text style={{ color: textColor, fontSize: 16, lineHeight: 22 }}>{message.body}</Text> : null}
+            <View
+                style={[
+                    styles.bubble,
+                    styles.sousBubble,
+                    joinedTop && styles.sousJoinedTop,
+                    joinedBottom && styles.sousJoinedBottom,
+                    {
+                        backgroundColor: isAmpi ? theme.primary[100] : c.surface,
+                        borderColor: c.border,
+                        alignSelf: 'flex-start',
+                    },
+                ]}
+            >
+                {isAmpi ? <AiBadge style={{ marginBottom: 4 }} /> : null}
+                {message.body ? (
+                    <Text style={[styles.sousText, { color: c.text.primary }]} selectable>
+                        {message.body}
+                    </Text>
+                ) : null}
                 {message.attachment?.fileName ? (
                     <View style={[styles.fileChip, { borderColor: c.border }]}>
                         <Ionicons name="document-outline" size={18} color={c.text.secondary} />
@@ -84,13 +143,16 @@ export default function PartyChatPanel({
     isDesktop,
 }) {
     const c = theme.colors;
+    const insets = useSafeAreaInsets();
     const [input, setInput] = useState('');
-    const [inputHeight, setInputHeight] = useState(INPUT_MIN);
+    const [inputHeight, setInputHeight] = useState(INPUT_MIN_HEIGHT);
     const [pendingAttachment, setPendingAttachment] = useState(null);
     const [thinking, setThinking] = useState(false);
     const [composerFocused, setComposerFocused] = useState(false);
     const listRef = useRef(null);
-    const { keyboardOpen } = useKeyboardViewport(composerFocused && Platform.OS === 'web');
+    const { keyboardOpen } = useKeyboardViewport(composerFocused, () =>
+        listRef.current?.scrollToEnd?.({ animated: true })
+    );
 
     const grouped = useMemo(
         () =>
@@ -200,7 +262,7 @@ export default function PartyChatPanel({
     const onSend = () => {
         const body = input;
         setInput('');
-        setInputHeight(INPUT_MIN);
+        setInputHeight(INPUT_MIN_HEIGHT);
         const attach = pendingAttachment;
         setPendingAttachment(null);
         void sendMessage(body, { attachment: attach, askAmpi: messageMentionsAmpi(body) });
@@ -209,12 +271,15 @@ export default function PartyChatPanel({
     const askAmpi = () => {
         const body = input.trim() || `Hey @${ASSISTANT_NAME}, what should we cook?`;
         setInput('');
+        setInputHeight(INPUT_MIN_HEIGHT);
         void sendMessage(body, { askAmpi: true });
     };
 
+    const canSend = Boolean(input.trim() || pendingAttachment) && !thinking;
+
     if (!livePartyId) {
         return (
-            <View style={styles.empty}>
+            <View style={styles.emptyWrap}>
                 <Text style={{ color: c.text.secondary, textAlign: 'center' }}>
                     Party chat needs live sync. Create or join a live party first.
                 </Text>
@@ -222,24 +287,45 @@ export default function PartyChatPanel({
         );
     }
 
+    const composerPaddingBottom =
+        Platform.OS === 'web' && composerFocused
+            ? keyboardOpen
+                ? 4
+                : Math.max(insets.bottom, 8)
+            : composerFocused && !keyboardOpen
+              ? Math.max(insets.bottom, 8)
+              : 8;
+
     return (
         <KeyboardAvoidingView
             style={[styles.root, isDesktop && styles.rootDesktop]}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={88}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
         >
             <FlatList
                 ref={listRef}
                 data={grouped}
                 keyExtractor={(item) => item.id}
                 style={styles.list}
-                contentContainerStyle={{ paddingVertical: 8, paddingBottom: 12 }}
+                contentContainerStyle={[
+                    styles.listContent,
+                    !grouped.length && styles.listEmpty,
+                ]}
                 onContentSizeChange={() => listRef.current?.scrollToEnd?.({ animated: false })}
+                ListEmptyComponent={
+                    <View style={styles.chatEmpty} accessibilityRole="text">
+                        <Ionicons name="chatbubbles-outline" size={40} color={c.text.tertiary} />
+                        <Text style={[styles.chatEmptyTitle, { color: c.text.primary }]}>Party chat</Text>
+                        <Text style={[styles.chatEmptyBody, { color: c.text.secondary }]}>
+                            Coordinate meals, share updates, or @{ASSISTANT_NAME} for menu ideas.
+                        </Text>
+                    </View>
+                }
                 renderItem={({ item }) => {
                     const isOwn = item.senderMemberId === myMemberId;
                     const canDelete = isPartyOwner || isOwn;
                     return (
-                        <View style={{ flexDirection: 'row', gap: 8, paddingRight: isOwn ? 0 : 8 }}>
+                        <View style={styles.messageRow}>
                             {!isOwn && item._position.first ? (
                                 <View
                                     style={[
@@ -252,9 +338,9 @@ export default function PartyChatPanel({
                                     </Text>
                                 </View>
                             ) : !isOwn ? (
-                                <View style={{ width: 36 }} />
+                                <View style={styles.avatarSpacer} />
                             ) : null}
-                            <View style={{ flex: 1 }}>
+                            <View style={styles.messageBody}>
                                 <PartyChatBubble
                                     message={item}
                                     theme={theme}
@@ -274,7 +360,7 @@ export default function PartyChatPanel({
                                                 window.open(local.uri, '_blank');
                                             }
                                         }}
-                                        style={{ marginTop: 2 }}
+                                        style={{ marginTop: 2, alignSelf: 'flex-end' }}
                                     >
                                         <Text style={{ color: theme.primary[600], fontSize: 12 }}>Open your file</Text>
                                     </Pressable>
@@ -285,76 +371,180 @@ export default function PartyChatPanel({
                 }}
             />
             {pendingAttachment ? (
-                <View style={[styles.pending, { borderColor: c.border }]}>
+                <View style={[styles.pending, { borderColor: c.border, backgroundColor: c.surface }]}>
                     <Text style={{ color: c.text.secondary, flex: 1 }} numberOfLines={1}>
                         {pendingAttachment.fileName}
                     </Text>
-                    <Pressable onPress={() => setPendingAttachment(null)}>
+                    <Pressable onPress={() => setPendingAttachment(null)} accessibilityLabel="Remove attachment">
                         <Ionicons name="close-circle" size={22} color={c.text.tertiary} />
                     </Pressable>
                 </View>
             ) : null}
-            <View style={[styles.composer, { borderTopColor: c.borderSoft, backgroundColor: c.background }]}>
-                <Pressable onPress={pickAttachment} style={styles.tool} accessibilityLabel="Attach file">
-                    <Ionicons name="attach" size={22} color={c.text.primary} />
-                </Pressable>
-                <TextInput
-                    value={input}
-                    onChangeText={setInput}
-                    onFocus={() => setComposerFocused(true)}
-                    onBlur={() => setComposerFocused(false)}
-                    placeholder="Message the party… (@Ampi for help)"
-                    placeholderTextColor={c.text.tertiary}
-                    multiline
-                    style={[
-                        styles.input,
-                        {
-                            color: c.text.primary,
-                            backgroundColor: c.surface,
-                            borderColor: c.border,
-                            height: Math.min(INPUT_MAX, Math.max(INPUT_MIN, inputHeight)),
-                        },
-                    ]}
-                    onContentSizeChange={(e) => {
-                        const h = e.nativeEvent.contentSize.height + 16;
-                        setInputHeight(Math.min(INPUT_MAX, Math.max(INPUT_MIN, h)));
-                    }}
-                />
-                <AnimatedPressable
-                    onPress={askAmpi}
-                    disabled={thinking}
-                    style={[styles.tool, { borderColor: c.border, borderWidth: 1 }]}
-                    accessibilityLabel={`Ask ${ASSISTANT_NAME}`}
-                >
-                    <Text style={{ color: theme.primary[600], fontWeight: '700', fontSize: 12 }}>Ask {ASSISTANT_NAME}</Text>
-                </AnimatedPressable>
-                <AnimatedPressable
-                    onPress={onSend}
-                    disabled={thinking || (!input.trim() && !pendingAttachment)}
-                    style={[styles.send, { backgroundColor: theme.primary[500], opacity: thinking ? 0.6 : 1 }]}
-                    accessibilityLabel="Send"
-                >
-                    <Ionicons name="arrow-up" size={20} color="#fff" />
-                </AnimatedPressable>
+            <View
+                style={[
+                    styles.composerWrap,
+                    {
+                        borderTopColor: c.borderSoft,
+                        backgroundColor: c.background,
+                        paddingBottom: composerPaddingBottom,
+                    },
+                ]}
+            >
+                <View style={styles.composerInputRow}>
+                    <TextInput
+                        value={input}
+                        onChangeText={(text) => {
+                            setInput(text);
+                            if (!text.trim()) setInputHeight(INPUT_MIN_HEIGHT);
+                        }}
+                        onFocus={() => setComposerFocused(true)}
+                        onBlur={() => setComposerFocused(false)}
+                        placeholder={`Message the party… (@${ASSISTANT_NAME} for help)`}
+                        placeholderTextColor={c.text.tertiary}
+                        accessibilityLabel="Party chat message"
+                        multiline
+                        scrollEnabled={inputHeight >= INPUT_MAX_HEIGHT}
+                        style={[
+                            styles.input,
+                            {
+                                color: c.text.primary,
+                                backgroundColor: c.surface,
+                                borderColor: c.border,
+                                ...(Platform.OS === 'web' && !input.trim()
+                                    ? { minHeight: INPUT_MIN_HEIGHT, maxHeight: INPUT_MAX_HEIGHT }
+                                    : { height: Math.max(INPUT_MIN_HEIGHT, inputHeight) }),
+                            },
+                        ]}
+                        onContentSizeChange={(e) => {
+                            if (Platform.OS === 'web' && !input.trim()) {
+                                setInputHeight(INPUT_MIN_HEIGHT);
+                                return;
+                            }
+                            const measured = e.nativeEvent.contentSize.height + INPUT_V_PAD * 2;
+                            const next = Math.min(INPUT_MAX_HEIGHT, Math.max(INPUT_MIN_HEIGHT, measured));
+                            setInputHeight(next);
+                        }}
+                        blurOnSubmit={Platform.OS !== 'web'}
+                        onKeyPress={
+                            Platform.OS === 'web'
+                                ? (e) => {
+                                      const key = e.nativeEvent;
+                                      if (key.key === 'Enter' && !key.shiftKey && !key.isComposing) {
+                                          e.preventDefault();
+                                          if (canSend) onSend();
+                                      }
+                                  }
+                                : undefined
+                        }
+                    />
+                    <AnimatedPressable
+                        onPress={onSend}
+                        disabled={!canSend}
+                        scaleTo={motion.scale.press}
+                        style={[
+                            styles.roundButton,
+                            styles.sendButton,
+                            {
+                                backgroundColor: theme.primary[500],
+                                opacity: canSend ? 1 : 0.5,
+                            },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Send"
+                    >
+                        <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+                    </AnimatedPressable>
+                </View>
+                <View style={styles.composerToolsRow}>
+                    <Pressable
+                        onPress={pickAttachment}
+                        style={[styles.toolButton, { backgroundColor: c.surface, borderColor: c.border }]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Attach file"
+                    >
+                        <Ionicons name="attach" size={20} color={c.text.primary} />
+                    </Pressable>
+                    <Pressable
+                        onPress={askAmpi}
+                        disabled={thinking}
+                        style={[
+                            styles.askAmpiPill,
+                            { borderColor: c.border, backgroundColor: c.surfaceMuted, opacity: thinking ? 0.6 : 1 },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Ask ${ASSISTANT_NAME}`}
+                    >
+                        <Text style={[styles.askAmpiText, { color: theme.primary[600] }]}>Ask {ASSISTANT_NAME}</Text>
+                    </Pressable>
+                </View>
             </View>
         </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
-    root: { flex: 1, minHeight: 280 },
+    root: { flex: 1, minHeight: 0 },
     rootDesktop: { minHeight: 0, borderLeftWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(128,128,128,0.25)' },
     list: { flex: 1 },
-    empty: { flex: 1, justifyContent: 'center', padding: 24 },
-    time: { textAlign: 'center', fontSize: 12, marginBottom: 8 },
+    listContent: { paddingHorizontal: 12, paddingVertical: 8, paddingBottom: 12 },
+    listEmpty: { flexGrow: 1, justifyContent: 'center' },
+    emptyWrap: { flex: 1, justifyContent: 'center', padding: 24 },
+    chatEmpty: { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 32, gap: 8 },
+    chatEmptyTitle: { fontSize: 18, fontWeight: '700', marginTop: 4 },
+    chatEmptyBody: { fontSize: 15, lineHeight: 22, textAlign: 'center', maxWidth: 300 },
+    messageRow: { flexDirection: 'row', gap: 8, marginBottom: 2 },
+    messageBody: { flex: 1, minWidth: 0 },
+    timestamp: { alignSelf: 'center', fontSize: 11, fontWeight: '600', marginTop: 6, marginBottom: 8, letterSpacing: 0.2 },
     sender: { fontSize: 12, fontWeight: '600', marginBottom: 2, marginLeft: 4 },
-    bubble: { borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10, maxWidth: '100%', borderWidth: StyleSheet.hairlineWidth },
+    bubble: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 9, maxWidth: '84%' },
+    userBubble: { borderBottomRightRadius: 6 },
+    userJoinedTop: { borderTopRightRadius: 6 },
+    userJoinedBottom: { borderBottomRightRadius: 6 },
+    userText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22 },
+    userAttach: { color: '#FFFFFF', fontSize: 13, marginTop: 6, opacity: 0.92 },
+    sousBubble: { borderWidth: 1, borderBottomLeftRadius: 6 },
+    sousJoinedTop: { borderTopLeftRadius: 6 },
+    sousJoinedBottom: { borderBottomLeftRadius: 6 },
+    sousText: { fontSize: 16, lineHeight: 22 },
     fileChip: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, padding: 8, borderRadius: 10, borderWidth: 1 },
     avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+    avatarSpacer: { width: 36 },
     avatarText: { color: '#fff', fontWeight: '700' },
-    composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 10, borderTopWidth: StyleSheet.hairlineWidth },
-    input: { flex: 1, borderRadius: 20, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8, fontSize: 16 },
-    tool: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12, paddingHorizontal: 6 },
-    send: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-    pending: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 12, marginBottom: 4, padding: 8, borderRadius: 10, borderWidth: 1 },
+    composerWrap: { paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
+    composerInputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, width: '100%' },
+    composerToolsRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, paddingLeft: 2 },
+    input: {
+        flex: 1,
+        minHeight: INPUT_MIN_HEIGHT,
+        maxHeight: INPUT_MAX_HEIGHT,
+        borderWidth: 1,
+        borderRadius: 20,
+        paddingHorizontal: 14,
+        paddingTop: INPUT_V_PAD,
+        paddingBottom: INPUT_V_PAD,
+        fontSize: 16,
+        lineHeight: INPUT_LINE_HEIGHT,
+    },
+    toolButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+    roundButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+    sendButton: { borderWidth: 0 },
+    askAmpiPill: {
+        minHeight: 40,
+        paddingHorizontal: 12,
+        borderRadius: 18,
+        borderWidth: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    askAmpiText: { fontSize: 13, fontWeight: '700' },
+    pending: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginHorizontal: 12,
+        marginBottom: 4,
+        padding: 8,
+        borderRadius: 10,
+        borderWidth: 1,
+    },
 });
