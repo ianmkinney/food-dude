@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
     AccessibilityInfo,
+    Animated,
     FlatList,
     KeyboardAvoidingView,
     Platform,
@@ -497,6 +498,21 @@ export default function SousScreen() {
     const micTarget = useTourTarget('sous-composer');
     const listening = mic.state === 'listening';
     const draft = listening ? mic.transcript : input;
+    const micPulse = useRef(new Animated.Value(1)).current;
+    useEffect(() => {
+        if (!listening) {
+            micPulse.setValue(1);
+            return undefined;
+        }
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(micPulse, { toValue: 1.14, duration: 550, useNativeDriver: true }),
+                Animated.timing(micPulse, { toValue: 1, duration: 550, useNativeDriver: true }),
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, [listening, micPulse]);
 
     const [micTip, setMicTip] = useState(false);
     const micTipSeen = useRef(true);
@@ -977,11 +993,13 @@ export default function SousScreen() {
                 <Text style={[styles.micStatus, { color: c.text.secondary }]}>{voiceNote}</Text>
             )}
             {(mic.error || listening) && (
-                <Text style={[styles.micStatus, { color: mic.error ? c.error : theme.primary[600] }]}>
+                <Text style={[styles.micStatus, { color: mic.error ? c.error : theme.colors.error }]}>
                     {mic.error ||
-                        (mic.isWeb
-                            ? `Listening… tap the mic again when you're done. ${WEB_SPEECH_NOTICE}`
-                            : 'Listening while you hold the mic. Speech is turned into text on this device.')}
+                        (listening
+                            ? `Recording ${mic.recordingElapsedLabel} — tap the red stop button when you're done.${
+                                  mic.isWeb ? ` ${WEB_SPEECH_NOTICE}` : ' Speech is turned into text on this device.'
+                              }`
+                            : '')}
                 </Text>
             )}
             {!started && chips}
@@ -1040,7 +1058,7 @@ export default function SousScreen() {
                         }}
                         onFocus={onComposerFocus}
                         onBlur={onComposerBlur}
-                        placeholder={`Message ${ASSISTANT_NAME}…`}
+                        placeholder={listening ? 'Listening…' : `Message ${ASSISTANT_NAME}…`}
                         accessibilityLabel={`Message to ${ASSISTANT_NAME}`}
                         placeholderTextColor={c.text.tertiary}
                         style={[
@@ -1084,14 +1102,25 @@ export default function SousScreen() {
                     <View {...keepComposerFocus}>
                         <AnimatedPressable
                             onPress={() => send(listening ? mic.transcript : input)}
-                            disabled={(!input.trim() && !pendingAttachments.length && !attachedVideo) || thinking}
+                            disabled={
+                                thinking ||
+                                (((!listening && !input.trim()) || (listening && !draft.trim())) &&
+                                    !pendingAttachments.length &&
+                                    !attachedVideo)
+                            }
                             scaleTo={motion.scale.press}
                             style={[
                                 styles.roundButton,
                                 styles.sendButton,
                                 {
                                     backgroundColor: theme.primary[500],
-                                    opacity: (!input.trim() && !pendingAttachments.length && !attachedVideo) || thinking ? 0.5 : 1,
+                                    opacity:
+                                        thinking ||
+                                        (((!listening && !input.trim()) || (listening && !draft.trim())) &&
+                                            !pendingAttachments.length &&
+                                            !attachedVideo)
+                                            ? 0.5
+                                            : 1,
                                 },
                             ]}
                             accessibilityRole="button"
@@ -1118,33 +1147,44 @@ export default function SousScreen() {
                         <Ionicons name="film-outline" size={20} color={c.text.primary} />
                     </Pressable>
                     {mic.isSupported ? (
-                        <Pressable
-                            ref={micTarget}
-                            {...mic.pressProps}
-                            onPress={
-                                mic.pressProps.onPress
-                                    ? () => {
-                                          if (autoSpeak) primeSpeechOnWeb();
-                                          if (!listening) showMicTipOnce();
-                                          else setMicTip(false);
-                                          mic.pressProps.onPress?.();
-                                      }
-                                    : undefined
-                            }
-                            style={[
-                                styles.toolButton,
-                                { backgroundColor: listening ? theme.colors.error : c.surface, borderColor: c.border },
-                            ]}
-                            accessibilityRole="button"
-                            accessibilityLabel={mic.isWeb ? `Tap to talk to ${ASSISTANT_NAME}` : `Hold to talk to ${ASSISTANT_NAME}`}
-                            accessibilityHint={
-                                mic.isWeb
-                                    ? 'Tap again to stop. Your browser turns speech into text and may send the audio to Apple or Google'
-                                    : 'Listens only while held. Asks for microphone access the first time'
-                            }
-                        >
-                            <Ionicons name={listening ? 'stop' : 'mic'} size={20} color={listening ? '#FFFFFF' : c.text.primary} />
-                        </Pressable>
+                        <Animated.View style={{ transform: [{ scale: listening ? micPulse : 1 }] }}>
+                            <Pressable
+                                ref={micTarget}
+                                {...mic.pressProps}
+                                onPress={() => {
+                                    if (autoSpeak) primeSpeechOnWeb();
+                                    if (!listening) showMicTipOnce();
+                                    else setMicTip(false);
+                                    mic.pressProps.onPress?.();
+                                }}
+                                style={[
+                                    styles.toolButton,
+                                    listening ? styles.micRecordingButton : null,
+                                    {
+                                        backgroundColor: listening ? theme.colors.error : c.surface,
+                                        borderColor: listening ? theme.colors.error : c.border,
+                                    },
+                                ]}
+                                accessibilityRole="button"
+                                accessibilityLabel={
+                                    listening ? `Stop recording and send to ${ASSISTANT_NAME}` : `Record a message to ${ASSISTANT_NAME}`
+                                }
+                                accessibilityHint={
+                                    mic.isWeb
+                                        ? 'Tap stop when finished. Your browser turns speech into text and may send the audio to Apple or Google'
+                                        : 'Tap stop when finished. Speech is turned into text on this device'
+                                }
+                            >
+                                <Ionicons
+                                    name={listening ? 'stop' : 'mic'}
+                                    size={20}
+                                    color={listening ? '#FFFFFF' : c.text.primary}
+                                />
+                                {listening ? (
+                                    <Text style={styles.micElapsedBadge}>{mic.recordingElapsedLabel}</Text>
+                                ) : null}
+                            </Pressable>
+                        </Animated.View>
                     ) : null}
                 </View>
             </View>
@@ -1346,6 +1386,13 @@ const styles = StyleSheet.create({
     micTipText: { fontSize: 13, lineHeight: 19 },
     micTipArrow: { position: 'absolute', left: 16, bottom: -6, width: 12, height: 12, borderRightWidth: 1, borderBottomWidth: 1, transform: [{ rotate: '45deg' }] },
     micStatus: { textAlign: 'center', fontSize: 13, paddingHorizontal: 16, paddingBottom: 8 },
+    micRecordingButton: {
+        minWidth: 72,
+        flexDirection: 'row',
+        gap: 6,
+        paddingHorizontal: 12,
+    },
+    micElapsedBadge: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
     videoAttachBar: {
         flexDirection: 'row',
         alignItems: 'center',

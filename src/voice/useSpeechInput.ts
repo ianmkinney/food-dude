@@ -3,13 +3,21 @@ import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ASSISTANT_NAME } from '../config/assistant';
 import { SPEECH_ON_DEVICE_ONLY } from '../config/voice';
-import { getWebRecognitionCtor, readTranscript, type WebRecognition } from './webSpeechRecognition';
+import {
+    buildDisplayTranscript,
+    commitSessionToAccumulated,
+    finalizeTranscript,
+    formatRecordingElapsed,
+    MAX_SPEECH_INPUT_MS,
+    shouldRestartRecognitionAfterEnd,
+} from './speechInputSession';
+import { getWebRecognitionCtor, readTranscriptParts, type WebRecognition } from './webSpeechRecognition';
 
-// Push-to-talk for Ampi: listens while the mic button is held. Native uses
-// on-device recognition only when SPEECH_ON_DEVICE_ONLY is true. The web uses
-// the browser's Web Speech API, which may be cloud-backed (see WEB_SPEECH_NOTICE).
+// Tap-to-talk for Ampi: listens until the user taps stop (or the safety cap).
+// Web uses the browser Web Speech API (see WEB_SPEECH_NOTICE). iOS Safari may
+// end recognition after a pause; we restart and append until the user stops.
 
-export const ANDROID_MIC_RATIONALE = `Talk instead of type? ${ASSISTANT_NAME} listens only while you hold the mic button. You can always type instead.`;
+export const ANDROID_MIC_RATIONALE = `Talk instead of type? ${ASSISTANT_NAME} listens until you tap stop. You can always type instead.`;
 const RATIONALE_SEEN_KEY = 'amplifood.mic.rationaleSeen';
 
 type Recognizer = typeof import('expo-speech-recognition').ExpoSpeechRecognitionModule;
@@ -33,15 +41,19 @@ export type SpeechInputState = 'idle' | 'listening' | 'unavailable';
 
 export type SpeechInput = {
     state: SpeechInputState;
+    /** Full display text (committed + interim) while recording. */
     transcript: string;
+    /** Interim tail within the current recognition session (web / native). */
+    interimTranscript: string;
+    recordingElapsedSec: number;
+    recordingElapsedLabel: string;
     error: string | null;
     isSupported: boolean;
     /** True when recognition runs in the browser and may leave the device. */
     isWeb: boolean;
     start: () => Promise<void>;
     stop: () => void;
-    /** Hold-to-talk on native; tap to start/stop on web, where Safari needs a click to start recognition. */
-    pressProps: { onPress?: () => void; onPressIn?: () => void; onPressOut?: () => void };
+    pressProps: { onPress?: () => void };
 };
 
 function supportsOnDevice(mod: Recognizer | null): boolean {
@@ -77,83 +89,195 @@ const errorText = (code: string, message?: string) =>
     code === 'not-allowed' || code === 'service-not-allowed'
         ? `Microphone or speech access is off. Allow it in your settings to talk to ${ASSISTANT_NAME}, or type instead.`
         : code === 'no-speech'
-          ? "Didn't catch that. Try the mic again."
+          ? null
           : code === 'aborted'
             ? null
             : message || `Speech recognition stopped (${code}).`;
+
+function useRecordingElapsed(active: boolean): number {
+    const [elapsedSec, setElapsedSec] = useState(0);
+    useEffect(() => {
+        if (!active) {
+            setElapsedSec(0);
+            return undefined;
+        }
+        const started = Date.now();
+        setElapsedSec(0);
+        const tick = () => setElapsedSec(Math.floor((Date.now() - started) / 1000));
+        const id = setInterval(tick, 500);
+        return () => clearInterval(id);
+    }, [active]);
+    return elapsedSec;
+}
 
 function useWebSpeechInput(onFinal: (text: string) => void): SpeechInput {
     const Ctor = getWebRecognitionCtor();
     const supported = !!Ctor;
     const [state, setState] = useState<SpeechInputState>(supported ? 'idle' : 'unavailable');
     const [transcript, setTranscript] = useState('');
+    const [interimTranscript, setInterimTranscript] = useState('');
     const [error, setError] = useState<string | null>(null);
     const onFinalRef = useRef(onFinal);
     onFinalRef.current = onFinal;
     const recRef = useRef<WebRecognition | null>(null);
-    const latestRef = useRef('');
-    const sentRef = useRef(false);
+    const accumulatedRef = useRef('');
+    const sessionTextRef = useRef('');
+    const userStoppedRef = useRef(false);
+    const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const recordingElapsedSec = useRecordingElapsed(state === 'listening');
 
-    useEffect(() => () => recRef.current?.abort(), []);
-
-    const deliver = () => {
-        const text = latestRef.current.trim();
-        if (!sentRef.current && text) {
-            sentRef.current = true;
-            onFinalRef.current(text);
+    const clearSafetyTimer = () => {
+        if (safetyTimerRef.current) {
+            clearTimeout(safetyTimerRef.current);
+            safetyTimerRef.current = null;
         }
     };
 
-    // Must run synchronously inside the tap handler: Safari only starts
-    // recognition (and shows the mic prompt) from a user gesture.
+    const resetSessionRefs = () => {
+        accumulatedRef.current = '';
+        sessionTextRef.current = '';
+        userStoppedRef.current = false;
+    };
+
+    const updateDisplay = useCallback(() => {
+        const display = buildDisplayTranscript(accumulatedRef.current, sessionTextRef.current);
+        setTranscript(display);
+        setInterimTranscript(sessionTextRef.current.trim());
+    }, []);
+
+    const deliverIfNeeded = useCallback(() => {
+        const text = finalizeTranscript(accumulatedRef.current, sessionTextRef.current).trim();
+        resetSessionRefs();
+        setTranscript('');
+        setInterimTranscript('');
+        setState('idle');
+        if (text) onFinalRef.current(text);
+    }, []);
+
+    useEffect(
+        () => () => {
+            clearSafetyTimer();
+            userStoppedRef.current = true;
+            recRef.current?.abort();
+        },
+        []
+    );
+
+    const attachRecognition = useCallback(
+        (rec: WebRecognition) => {
+            rec.lang = 'en-US';
+            rec.interimResults = true;
+            rec.continuous = true;
+            rec.onresult = (event) => {
+                const parts = readTranscriptParts(event);
+                sessionTextRef.current = parts.display;
+                updateDisplay();
+            };
+            rec.onerror = (event) => {
+                if (event.error === 'aborted' && userStoppedRef.current) return;
+                const msg = errorText(event.error, event.message);
+                if (msg) setError(msg);
+                userStoppedRef.current = true;
+                clearSafetyTimer();
+                setState('idle');
+            };
+            rec.onend = () => {
+                if (userStoppedRef.current) {
+                    setState('idle');
+                    return;
+                }
+                if (!shouldRestartRecognitionAfterEnd(userStoppedRef.current)) return;
+                accumulatedRef.current = commitSessionToAccumulated(
+                    accumulatedRef.current,
+                    sessionTextRef.current
+                );
+                sessionTextRef.current = '';
+                updateDisplay();
+                if (!Ctor) return;
+                try {
+                    const next = new Ctor();
+                    attachRecognition(next);
+                    recRef.current = next;
+                    next.start();
+                } catch (e) {
+                    setError((e as Error)?.message || 'Could not restart the microphone.');
+                    setState('idle');
+                }
+            };
+        },
+        [Ctor, updateDisplay]
+    );
+
+    const startRecognition = useCallback(() => {
+        if (!Ctor) return;
+        const rec = new Ctor();
+        attachRecognition(rec);
+        recRef.current = rec;
+        rec.start();
+        setState('listening');
+    }, [Ctor, attachRecognition]);
+
     const start = useCallback(async () => {
         if (!Ctor) {
             setError("This browser doesn't offer speech recognition. Type your message instead.");
             return;
         }
         recRef.current?.abort();
+        clearSafetyTimer();
         setError(null);
+        resetSessionRefs();
         setTranscript('');
-        latestRef.current = '';
-        sentRef.current = false;
-        const rec = new Ctor();
-        rec.lang = 'en-US';
-        rec.interimResults = true;
-        rec.continuous = false;
-        rec.onresult = (event) => {
-            const { text, isFinal } = readTranscript(event);
-            latestRef.current = text;
-            setTranscript(text);
-            if (isFinal) deliver();
-        };
-        rec.onerror = (event) => {
-            setError(errorText(event.error, event.message));
-            setState('idle');
-        };
-        rec.onend = () => {
-            deliver();
-            setState('idle');
-        };
-        recRef.current = rec;
+        setInterimTranscript('');
         try {
-            rec.start();
-            setState('listening');
+            startRecognition();
+            safetyTimerRef.current = setTimeout(() => {
+                userStoppedRef.current = true;
+                recRef.current?.stop();
+                deliverIfNeeded();
+            }, MAX_SPEECH_INPUT_MS);
         } catch (e) {
             setError((e as Error)?.message || 'Could not start the microphone.');
             setState('idle');
         }
-    }, [Ctor]);
+    }, [Ctor, deliverIfNeeded, startRecognition]);
 
     const stop = useCallback(() => {
+        if (state !== 'listening') return;
+        userStoppedRef.current = true;
+        clearSafetyTimer();
+        const text = finalizeTranscript(accumulatedRef.current, sessionTextRef.current).trim();
+        accumulatedRef.current = '';
+        sessionTextRef.current = '';
+        setTranscript('');
+        setInterimTranscript('');
         recRef.current?.stop();
-    }, []);
+        setState('idle');
+        if (text) onFinalRef.current(text);
+    }, [state]);
 
     const toggle = useCallback(() => {
         if (state === 'listening') stop();
-        else start();
+        else void start();
     }, [state, start, stop]);
 
-    return { state, transcript, error, isSupported: supported, isWeb: true, start, stop, pressProps: { onPress: toggle } };
+    return {
+        state,
+        transcript,
+        interimTranscript,
+        recordingElapsedSec,
+        recordingElapsedLabel: formatRecordingElapsed(recordingElapsedSec),
+        error,
+        isSupported: supported,
+        isWeb: true,
+        start,
+        stop,
+        pressProps: { onPress: toggle },
+    };
+}
+
+function joinNativeResults(event: { results?: Array<{ transcript?: string }> }): string {
+    const list = event.results ?? [];
+    return list.map((r) => r.transcript ?? '').join(' ').trim();
 }
 
 function useNativeSpeechInput(onFinal: (text: string) => void): SpeechInput {
@@ -161,34 +285,87 @@ function useNativeSpeechInput(onFinal: (text: string) => void): SpeechInput {
     const supported = supportsOnDevice(mod);
     const [state, setState] = useState<SpeechInputState>(supported ? 'idle' : 'unavailable');
     const [transcript, setTranscript] = useState('');
+    const [interimTranscript, setInterimTranscript] = useState('');
     const [error, setError] = useState<string | null>(null);
     const onFinalRef = useRef(onFinal);
     onFinalRef.current = onFinal;
+    const accumulatedRef = useRef('');
+    const sessionTextRef = useRef('');
+    const userStoppedRef = useRef(false);
+    const listeningRef = useRef(false);
+    const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const recordingElapsedSec = useRecordingElapsed(state === 'listening');
+
+    const clearSafetyTimer = () => {
+        if (safetyTimerRef.current) {
+            clearTimeout(safetyTimerRef.current);
+            safetyTimerRef.current = null;
+        }
+    };
+
+    const stopRef = useRef<() => void>(() => {});
+
+    const startRecognition = useCallback(async () => {
+        if (!mod || !supported) return;
+        mod.start({
+            lang: 'en-US',
+            interimResults: true,
+            continuous: true,
+            requiresOnDeviceRecognition: true,
+            addsPunctuation: true,
+        });
+        listeningRef.current = true;
+        setState('listening');
+    }, [mod, supported]);
 
     useEffect(() => {
         if (!mod || !supported) return undefined;
         const subs = [
             mod.addListener('result', (event) => {
-                const text = event.results?.[0]?.transcript ?? '';
-                setTranscript(text);
-                if (event.isFinal && text.trim()) {
-                    onFinalRef.current(text.trim());
-                }
+                const text = joinNativeResults(event);
+                sessionTextRef.current = text;
+                const display = buildDisplayTranscript(accumulatedRef.current, text);
+                setTranscript(display);
+                setInterimTranscript(event.isFinal ? '' : text);
             }),
             mod.addListener('error', (event) => {
+                if (event.error === 'aborted' && userStoppedRef.current) return;
                 setError(
                     event.error === 'not-allowed'
                         ? `Microphone or speech access is off. Turn it on in Settings to talk to ${ASSISTANT_NAME}, or type instead.`
                         : event.error === 'no-speech'
-                          ? "Didn't catch that. Hold the mic and try again."
+                          ? null
                           : event.message || 'Speech recognition stopped.'
                 );
+                userStoppedRef.current = true;
+                listeningRef.current = false;
+                clearSafetyTimer();
                 setState('idle');
             }),
-            mod.addListener('end', () => setState('idle')),
+            mod.addListener('end', async () => {
+                if (userStoppedRef.current || !listeningRef.current) {
+                    listeningRef.current = false;
+                    setState('idle');
+                    return;
+                }
+                if (!shouldRestartRecognitionAfterEnd(userStoppedRef.current)) return;
+                accumulatedRef.current = commitSessionToAccumulated(
+                    accumulatedRef.current,
+                    sessionTextRef.current
+                );
+                sessionTextRef.current = '';
+                setTranscript(accumulatedRef.current);
+                setInterimTranscript('');
+                try {
+                    await startRecognition();
+                } catch {
+                    setState('idle');
+                    listeningRef.current = false;
+                }
+            }),
         ];
         return () => subs.forEach((sub) => sub.remove());
-    }, [mod, supported]);
+    }, [mod, supported, startRecognition]);
 
     const start = useCallback(async () => {
         if (!mod || !supported) {
@@ -196,7 +373,12 @@ function useNativeSpeechInput(onFinal: (text: string) => void): SpeechInput {
             return;
         }
         setError(null);
+        accumulatedRef.current = '';
+        sessionTextRef.current = '';
+        userStoppedRef.current = false;
+        listeningRef.current = false;
         setTranscript('');
+        setInterimTranscript('');
         if (!(await confirmAndroidRationale())) return;
         const permission = await mod.requestPermissionsAsync();
         if (!permission.granted) {
@@ -205,30 +387,57 @@ function useNativeSpeechInput(onFinal: (text: string) => void): SpeechInput {
             );
             return;
         }
-        mod.start({
-            lang: 'en-US',
-            interimResults: true,
-            continuous: false,
-            requiresOnDeviceRecognition: true,
-            addsPunctuation: true,
-        });
-        setState('listening');
-    }, [mod, supported]);
+        clearSafetyTimer();
+        await startRecognition();
+        safetyTimerRef.current = setTimeout(() => {
+            stopRef.current();
+        }, MAX_SPEECH_INPUT_MS);
+    }, [mod, supported, startRecognition]);
 
     const stop = useCallback(() => {
-        mod?.stop();
-        setState(supported ? 'idle' : 'unavailable');
-    }, [mod, supported]);
+        if (!mod || state !== 'listening') return;
+        userStoppedRef.current = true;
+        listeningRef.current = false;
+        clearSafetyTimer();
+        const text = finalizeTranscript(accumulatedRef.current, sessionTextRef.current).trim();
+        accumulatedRef.current = '';
+        sessionTextRef.current = '';
+        setTranscript('');
+        setInterimTranscript('');
+        mod.stop();
+        setState('idle');
+        if (text) onFinalRef.current(text);
+    }, [mod, state]);
+
+    stopRef.current = stop;
+
+    const toggle = useCallback(() => {
+        if (state === 'listening') stop();
+        else void start();
+    }, [state, start, stop]);
+
+    useEffect(
+        () => () => {
+            clearSafetyTimer();
+            userStoppedRef.current = true;
+            listeningRef.current = false;
+            mod?.stop();
+        },
+        [mod]
+    );
 
     return {
         state,
         transcript,
+        interimTranscript,
+        recordingElapsedSec,
+        recordingElapsedLabel: formatRecordingElapsed(recordingElapsedSec),
         error,
         isSupported: supported,
         isWeb: false,
         start,
         stop,
-        pressProps: { onPressIn: () => void start(), onPressOut: stop },
+        pressProps: { onPress: toggle },
     };
 }
 
