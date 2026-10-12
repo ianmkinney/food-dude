@@ -68,6 +68,7 @@ import { useLayoutMode } from '../layout/useLayoutMode';
 import DesktopChatSidePanel from '../components/layout/DesktopChatSidePanel';
 import { desktopAmpiStyles } from '../components/layout/desktopTheme';
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
+import ClearChatPill from './ClearChatPill';
 
 type Message = {
     id: string;
@@ -255,21 +256,9 @@ export default function SousScreen() {
         if (isDesktop) return;
         const parent = navigation as Nav & { setOptions?: (o: object) => void };
         parent.setOptions?.({
-            headerRight: () => (
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Pressable
-                        onPress={() => setShowClearConfirm(true)}
-                        style={styles.iconButton}
-                        accessibilityRole="button"
-                        accessibilityLabel="Clear chat"
-                    >
-                        <Ionicons name="ellipsis-vertical" size={22} color={c.text.secondary} />
-                    </Pressable>
-                    <HeaderAccountActions tintColor={c.text.primary} />
-                </View>
-            ),
+            headerRight: () => <HeaderAccountActions tintColor={c.text.primary} />,
         });
-    }, [isDesktop, navigation, c.text.primary, c.text.secondary]);
+    }, [isDesktop, navigation, c.text.primary]);
 
     useEffect(() => {
         getVoiceSettings().then((s) => setAutoSpeakState(s.autoSpeak));
@@ -892,6 +881,11 @@ export default function SousScreen() {
             keyboardVerticalOffset={90}
         >
             {!isDesktop ? (
+                <View style={styles.clearChatRow}>
+                    <ClearChatPill onPress={() => setShowClearConfirm(true)} />
+                </View>
+            ) : null}
+            {!isDesktop ? (
                 <View style={styles.iconRow}>
                     {started ? (
                         <View style={styles.identity}>
@@ -1259,15 +1253,11 @@ export default function SousScreen() {
                     <Text style={{ color: c.text.primary, fontSize: 15, flex: 1 }}>Also clear {ASSISTANT_NAME}&apos;s memory</Text>
                 </Pressable>
             </AccessibleConfirmModal>
-            <DesktopPageHeader title={ASSISTANT_NAME} subtitle={ASSISTANT_TAGLINE}>
-                <Pressable
-                    onPress={() => setShowClearConfirm(true)}
-                    style={styles.iconButton}
-                    accessibilityRole="button"
-                    accessibilityLabel="Clear chat"
-                >
-                    <Ionicons name="ellipsis-vertical" size={22} color={c.text.secondary} />
-                </Pressable>
+            <DesktopPageHeader
+                title={ASSISTANT_NAME}
+                subtitle={ASSISTANT_TAGLINE}
+                leading={<ClearChatPill onPress={() => setShowClearConfirm(true)} />}
+            >
                 <AiBadge />
                 <Pressable
                     onPress={() => navigation.navigate('AiChef')}
@@ -1330,6 +1320,7 @@ const styles = StyleSheet.create({
     listDesktop: { flex: 1, minHeight: 0 },
     listDesktopPinned: { flexGrow: 1 },
     desktopChatSpacer: { flexGrow: 1, minHeight: 1 },
+    clearChatRow: { paddingHorizontal: 12, paddingTop: 4, paddingBottom: 2, alignItems: 'flex-start' },
     iconRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, minHeight: 52 },
     identity: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 4 },
     identityName: { fontSize: 18 },
