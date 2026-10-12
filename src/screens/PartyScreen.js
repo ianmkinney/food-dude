@@ -52,6 +52,7 @@ import { resolveRecipeContributorName } from '../utils/partyMealMeta';
 import ImageLightbox from '../components/ImageLightbox';
 import { useLayoutMode } from '../layout/useLayoutMode';
 import PartyChatPanel from '../components/party/PartyChatPanel';
+import PartyChatCollapsibleHeader from '../components/party/PartyChatCollapsibleHeader';
 import { mergePartyChatMessages } from '../services/partyLiveSync';
 
 const PartyScreen = ({ navigation }) => {
@@ -94,6 +95,7 @@ const PartyScreen = ({ navigation }) => {
     const [showRenameModal, setShowRenameModal] = useState(false);
     const [renameValue, setRenameValue] = useState('');
     const [partySection, setPartySection] = useState('meals');
+    const [partyChatComposerFocused, setPartyChatComposerFocused] = useState(false);
     const [chatMessages, setChatMessages] = useState([]);
     /** Bumps party image URLs immediately after upload (before poll returns new live_version). */
     const [partyImageEpoch, setPartyImageEpoch] = useState(0);
@@ -157,7 +159,12 @@ const PartyScreen = ({ navigation }) => {
     useEffect(() => {
         setChatMessages([]);
         setPartySection('meals');
+        setPartyChatComposerFocused(false);
     }, [selectedParty?.id, selectedParty?.live_party_id]);
+
+    useEffect(() => {
+        if (partySection !== 'chat') setPartyChatComposerFocused(false);
+    }, [partySection]);
 
     useEffect(() => {
         let cancelled = false;
@@ -1070,6 +1077,7 @@ const PartyScreen = ({ navigation }) => {
             myMemberId={myPartyMember?.sync_member_id || null}
             isPartyOwner={isPartyOwner}
             isDesktop={isDesktop}
+            onComposerFocusChange={setPartyChatComposerFocused}
         />
     ) : null;
 
@@ -1082,7 +1090,9 @@ const PartyScreen = ({ navigation }) => {
             <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column', minHeight: 0 }}>
                 {!isDesktop && partySection === 'chat' && selectedParty ? (
                     <View style={{ flex: 1, minHeight: 0 }}>
-                        {listHeader}
+                        <PartyChatCollapsibleHeader collapsed={partyChatComposerFocused}>
+                            {listHeader}
+                        </PartyChatCollapsibleHeader>
                         {chatPanel}
                     </View>
                 ) : (

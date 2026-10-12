@@ -1,4 +1,4 @@
-/** Shared ElevenLabs pronunciation dictionary locators for "Ampy" (assistant name). */
+/** ElevenLabs TTS: rely on Ampi → Ampy text substitution (no hardcoded dictionary id). */
 
 export const ELEVENLABS_PRONUNCIATION_RULES = [
     {
@@ -18,12 +18,9 @@ export const ELEVENLABS_PRONUNCIATION_RULES = [
 ];
 
 export function getElevenLabsPronunciationLocators() {
-    return [{ pronunciation_dictionary_id: 'amplifood_ampy', version_id: 'v1' }];
+    return [];
 }
 
 export function applyPronunciationLocators<T extends Record<string, unknown>>(body: T): T {
-    return {
-        ...body,
-        pronunciation_dictionary_locators: getElevenLabsPronunciationLocators(),
-    };
+    return body;
 }

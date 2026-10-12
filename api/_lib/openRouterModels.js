@@ -106,14 +106,12 @@ export function modelSupportsParameter(model, param) {
     return (model?.supportedParameters || []).includes(param);
 }
 
-/** Models safe for Ampi chat (structured JSON actions + tool schema). */
+/**
+ * Models usable for Ampi via the adapter (native tools, json_schema, or prompt JSON).
+ * Any text-output model in the OpenRouter catalog qualifies.
+ */
 export function isAmpiChatCatalogModel(model) {
-    if (!model || !isChatCatalogModel(model)) return false;
-    const params = model.supportedParameters || [];
-    if (!params.length) return false;
-    if (!params.includes('tools')) return false;
-    if (!params.includes('response_format') && !params.includes('structured_outputs')) return false;
-    return true;
+    return Boolean(model && isChatCatalogModel(model));
 }
 
 export function isImageCatalogModel(model) {

@@ -26,6 +26,7 @@ import ScreenSkeleton from '../components/Skeleton';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
 import { useLayoutMode } from '../layout/useLayoutMode';
+import { useFloatingActionLayout } from '../layout/floatingActionLayout';
 import { useSyncDataRefresh } from '../hooks/useSyncDataRefresh';
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 import { desktopPageStyles } from '../components/layout/desktopTheme';
@@ -46,6 +47,9 @@ const GroceryListScreen = () => {
         () => normalizeGroceryRows(Array.isArray(cachedItems) ? cachedItems : []),
         [cachedItems]
     );
+    const mobileFabCount = groceryItems.length > 0 ? 2 : 1;
+    const { containerStyle: fabContainerStyle, listPaddingBottom: fabListPadding } =
+        useFloatingActionLayout(mobileFabCount);
     const [GroceryListDesktopBody, setGroceryListDesktopBody] = useState(null);
     const [filter, setFilter] = useState('all'); // all, checked, unchecked
     const [showStoreModal, setShowStoreModal] = useState(false);
@@ -389,7 +393,7 @@ const GroceryListScreen = () => {
                     data={rows}
                     renderItem={renderRow}
                     keyExtractor={(row) => row.key}
-                    contentContainerStyle={styles.listContent}
+                    contentContainerStyle={[styles.listContent, { paddingBottom: fabListPadding }]}
                     ListEmptyComponent={renderEmptyState}
                     refreshing={false}
                     onRefresh={loadGroceryItems}
@@ -397,32 +401,36 @@ const GroceryListScreen = () => {
             )}
 
             {/* Floating Action Buttons */}
-            {!isDesktop ? <View style={styles.fabContainer}>
-                {groceryItems.length > 0 && (
-                <FloatingActionButton
-                    theme={theme}
-                    color={theme.colors.surfaceElevated}
-                    style={[styles.fabLeft, { borderColor: theme.colors.border }]}
-                    accessibilityLabel="Simplify grocery list with AI"
-                    onPress={handleSimplifyWithAI}
-                    disabled={simplifying || groceryItems.filter(item => !item.is_checked).length === 0}
-                >
-                    {simplifying ? (
-                        <ActivityIndicator color={theme.primary[500]} size="small" />
-                    ) : (
-                        <Ionicons name="sparkles" size={24} color={theme.primary[500]} />
-                    )}
-                </FloatingActionButton>
-                )}
-                <FloatingActionButton
-                    theme={theme}
-                    accessibilityLabel="Add grocery item"
-                    onPress={() => navigation.navigate('AddGroceryItem')}
-                    morphTo="af-sheet"
-                >
-                    <Ionicons name="add" size={28} color="#FFFFFF" />
-                </FloatingActionButton>
-            </View> : null}
+            {!isDesktop ? (
+                <View style={fabContainerStyle} pointerEvents="box-none">
+                    {groceryItems.length > 0 ? (
+                        <FloatingActionButton
+                            theme={theme}
+                            color={theme.colors.surfaceElevated}
+                            style={[styles.fabSecondary, { borderColor: theme.colors.border }]}
+                            accessibilityLabel="Simplify grocery list with AI"
+                            onPress={handleSimplifyWithAI}
+                            disabled={
+                                simplifying || groceryItems.filter((item) => !item.is_checked).length === 0
+                            }
+                        >
+                            {simplifying ? (
+                                <ActivityIndicator color={theme.primary[500]} size="small" />
+                            ) : (
+                                <Ionicons name="sparkles" size={24} color={theme.primary[500]} />
+                            )}
+                        </FloatingActionButton>
+                    ) : null}
+                    <FloatingActionButton
+                        theme={theme}
+                        accessibilityLabel="Add grocery item"
+                        onPress={() => navigation.navigate('AddGroceryItem')}
+                        morphTo="af-sheet"
+                    >
+                        <Ionicons name="add" size={28} color="#FFFFFF" />
+                    </FloatingActionButton>
+                </View>
+            ) : null}
 
             {/* Store Info Modal */}
             <Modal
@@ -584,7 +592,6 @@ const styles = StyleSheet.create({
     },
     listContent: {
         padding: 16,
-        paddingBottom: 104,
     },
     groupLabel: {
         fontSize: 13,
@@ -595,15 +602,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
         marginLeft: 4,
     },
-    fabContainer: {
-        position: 'absolute',
-        right: 20,
-        bottom: 20,
-        flexDirection: 'row',
-        gap: 12,
-        alignItems: 'center',
-    },
-    fabLeft: {
+    fabSecondary: {
         borderWidth: 1,
     },
     modalOverlay: {

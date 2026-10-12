@@ -21,6 +21,8 @@ register('./test-support/ts-hooks.mjs', import.meta.url, {
             'src/services/recipeParser',
             'src/services/groceryService',
             'src/services/mediaPrep',
+            'src/services/recipeEnhanceClient',
+            'src/services/aiChefService',
         ],
     },
 });
@@ -162,7 +164,27 @@ test('update_recipe edits ingredients in place and rejects unknown ids and no-op
 
     const [missing] = await runTools([{ tool: 'update_recipe', args: { recipe_id: 4242, title: 'Nope' } }]);
     assert.equal(missing.type, 'error');
-    assert.match(missing.message, /couldn't find recipe #4242/);
+    assert.match(missing.message, /couldn't find.*4242|#4242/i);
+
+    const [hashId] = await runTools([
+        { tool: 'update_recipe', args: { recipe_id: '#10', title: 'Lasagna Soup Deluxe' } },
+    ]);
+    assert.equal(hashId.type, 'error', 'unknown #10 should fail when no recipe 10');
+
+    const [nutrition] = await runTools([
+        {
+            tool: 'update_recipe',
+            args: { recipe_id: id, calories: 410, protein: 28, carbohydrates: 42 },
+        },
+    ]);
+    assert.equal(nutrition.type, 'recipe');
+    assert.equal(ampiTest.recipes.get(id).calories, 410);
+
+    const [geminiStyle] = await runTools([
+        { tool: 'update_recipe', args: { recipeId: String(id), title: 'Spicy Lasagna Soup' } },
+    ]);
+    assert.equal(geminiStyle.type, 'recipe');
+    assert.equal(ampiTest.recipes.get(id).title, 'Spicy Lasagna Soup');
 
     const [noop] = await runTools([{ tool: 'update_recipe', args: { recipe_id: id, title: 'Lasagna Soup' } }]);
     assert.equal(noop.type, 'error');

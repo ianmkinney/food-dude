@@ -23,6 +23,7 @@ import EmptyState from '../components/EmptyState';
 import { navigateWithTransition } from '../motion/viewTransition';
 import { ASSISTANT_NAME } from '../config/assistant';
 import { useLayoutMode } from '../layout/useLayoutMode';
+import { useFloatingActionLayout } from '../layout/floatingActionLayout';
 import { desktopPageStyles, desktopRecipeStyles } from '../components/layout/desktopTheme';
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 import RecipeBookDesktopGrid from './RecipeBookDesktopGrid';
@@ -126,6 +127,8 @@ const RecipeBookScreen = ({ navigation }) => {
     const [filter, setFilter] = useState('all'); // 'all', 'cooked', 'uncooked'
     const enhancingIds = useActiveEnhanceRecipeIds();
     const [lightboxUri, setLightboxUri] = useState(null);
+    const { containerStyle: fabContainerStyle, listPaddingBottom: fabListPadding } =
+        useFloatingActionLayout(1);
 
     // Header customization removed as per user request
     const loadRecipes = useCallback(async () => {
@@ -399,7 +402,7 @@ const RecipeBookScreen = ({ navigation }) => {
                     initialNumToRender={8}
                     maxToRenderPerBatch={6}
                     windowSize={7}
-                    contentContainerStyle={styles.listContent}
+                    contentContainerStyle={[styles.listContent, { paddingBottom: fabListPadding }]}
                     ListEmptyComponent={!loading && renderEmptyState()}
                     refreshing={loading}
                     onRefresh={loadRecipes}
@@ -407,15 +410,16 @@ const RecipeBookScreen = ({ navigation }) => {
             )}
 
             {!isDesktop ? (
-                <FloatingActionButton
-                    theme={theme}
-                    style={styles.fab}
-                    accessibilityLabel="Add recipe"
-                    onPress={() => navigation.navigate('AddRecipe')}
-                    morphTo="af-sheet"
-                >
-                    <Ionicons name="add" size={28} color="#FFFFFF" />
-                </FloatingActionButton>
+                <View style={fabContainerStyle} pointerEvents="box-none">
+                    <FloatingActionButton
+                        theme={theme}
+                        accessibilityLabel="Add recipe"
+                        onPress={() => navigation.navigate('AddRecipe')}
+                        morphTo="af-sheet"
+                    >
+                        <Ionicons name="add" size={28} color="#FFFFFF" />
+                    </FloatingActionButton>
+                </View>
             ) : null}
         </View>
     );
@@ -512,11 +516,6 @@ const styles = StyleSheet.create({
     metaText: {
         fontSize: 12,
         textTransform: 'capitalize',
-    },
-    fab: {
-        position: 'absolute',
-        right: 20,
-        bottom: 20,
     },
     thumb: {
         width: 80,

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     FlatList,
     KeyboardAvoidingView,
@@ -18,6 +19,7 @@ import { AiBadge } from '../../ai/AiLabel';
 import AnimatedPressable from '../AnimatedPressable';
 import { formatChatTime, groupPosition } from '../../chat/messageGroups';
 import { useKeyboardViewport } from '../../chat/useKeyboardViewport';
+import { setComposerFocused as setGlobalComposerFocused } from '../../chat/composerFocus';
 import { ASSISTANT_NAME } from '../../config/assistant';
 import { motion } from '../../theme';
 import {
@@ -25,10 +27,17 @@ import {
     mergePartyChatMessages,
     postPartyChatMessage,
 } from '../../services/partyLiveSync';
-import { messageMentionsAmpi, runPartyAmpiReply } from '../../services/partyAmpiChat';
+import { toDisplayText } from '../../chat/messageText';
+import { finalizePartyAmpiReplyForPost, messageMentionsAmpi, runPartyAmpiReply } from '../../services/partyAmpiChat';
 import { savePartyChatAttachmentLocal, loadPartyChatAttachmentLocal } from '../../party/partyChatLocalFiles';
+import { usePartyChatHistory } from '../../hooks/usePartyChatHistory';
 
 const MENTION_RE = /@ampi\b/i;
+
+function newPendingMessageId() {
+    const uuid = globalThis.crypto?.randomUUID?.();
+    return `pending-${uuid || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+}
 const INPUT_LINE_HEIGHT = 20;
 const INPUT_MAX_LINES = 6;
 const INPUT_MIN_HEIGHT = 40;
@@ -42,9 +51,12 @@ function avatarColor(name, theme) {
     return palette[h];
 }
 
-function PartyChatBubble({ message, theme, position, isOwn, onDelete, canDelete }) {
+function PartyChatBubble({ message, theme, position, isOwn, onDelete, canDelete, onRetry }) {
     const c = theme.colors;
     const isAmpi = message.isAmpi;
+    const failed = message.sendState === 'failed';
+    const pending = message.sendState === 'pending';
+    const bodyText = isAmpi ? toDisplayText(message.body || '') : message.body;
     const joinedTop = !position.first;
     const joinedBottom = !position.last;
     const time = position.showTime ? (
@@ -64,7 +76,11 @@ function PartyChatBubble({ message, theme, position, isOwn, onDelete, canDelete 
                         styles.userBubble,
                         joinedTop && styles.userJoinedTop,
                         joinedBottom && styles.userJoinedBottom,
-                        { backgroundColor: theme.primary[500], alignSelf: 'flex-end' },
+                        {
+                            backgroundColor: theme.primary[500],
+                            alignSelf: 'flex-end',
+                            opacity: pending ? 0.65 : failed ? 0.85 : 1,
+                        },
                     ]}
                 >
                     {message.body ? (
@@ -76,7 +92,14 @@ function PartyChatBubble({ message, theme, position, isOwn, onDelete, canDelete 
                         <Text style={styles.userAttach}>📎 {message.attachment.fileName}</Text>
                     ) : null}
                 </View>
-                {canDelete ? (
+                {failed ? (
+                    <Pressable onPress={onRetry} accessibilityRole="button" accessibilityLabel="Retry send">
+                        <Text style={{ color: c.error, fontSize: 12, marginTop: 4, textAlign: 'right', fontWeight: '600' }}>
+                            Failed to send — tap to retry
+                        </Text>
+                    </Pressable>
+                ) : null}
+                {canDelete && !pending ? (
                     <Pressable onPress={onDelete} accessibilityRole="button" accessibilityLabel="Delete message">
                         <Text style={{ color: c.error, fontSize: 12, marginTop: 2, textAlign: 'right' }}>Delete</Text>
                     </Pressable>
@@ -100,16 +123,16 @@ function PartyChatBubble({ message, theme, position, isOwn, onDelete, canDelete 
                     joinedTop && styles.sousJoinedTop,
                     joinedBottom && styles.sousJoinedBottom,
                     {
-                        backgroundColor: isAmpi ? theme.primary[100] : c.surface,
+                        backgroundColor: c.surface,
                         borderColor: c.border,
                         alignSelf: 'flex-start',
                     },
                 ]}
             >
                 {isAmpi ? <AiBadge style={{ marginBottom: 4 }} /> : null}
-                {message.body ? (
+                {bodyText ? (
                     <Text style={[styles.sousText, { color: c.text.primary }]} selectable>
-                        {message.body}
+                        {bodyText}
                     </Text>
                 ) : null}
                 {message.attachment?.fileName ? (
@@ -141,6 +164,7 @@ export default function PartyChatPanel({
     myMemberId,
     isPartyOwner,
     isDesktop,
+    onComposerFocusChange,
 }) {
     const c = theme.colors;
     const insets = useSafeAreaInsets();
@@ -148,10 +172,43 @@ export default function PartyChatPanel({
     const [inputHeight, setInputHeight] = useState(INPUT_MIN_HEIGHT);
     const [pendingAttachment, setPendingAttachment] = useState(null);
     const [thinking, setThinking] = useState(false);
-    const [composerFocused, setComposerFocused] = useState(false);
+    const [composerFocused, setComposerFocusedState] = useState(false);
     const listRef = useRef(null);
+    const inputRef = useRef(null);
+    const blurTimer = useRef(null);
+    const { loadState, loadError, reload: reloadHistory } = usePartyChatHistory(livePartyId, setMessages);
     const { keyboardOpen } = useKeyboardViewport(composerFocused, () =>
-        listRef.current?.scrollToEnd?.({ animated: true })
+        listRef.current?.scrollToEnd?.({ animated: true }),
+        { pageBackground: c.background }
+    );
+
+    const setComposerActive = useCallback(
+        (active) => {
+            setComposerFocusedState(active);
+            setGlobalComposerFocused(active);
+            onComposerFocusChange?.(active);
+        },
+        [onComposerFocusChange]
+    );
+
+    const onComposerFocus = useCallback(() => {
+        if (blurTimer.current) clearTimeout(blurTimer.current);
+        setComposerActive(true);
+    }, [setComposerActive]);
+
+    const onComposerBlur = useCallback(() => {
+        if (blurTimer.current) clearTimeout(blurTimer.current);
+        blurTimer.current = setTimeout(() => {
+            setComposerActive(false);
+        }, 150);
+    }, [setComposerActive]);
+
+    useEffect(
+        () => () => {
+            if (blurTimer.current) clearTimeout(blurTimer.current);
+            setGlobalComposerFocused(false);
+        },
+        []
     );
 
     const grouped = useMemo(
@@ -199,23 +256,41 @@ export default function PartyChatPanel({
         }
     };
 
-    const sendMessage = useCallback(
-        async (bodyText, { attachment, askAmpi } = {}) => {
-            if (!livePartyId) return;
-            const body = String(bodyText || '').trim();
-            if (!body && !attachment) return;
-            setThinking(true);
+    const postUserMessage = useCallback(
+        async (body, attachment, { clientId, skipOptimistic } = {}) => {
+            const pendingId = clientId || newPendingMessageId();
+            const attachMeta = attachment
+                ? {
+                      fileName: attachment.fileName,
+                      mimeType: attachment.mimeType,
+                      sizeBytes: attachment.sizeBytes,
+                  }
+                : null;
+            if (!skipOptimistic) {
+                setMessages((prev) =>
+                    mergePartyChatMessages(prev, [
+                        {
+                            id: pendingId,
+                            body,
+                            attachment: attachMeta,
+                            sendState: 'pending',
+                            createdAt: Date.now(),
+                            senderDisplayName: myDisplayName,
+                            senderMemberId: myMemberId,
+                            isAmpi: false,
+                        },
+                    ])
+                );
+            } else {
+                setMessages((prev) =>
+                    prev.map((m) => (m.id === pendingId ? { ...m, sendState: 'pending', sendError: null } : m))
+                );
+            }
             try {
                 const res = await postPartyChatMessage({
                     livePartyId,
                     body,
-                    attachment: attachment
-                        ? {
-                              fileName: attachment.fileName,
-                              mimeType: attachment.mimeType,
-                              sizeBytes: attachment.sizeBytes,
-                          }
-                        : null,
+                    attachment: attachMeta,
                 });
                 const msg = res.message;
                 if (msg && attachment?.uri) {
@@ -225,7 +300,36 @@ export default function PartyChatPanel({
                         fileName: attachment.fileName,
                     });
                 }
-                setMessages((prev) => mergePartyChatMessages(prev, [msg]));
+                setMessages((prev) => {
+                    const rest = prev.filter((m) => m.id !== pendingId);
+                    return mergePartyChatMessages(rest, [msg]);
+                });
+                return msg;
+            } catch (e) {
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.id === pendingId
+                            ? { ...m, sendState: 'failed', sendError: e?.message || 'Could not send message.' }
+                            : m
+                    )
+                );
+                throw e;
+            }
+        },
+        [livePartyId, myDisplayName, myMemberId, setMessages]
+    );
+
+    const sendMessage = useCallback(
+        async (bodyText, { attachment, askAmpi, retryMessageId } = {}) => {
+            if (!livePartyId) return;
+            const body = String(bodyText || '').trim();
+            if (!body && !attachment) return;
+            setThinking(true);
+            try {
+                const msg = await postUserMessage(body, attachment, {
+                    clientId: retryMessageId,
+                    skipOptimistic: Boolean(retryMessageId),
+                });
                 if (askAmpi || messageMentionsAmpi(body)) {
                     try {
                         const reply = await runPartyAmpiReply({
@@ -238,9 +342,11 @@ export default function PartyChatPanel({
                                 : [],
                         });
                         if (reply) {
+                            const bodyForPost = await finalizePartyAmpiReplyForPost(reply);
+                            if (!bodyForPost) return;
                             const ampiRes = await postPartyChatMessage({
                                 livePartyId,
-                                body: reply,
+                                body: bodyForPost,
                                 isAmpi: true,
                                 ampiViaName: myDisplayName || 'You',
                             });
@@ -250,14 +356,20 @@ export default function PartyChatPanel({
                         Alert.alert(ASSISTANT_NAME, e?.message || 'Could not reach AI.');
                     }
                 }
-            } catch (e) {
-                Alert.alert('Chat', e?.message || 'Could not send message.');
+            } catch {
+                // Failed rows stay in the list with tap-to-retry.
             } finally {
                 setThinking(false);
             }
         },
-        [livePartyId, meals, ingredientClaims, messages, myDisplayName, setMessages]
+        [livePartyId, meals, ingredientClaims, messages, myDisplayName, postUserMessage, setMessages]
     );
+
+    const releaseComposer = useCallback(() => {
+        if (blurTimer.current) clearTimeout(blurTimer.current);
+        inputRef.current?.blur?.();
+        setComposerActive(false);
+    }, [setComposerActive]);
 
     const onSend = () => {
         const body = input;
@@ -265,6 +377,7 @@ export default function PartyChatPanel({
         setInputHeight(INPUT_MIN_HEIGHT);
         const attach = pendingAttachment;
         setPendingAttachment(null);
+        releaseComposer();
         void sendMessage(body, { attachment: attach, askAmpi: messageMentionsAmpi(body) });
     };
 
@@ -272,6 +385,7 @@ export default function PartyChatPanel({
         const body = input.trim() || `Hey @${ASSISTANT_NAME}, what should we cook?`;
         setInput('');
         setInputHeight(INPUT_MIN_HEIGHT);
+        releaseComposer();
         void sendMessage(body, { askAmpi: true });
     };
 
@@ -302,6 +416,24 @@ export default function PartyChatPanel({
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
         >
+            {loadState === 'loading' ? (
+                <View style={[styles.historyBanner, { borderColor: c.border, backgroundColor: c.surfaceMuted }]}>
+                    <ActivityIndicator color={theme.primary[500]} />
+                    <Text style={{ color: c.text.secondary, marginLeft: 10, fontSize: 14 }}>Loading messages…</Text>
+                </View>
+            ) : null}
+            {loadState === 'error' ? (
+                <Pressable
+                    onPress={() => reloadHistory()}
+                    style={[styles.historyBanner, styles.historyError, { borderColor: c.error, backgroundColor: c.surfaceMuted }]}
+                    accessibilityRole="button"
+                >
+                    <Ionicons name="cloud-offline-outline" size={20} color={c.error} />
+                    <Text style={{ color: c.error, marginLeft: 8, flex: 1, fontSize: 14 }}>
+                        {loadError || 'Could not load chat history.'} Tap to retry.
+                    </Text>
+                </Pressable>
+            ) : null}
             <FlatList
                 ref={listRef}
                 data={grouped}
@@ -313,17 +445,29 @@ export default function PartyChatPanel({
                 ]}
                 onContentSizeChange={() => listRef.current?.scrollToEnd?.({ animated: false })}
                 ListEmptyComponent={
-                    <View style={styles.chatEmpty} accessibilityRole="text">
-                        <Ionicons name="chatbubbles-outline" size={40} color={c.text.tertiary} />
-                        <Text style={[styles.chatEmptyTitle, { color: c.text.primary }]}>Party chat</Text>
-                        <Text style={[styles.chatEmptyBody, { color: c.text.secondary }]}>
-                            Coordinate meals, share updates, or @{ASSISTANT_NAME} for menu ideas.
-                        </Text>
-                    </View>
+                    loadState === 'loading' ? (
+                        <View style={styles.chatEmpty} accessibilityRole="text">
+                            <ActivityIndicator size="large" color={theme.primary[500]} />
+                            <Text style={[styles.chatEmptyBody, { color: c.text.secondary, marginTop: 12 }]}>
+                                Loading party chat…
+                            </Text>
+                        </View>
+                    ) : (
+                        <View style={styles.chatEmpty} accessibilityRole="text">
+                            <Ionicons name="chatbubbles-outline" size={40} color={c.text.tertiary} />
+                            <Text style={[styles.chatEmptyTitle, { color: c.text.primary }]}>Party chat</Text>
+                            <Text style={[styles.chatEmptyBody, { color: c.text.secondary }]}>
+                                Coordinate meals, share updates, or @{ASSISTANT_NAME} for menu ideas.
+                            </Text>
+                        </View>
+                    )
                 }
                 renderItem={({ item }) => {
-                    const isOwn = item.senderMemberId === myMemberId;
-                    const canDelete = isPartyOwner || isOwn;
+                    const isOwn =
+                        item.senderMemberId === myMemberId ||
+                        item.sendState === 'pending' ||
+                        item.sendState === 'failed';
+                    const canDelete = (isPartyOwner || isOwn) && !item.sendState;
                     return (
                         <View style={styles.messageRow}>
                             {!isOwn && item._position.first ? (
@@ -348,9 +492,23 @@ export default function PartyChatPanel({
                                     isOwn={isOwn}
                                     canDelete={canDelete}
                                     onDelete={async () => {
+                                        if (String(item.id).startsWith('pending-')) {
+                                            setMessages((prev) => prev.filter((m) => m.id !== item.id));
+                                            return;
+                                        }
                                         await deletePartyChatMessage({ livePartyId, messageId: item.id });
                                         setMessages((prev) => prev.filter((m) => m.id !== item.id));
                                     }}
+                                    onRetry={
+                                        item.sendState === 'failed'
+                                            ? () => {
+                                                  void sendMessage(item.body, {
+                                                      attachment: item.attachment,
+                                                      retryMessageId: item.id,
+                                                  });
+                                              }
+                                            : undefined
+                                    }
                                 />
                                 {isOwn && item.attachment?.fileName ? (
                                     <Pressable
@@ -392,13 +550,14 @@ export default function PartyChatPanel({
             >
                 <View style={styles.composerInputRow}>
                     <TextInput
+                        ref={inputRef}
                         value={input}
                         onChangeText={(text) => {
                             setInput(text);
                             if (!text.trim()) setInputHeight(INPUT_MIN_HEIGHT);
                         }}
-                        onFocus={() => setComposerFocused(true)}
-                        onBlur={() => setComposerFocused(false)}
+                        onFocus={onComposerFocus}
+                        onBlur={onComposerBlur}
                         placeholder={`Message the party… (@${ASSISTANT_NAME} for help)`}
                         placeholderTextColor={c.text.tertiary}
                         accessibilityLabel="Party chat message"
@@ -485,6 +644,14 @@ export default function PartyChatPanel({
 const styles = StyleSheet.create({
     root: { flex: 1, minHeight: 0 },
     rootDesktop: { minHeight: 0, borderLeftWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(128,128,128,0.25)' },
+    historyBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    historyError: { flexWrap: 'wrap' },
     list: { flex: 1 },
     listContent: { paddingHorizontal: 12, paddingVertical: 8, paddingBottom: 12 },
     listEmpty: { flexGrow: 1, justifyContent: 'center' },

@@ -2,6 +2,27 @@
 
 All notable user-facing changes to AmpliFood are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-10-12
+
+Mobile layout polish for pantry lists.
+
+- Move floating add (and grocery AI/add) buttons to the bottom-left, above the tab bar, with extra list padding so row actions stay tappable on iPhone Safari
+- Party chat on mobile Safari: pin the composer to the keyboard (`visualViewport`) and collapse party header chrome while typing
+- Fix party chat not persisting or syncing in production: `chat_post` and `changes_since` no longer require a Google session when a valid party member token is present (expired owner session had been causing silent 401s on poll and send); advance chat poll cursor after send; Playwright two-client party chat E2E
+- Party @Ampi: parse JSON model replies (same parser as Ampi chat), store/display reply text only, repair already-saved JSON bodies on render; match Ampi bubble styling in dark mode (`surface` + primary text)
+- Party chat persistence: load full history on open (`chat_history` with pagination), refresh owner member token when missing, loading spinner and retry on history failure, failed sends stay visible with tap-to-retry
+- Ampi `update_recipe`: normalize recipe ids across models (`10`, `"#10"`, `recipeId`), infer id from reply/context, validate via recipe template coercion, update nutrition fields, clearer errors
+- OpenRouter model-agnostic Ampi adapter: canonical tool schema, per-model strategy (native tools → `json_schema` → prompt JSON), unified extract/normalize/repair + fallback; owner chat model picker lists all text models; contract tests and optional live smoke script
+- TikTok / social link import in Ampi: safe API JSON parsing (no raw `JSON.parse` on HTML errors), server caption extraction via the adapter, friendly client errors; block saving recipes without a real title (infer from content or fail with a clear message)
+- ElevenLabs TTS: remove hardcoded `amplifood_ampy` pronunciation dictionary; use Ampi→Ampy text substitution; retry without dictionary locators on 404
+
+## [1.0.1] - 2026-10-12
+
+Release at git tag `v1.0.1` (commit `f65512d`).
+
+- In-app version footer, build metadata, and bundled release notes (#74)
+- Party and recipe cover images: square thumbs, EXIF-aware crop, cache-busted URLs (#75)
+
 ## [1.0.0] - 2026-10-12
 
 First tagged stable web release: party group chat, demo data tools, and AI model reliability.

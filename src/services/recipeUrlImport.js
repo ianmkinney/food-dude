@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import { getApiBaseUrl } from '../config/api';
 import { getOwnerSessionToken } from '../platform/ownerSession';
+import { readFetchJson } from '../utils/httpJson';
+import { normalizeImportedRecipeTitle } from '../../api/_lib/parseRecipeJson.js';
 
 export function isTikTokPostUrl(url) {
     try {
@@ -94,8 +96,12 @@ function mapStructuredPayload(payload, fallbackUrl) {
     } else if (payload.sourcePlatform === 'tiktok') {
         platform = tiktokPlatformLabel(payload.author);
     }
+    const title =
+        payload.title && String(payload.title).trim() && String(payload.title).trim().toLowerCase() !== 'untitled recipe'
+            ? payload.title
+            : 'Imported recipe';
     return {
-        title: payload.title || 'Imported recipe',
+        title,
         description: payload.description || null,
         servings: payload.servings ?? null,
         prepTime: payload.times?.prepMinutes ?? null,
@@ -140,7 +146,16 @@ async function postRecipeImport(url) {
             message: error?.message || 'Load failed',
         };
     }
-    const body = await response.json().catch(() => ({}));
+    const read = await readFetchJson(response);
+    if (!read.ok) {
+        return {
+            ok: false,
+            status: read.status || response.status,
+            error: read.error || 'request_failed',
+            message: read.message || "Couldn't import that link.",
+        };
+    }
+    const body = read.json && typeof read.json === 'object' ? read.json : {};
     if (!response.ok) {
         const code = body?.error || 'request_failed';
         return {
@@ -150,7 +165,7 @@ async function postRecipeImport(url) {
             message: body?.message || IMPORT_ERRORS[code] || "Couldn't import that link.",
         };
     }
-    return { ok: true, body };
+    return { ok: true, body: normalizeImportedRecipeTitle(body) };
 }
 
 /**

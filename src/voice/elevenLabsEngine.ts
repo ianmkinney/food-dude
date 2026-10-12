@@ -27,9 +27,8 @@ async function synthesize(apiKey: string, voiceId: string, displayChunk: string)
     const spoken = await prepareElevenLabsSpeechText(displayChunk);
     const models = pickElevenLabsModelChain(spoken);
     let lastRes: Response | null = null;
-    for (const modelId of models) {
-        const body = await buildElevenLabsTtsBodyForUser(spoken, modelId);
-        const res = await fetch(
+    const postTts = (body: Record<string, unknown>) =>
+        fetch(
             `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
             {
                 method: 'POST',
@@ -37,6 +36,15 @@ async function synthesize(apiKey: string, voiceId: string, displayChunk: string)
                 body: JSON.stringify(body),
             }
         );
+
+    for (const modelId of models) {
+        let body = await buildElevenLabsTtsBodyForUser(spoken, modelId);
+        let res = await postTts(body);
+        if (!res.ok && res.status === 404 && body.pronunciation_dictionary_locators?.length) {
+            const { pronunciation_dictionary_locators: _drop, ...without } = body;
+            body = without;
+            res = await postTts(body);
+        }
         if (res.ok) return readAudioResponse(res);
         lastRes = res;
         if (res.status === 400 || res.status === 404) continue;

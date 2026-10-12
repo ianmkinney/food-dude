@@ -99,7 +99,7 @@ globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body);
     const { model } = body;
     upstreamCalls.push(model);
-    if (model === 'openai/gpt-6-luna-pro' && body.response_format) {
+    if (model === 'openai/gpt-6-luna-pro' && (body.response_format || body.tools?.length)) {
         return new Response(JSON.stringify({ error: { message: 'Provider returned error' } }), { status: 400 });
     }
     if (upstreamMode === 'down') throw new TypeError('fetch failed');
@@ -109,9 +109,30 @@ globalThis.fetch = async (url, init) => {
     if (retired.has(model)) {
         return new Response(JSON.stringify({ error: { message: `${model} is not a valid model ID`, code: 400 } }), { status: 400 });
     }
-    const piece = body.response_format
-        ? JSON.stringify({ reply: 'OK', actions: [] })
-        : 'OK';
+    const piece =
+        body.response_format || body.tools?.length
+            ? JSON.stringify({ reply: 'OK', actions: [] })
+            : 'OK';
+    if (!body.stream) {
+        const message =
+            body.tools?.length
+                ? {
+                      role: 'assistant',
+                      content: piece,
+                      tool_calls: [
+                          {
+                              id: 'call_test',
+                              type: 'function',
+                              function: { name: 'remember_fact', arguments: '{"fact":"ok","category":"likes"}' },
+                          },
+                      ],
+                  }
+                : { role: 'assistant', content: piece };
+        return new Response(JSON.stringify({ choices: [{ message }], model }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    }
     const sse = `data: ${JSON.stringify({ choices: [{ delta: { content: piece } }] })}\n\ndata: [DONE]\n\n`;
     return new Response(sse, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
 };
@@ -161,7 +182,7 @@ assert.equal(r.status, 200);
 assert.equal(r.body.defaults.chat, 'google/gemini-2.0-flash-001');
 assert.equal(r.body.defaults.image, 'google/gemini-2.5-flash-image');
 assert.ok(r.body.chatModels.some((m) => m.id === 'google/gemini-2.5-flash'));
-assert.ok(!r.body.chatModels.some((m) => m.id === 'evil/not-in-catalog'));
+assert.ok(r.body.chatModels.some((m) => m.id === 'evil/not-in-catalog'));
 assert.ok(r.body.chatModels.some((m) => m.id === 'openai/gpt-6-luna-pro'));
 assert.ok(r.body.imageModels.some((m) => m.id === 'google/gemini-2.5-flash-image'));
 assert.equal(typeof r.body.chatModels[0].pricePerMillion, 'number');

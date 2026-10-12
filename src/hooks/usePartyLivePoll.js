@@ -39,26 +39,17 @@ export function usePartyLivePoll({ livePartyId, enabled = true, onSnapshot, onCh
                         await setStoredLiveVersion(livePartyId, party.version);
                     }
                     onSnapshot?.(party);
-                    const chatBootstrap = await fetchLiveChanges({
-                        livePartyId,
-                        sinceVersion: party?.version ?? since,
-                        sinceChatMs: 0,
-                    });
-                    if (chatBootstrap.chat?.messages?.length) {
-                        const latest = chatBootstrap.chat.latestCreatedAt ?? 0;
-                        if (latest > 0) await setStoredChatSince(livePartyId, latest);
-                        onChatMessages?.(chatBootstrap.chat.messages, latest);
-                    }
                     import('../sync/syncEvents')
                         .then(({ emitSyncData }) => emitSyncData({ kind: 'party' }))
                         .catch(() => undefined);
                     return;
                 }
                 const result = await fetchLiveChanges({ livePartyId, sinceVersion: since, sinceChatMs: sinceChat });
-                if (result.chat?.messages?.length) {
-                    const latest = result.chat.latestCreatedAt ?? sinceChat;
+                const incoming = result.chat?.messages ?? [];
+                const latest = result.chat?.latestCreatedAt ?? sinceChat;
+                if (incoming.length) {
                     if (latest > sinceChat) await setStoredChatSince(livePartyId, latest);
-                    onChatMessages?.(result.chat.messages, latest);
+                    onChatMessages?.(incoming, latest);
                 }
                 if (Number(result.version) > since) {
                     const party =

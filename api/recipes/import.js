@@ -7,6 +7,8 @@ import { extractRecipeFromHtml, hasRecipeShape } from '../_lib/recipeExtract.js'
 import { importInstagramPost, isInstagramPostUrl } from '../_lib/instagramImport.js';
 import { importTikTokPost, isTikTokPostUrl } from '../_lib/tiktokImport.js';
 import { isStructuredImportPayload, jsonFromSocialImport, mapSocialImportError } from '../_lib/socialImportRespond.js';
+import { extractRecipeFromSocialCaption } from '../_lib/recipeTextExtract.js';
+import { normalizeImportedRecipeTitle } from '../_lib/parseRecipeJson.js';
 import { runVideoRecipeExtraction, validateUploadedVideo } from '../_lib/importVideoShared.js';
 
 const HEAVY_RL_PER_MINUTE = 3;
@@ -46,14 +48,44 @@ function mapFetchError(code) {
     return 'site_blocked';
 }
 
+async function enrichSocialImportResult(result, { apiKey, platform }) {
+    if (isStructuredImportPayload(result)) {
+        return normalizeImportedRecipeTitle(result);
+    }
+    if (!apiKey || !result?.text) return result;
+    try {
+        const structured = await extractRecipeFromSocialCaption({
+            apiKey,
+            text: result.text,
+            meta: {
+                sourceUrl: result.sourceUrl,
+                sourcePlatform: platform,
+                author: result.author,
+            },
+        });
+        if (structured && isStructuredImportPayload(structured)) {
+            return {
+                ...structured,
+                image: structured.image || result.image || null,
+                sourceUrl: structured.sourceUrl || result.sourceUrl,
+                author: structured.author || result.author,
+            };
+        }
+    } catch (error) {
+        console.warn('[recipes/import] caption AI extract failed:', error?.message || error);
+    }
+    return result;
+}
+
 async function handleSocialImport(res, platform, inputUrl, session) {
     const apiKey = resolveOpenRouterApiKey(session.email);
     const importer = platform === 'tiktok' ? importTikTokPost : importInstagramPost;
     try {
-        const result = await importer(inputUrl, {
+        let result = await importer(inputUrl, {
             apiKey,
             onHeavyRateLimit: () => checkMinuteRateLimit(`import-heavy:${session.sub}`, HEAVY_RL_PER_MINUTE),
         });
+        result = await enrichSocialImportResult(result, { apiKey, platform });
         const { status, body } = jsonFromSocialImport(result, platform);
         res.status(status).json(body);
     } catch (error) {

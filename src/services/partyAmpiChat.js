@@ -1,7 +1,10 @@
+import { formatPartyAmpiReplyBody } from '../../api/_lib/partyAmpiReply.js';
 import { generateMultimodal, generateText } from './aiClient';
 import { requireAiConfigured } from './aiSettings';
 import { hasPlatformAiAccess } from '../platform/ownerSession';
 import { ASSISTANT_NAME } from '../config/assistant';
+import { isMutatingAction } from '../sous/confirmActions';
+import { runTools } from '../sous/tools';
 
 const MENTION = /@ampi\b/i;
 
@@ -68,4 +71,27 @@ export async function runPartyAmpiReply(ctx) {
     }
     const text = await generateText(prompt, { feature: 'partyChat' });
     return String(text || '').trim();
+}
+
+/**
+ * Parse JSON-shaped model output, run safe tool actions, return plain reply for party chat POST.
+ * @param {string} raw
+ */
+export async function finalizePartyAmpiReplyForPost(raw) {
+    const { text, actions } = formatPartyAmpiReplyBody(raw);
+    let reply = text || String(raw || '').trim();
+    const immediate = (actions || []).filter((a) => !isMutatingAction(a));
+    const mutating = (actions || []).filter(isMutatingAction);
+    if (immediate.length) {
+        try {
+            await runTools(immediate);
+        } catch (error) {
+            console.warn('[party ampi tools]', error?.message || error);
+        }
+    }
+    if (mutating.length) {
+        const hint = `Open ${ASSISTANT_NAME} in the app to confirm recipe or list changes.`;
+        reply = reply ? `${reply}\n\n${hint}` : hint;
+    }
+    return reply;
 }

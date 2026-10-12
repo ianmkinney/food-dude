@@ -1,4 +1,6 @@
 import { getOpenRouterConfig } from './env.js';
+import { parseRecipeJsonFromModelText } from './parseRecipeJson.js';
+import { parseJsonBody } from './httpJson.js';
 
 const VIDEO_MODEL =
     process.env.OPENROUTER_RECIPE_VIDEO_MODEL || 'google/gemini-2.5-flash';
@@ -64,12 +66,9 @@ async function openRouterComplete({ apiKey, model, messages, maxTokens = 4096 })
         err.body = raw.slice(0, 400);
         throw err;
     }
-    let json;
-    try {
-        json = JSON.parse(raw);
-    } catch {
-        throw new Error('openrouter_bad_json');
-    }
+    const parsedBody = parseJsonBody(raw, { contentType: response.headers.get('content-type'), status: response.status });
+    if (!parsedBody.ok) throw new Error('openrouter_bad_json');
+    const json = parsedBody.json;
     const text = json?.choices?.[0]?.message?.content;
     if (!text) throw new Error('openrouter_empty');
     return String(text);
@@ -103,7 +102,7 @@ export async function extractRecipeFromVideoBase64({ apiKey, mimeType, base64, e
                               },
                           ];
                 const text = await openRouterComplete({ apiKey, model, messages });
-                const parsed = JSON.parse(stripFences(text));
+                const parsed = parseRecipeJsonFromModelText(text);
                 if (!parsed?.title || !Array.isArray(parsed.ingredients) || !parsed.ingredients.length) {
                     throw new Error('no_recipe_in_video');
                 }

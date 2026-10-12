@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import {
     MAX_PARTY_CHAT_LEN,
     mergePartyChatMessages,
+    mergeServerPartyChatWithLocal,
     normalizeAttachmentMeta,
     rowToChatMessage,
     sanitizePartyChatBody,
@@ -27,6 +28,12 @@ const merged = mergePartyChatMessages(
     [{ id: 'b', createdAt: 2, body: 'two' }, { id: 'a', createdAt: 3, body: 'one edited' }]
 );
 check('merge sorts and upserts', merged.length === 2 && merged[1].body === 'one edited');
+
+const withPending = mergeServerPartyChatWithLocal(
+    [{ id: 'srv-1', body: 'from server', createdAt: 1 }],
+    [{ id: 'pending-1', body: 'sending…', sendState: 'pending', createdAt: 2 }]
+);
+check('history merge keeps pending', withPending.length === 2 && withPending.some((m) => m.id === 'pending-1'));
 
 function createMemoryChatServer(partyId) {
     const messages = [];

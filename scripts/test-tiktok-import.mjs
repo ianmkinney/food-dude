@@ -13,6 +13,7 @@ const { resolveTikTokUrl } = await import('../api/_lib/tiktokImport.js');
 assert.ok(isTikTokPostUrl('https://www.tiktok.com/@chef/video/7123456789012345678'));
 assert.ok(isTikTokPostUrl('https://www.tiktok.com/@chef/photo/7123456789012345678'));
 assert.ok(isTikTokPostUrl('https://www.tiktok.com/t/ZPLhNRp2k/'));
+assert.ok(isTikTokPostUrl('https://www.tiktok.com/t/ZPLBA5bdT/'));
 assert.ok(isTikTokPostUrl('https://vm.tiktok.com/ZMabcdef/'));
 assert.ok(isTikTokPostUrl('https://vt.tiktok.com/ZMabcdef/'));
 assert.ok(!isTikTokPostUrl('https://example.com/video/1'));
