@@ -1,4 +1,5 @@
 import { toElevenLabsText } from '../chat/messageText';
+import { prepareElevenLabsSpeechText } from './elevenLabsTtsRequest';
 import { deviceSpeechEngine, describeVoiceError, type SpeakOptions, type SpeechEngine } from './speech';
 import { getPlatformElevenLabsConfig } from './platformElevenLabsSettings';
 import { speakInChunks, stopElevenLabsPlayback } from './elevenLabsPlayback';
@@ -17,7 +18,10 @@ export function createPlatformElevenLabsEngine(): SpeechEngine {
                 return;
             }
             try {
-                await speakInChunks(toElevenLabsText(text), (chunk) => synthesizePlatformTts(chunk, voiceId));
+                await speakInChunks(toElevenLabsText(text), async (chunk) => {
+                    const spoken = await prepareElevenLabsSpeechText(chunk);
+                    return synthesizePlatformTts(spoken, voiceId);
+                });
             } catch (error) {
                 if (options?.strict) throw error;
                 options?.onIssue?.(`${describeVoiceError(error)} Using the built-in voice instead.`);

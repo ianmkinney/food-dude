@@ -17,7 +17,13 @@ import { ASSISTANT_NAME } from '../config/assistant';
 type Theme = ReturnType<typeof import('../theme').getTheme>;
 import { describeVoiceError, getSpeechEngine, primeSpeechOnWeb, shouldSpeak } from '../voice/speech';
 import { runOwnerVoiceCheck, type VoiceCheckStep } from '../voice/voiceCheck';
-import { getVoiceSettings, setAutoSpeak, setVoiceMuted } from '../voice/voiceSettings';
+import {
+    getVoiceSettings,
+    setAutoSpeak,
+    setVoiceExpressiveness,
+    setVoiceMuted,
+    type VoiceExpressiveness,
+} from '../voice/voiceSettings';
 import { playElevenLabsAudio, stopElevenLabsPlayback } from '../voice/elevenLabsPlayback';
 import {
     clearElevenLabsApiKey,
@@ -54,6 +60,7 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
     const c = theme.colors;
     const [autoSpeak, setAutoSpeakState] = useState(false);
     const [muted, setMuted] = useState(false);
+    const [expressiveness, setExpressivenessState] = useState<VoiceExpressiveness>('expressive');
     const [elKeySaved, setElKeySaved] = useState(false);
     const [elKeyLast4, setElKeyLast4] = useState('');
     const [elKeyDraft, setElKeyDraft] = useState('');
@@ -86,6 +93,7 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
         getVoiceSettings().then((s) => {
             setAutoSpeakState(s.autoSpeak);
             setMuted(s.muted);
+            setExpressivenessState(s.expressiveness);
         });
         getElevenLabsConfig().then((cfg) => {
             setElKeySaved(Boolean(cfg.apiKey));
@@ -379,6 +387,42 @@ export default function VoicePreferences({ theme }: { theme: Theme }) {
                     }}
                     accessibilityLabel={`Mute ${ASSISTANT_NAME}'s voice`}
                 />
+            </View>
+            <Text style={[styles.body, { color: c.text.secondary, marginTop: 8 }]}>
+                Expressiveness (ElevenLabs v4): adds audio tags for speech only; on-screen text stays clean.
+            </Text>
+            <View style={styles.expressRow}>
+                {(
+                    [
+                        ['natural', 'Natural'],
+                        ['expressive', 'Expressive'],
+                        ['very_expressive', 'Very expressive'],
+                    ] as [VoiceExpressiveness, string][]
+                ).map(([id, label]) => {
+                    const selected = expressiveness === id;
+                    return (
+                        <Pressable
+                            key={id}
+                            onPress={async () => {
+                                setExpressivenessState(id);
+                                await setVoiceExpressiveness(id);
+                            }}
+                            style={[
+                                styles.expressChip,
+                                {
+                                    borderColor: c.border,
+                                    backgroundColor: selected ? theme.primary[100] : c.surface,
+                                },
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                        >
+                            <Text style={{ color: selected ? theme.primary[700] : c.text.primary, fontWeight: '600' }}>
+                                {label}
+                            </Text>
+                        </Pressable>
+                    );
+                })}
             </View>
             <Pressable onPress={preview} style={[styles.button, { borderColor: c.border }]} accessibilityRole="button">
                 <Text style={{ color: c.text.primary }}>Preview voice</Text>
@@ -760,4 +804,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    expressRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+    expressChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1 },
 });

@@ -108,7 +108,7 @@ export async function requestPlatformElevenLabsTts(text: string, voiceId: string
     return postVoice({ mode: 'tts', voiceId, text });
 }
 
-/** Text may carry v3 audio tags; the server picks eleven_v3 for those. */
+/** Text may carry v4 audio tags; the server prefers eleven_v4 with fallbacks. */
 export async function synthesizePlatformTts(text: string, voiceId: string): Promise<SynthesizedAudio & { model: string | null }> {
     const response = await requestPlatformElevenLabsTts(text, voiceId);
     if (!response.ok) throw await errorFrom(response);

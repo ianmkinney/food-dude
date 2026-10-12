@@ -1,10 +1,13 @@
 import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION } from '../config/assistant';
+import { coerceAmpiDisplayText } from '../sous/parseAmpiResponse';
 
-// Ampi may write ElevenLabs v3 audio tags like "[warmly]" or "[laughs]". They
-// steer the expressive voice only: the screen, the device voice and screen
-// readers get the text without them. A tag is one to four plain words in
-// square brackets that isn't the start of a Markdown link "[text](url)".
-const AUDIO_TAG = /\[(?:[a-z][a-z'-]*)(?: [a-z][a-z'-]*){0,3}\](?!\()/gi;
+// ElevenLabs v4 audio tags: [warmly], [laughs], [whispering, playful], [pause], [long pause].
+// Not Markdown links "[text](url)".
+const AUDIO_TAG =
+    /\[(?:[a-z][a-z'-]*(?:,\s*[a-z][a-z'-]*){0,3}|long pause|pause)\](?!\()/gi;
+
+const SSML_TAG = /<\/?(?:speak|break|emphasis|prosody|voice|say-as|sub|phoneme|audio|mark)[^>]*>/gi;
+const SSML_BREAK = /<break[^>]*\/?>/gi;
 
 export function hasAudioTags(text: string): boolean {
     AUDIO_TAG.lastIndex = 0;
@@ -50,14 +53,20 @@ function respellAssistantName(text: string): string {
     return text.replace(new RegExp(`\\b${ASSISTANT_NAME}\\b`, 'g'), ASSISTANT_PRONUNCIATION.replace(/-/g, ' '));
 }
 
+export function stripSsml(text: string): string {
+    return text.replace(SSML_TAG, '').replace(SSML_BREAK, '').trim();
+}
+
 /** What a reply looks like on screen and to screen readers. */
 export function toDisplayText(text: string): string {
-    return stripAudioTags(text);
+    return stripAudioTags(stripSsml(coerceAmpiDisplayText(text)));
 }
 
 /** Text for the device / browser voice: no audio tags, no Markdown symbols. */
 export function toSpokenText(text: string): string {
-    return respellAssistantName(stripMarkdown(stripAudioTags(text))).replace(/\s+/g, ' ').trim();
+    return respellAssistantName(stripMarkdown(stripAudioTags(stripSsml(text))))
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 /** Text for ElevenLabs: Markdown symbols removed, audio tags kept for eleven_v3. */
