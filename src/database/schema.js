@@ -27,7 +27,8 @@ export const createTablesSQL = `
     sugar REAL,
     sodium REAL,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    demo INTEGER NOT NULL DEFAULT 0
   );
 
   -- Recipe ingredients table
@@ -68,6 +69,7 @@ export const createTablesSQL = `
     servings INTEGER DEFAULT 1,
     notes TEXT,
     created_at INTEGER NOT NULL,
+    demo INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
   );
 
@@ -86,7 +88,8 @@ export const createTablesSQL = `
     freshness_pct INTEGER NOT NULL DEFAULT 100,
     amount_pct INTEGER NOT NULL DEFAULT 100,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    demo INTEGER NOT NULL DEFAULT 0
   );
 
   -- Grocery list items table
@@ -101,6 +104,7 @@ export const createTablesSQL = `
     is_checked INTEGER DEFAULT 0,
     notes TEXT,
     created_at INTEGER NOT NULL,
+    demo INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE SET NULL
   );
 
@@ -128,7 +132,8 @@ export const createTablesSQL = `
     scheduled_date TEXT,
     scheduled_meal_type TEXT,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    demo INTEGER NOT NULL DEFAULT 0
   );
 
   -- Party members table
