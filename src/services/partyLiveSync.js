@@ -234,7 +234,7 @@ export async function removeLiveMember({ livePartyId, memberId }) {
 export async function postPartyChatMessage({ livePartyId, body, attachment, isAmpi, ampiViaName }) {
     const memberToken = await getStoredMemberToken(livePartyId);
     const sessionToken = await getOwnerSessionToken();
-    return partyFetch('/party?action=chat_post', {
+    const data = await partyFetch('/party?action=chat_post', {
         body: {
             action: 'chat_post',
             partyId: livePartyId,
@@ -246,6 +246,12 @@ export async function postPartyChatMessage({ livePartyId, body, attachment, isAm
         memberToken,
         sessionToken,
     });
+    const createdAt = data?.message?.createdAt;
+    if (livePartyId && Number.isFinite(createdAt)) {
+        const prev = await getStoredChatSince(livePartyId);
+        if (createdAt > prev) await setStoredChatSince(livePartyId, createdAt);
+    }
+    return data;
 }
 
 export async function deletePartyChatMessage({ livePartyId, messageId }) {

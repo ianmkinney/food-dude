@@ -89,6 +89,23 @@ async function requireUserSession(req, res) {
     }
 }
 
+/** Valid session when present; null when missing or invalid (no 401). Used for party chat polling/posting. */
+async function optionalUserSession(req) {
+    if (!isGoogleSignInConfigured()) return null;
+    try {
+        requireSecrets();
+    } catch {
+        return null;
+    }
+    const token = bearerToken(req);
+    if (!token) return null;
+    try {
+        return await verifySession(token);
+    } catch {
+        return null;
+    }
+}
+
 async function loadPartyBundle(sql, partyId) {
     const parties = await sql`SELECT * FROM parties WHERE id = ${partyId}::uuid LIMIT 1`;
     const party = parties[0];
@@ -711,6 +728,10 @@ async function handleChangesSince(req, res, session) {
     }
     const sql = await getPartySql();
     const memberToken = memberTokenFromReq(req);
+    if (!session && !memberToken) {
+        partyReject(res, 401, 'unauthorized');
+        return;
+    }
     const ownerView = await isPartyOwner(sql, partyId, session);
     if (!ownerView) {
         const member = await assertMemberAccess(sql, partyId, memberToken);
@@ -757,6 +778,10 @@ async function handleChatPost(req, res, session) {
         partyReject(res, 400, 'bad_request');
         return;
     }
+    if (!session && !memberTokenFromReq(req)) {
+        partyReject(res, 401, 'unauthorized');
+        return;
+    }
     const sql = await getPartySql();
     if (!(await durableRateLimit(res, sql, `party:chat:${clientKey(req)}`, 40))) return;
     const access = await assertPartyChatAccess(sql, partyId, session, memberTokenFromReq(req));
@@ -801,6 +826,10 @@ async function handleChatDelete(req, res, session) {
     const messageId = String(body.messageId || '').trim();
     if (!partyId || !messageId) {
         partyReject(res, 400, 'bad_request');
+        return;
+    }
+    if (!session && !memberTokenFromReq(req)) {
+        partyReject(res, 401, 'unauthorized');
         return;
     }
     const sql = await getPartySql();
@@ -989,6 +1018,7 @@ export default async function handler(req, res) {
     if (!softRateLimit(req, res, 'party-api', 40)) return;
 
     let session = null;
+    const chatActions = ['changes_since', 'chat_post', 'chat_delete'];
     const needsSession = [
         'create',
         'join',
@@ -1000,14 +1030,17 @@ export default async function handler(req, res) {
         'rotate_invite',
         'rename',
         'update_meals',
-        'changes_since',
         'claim_ingredient',
         'unclaim_ingredient',
-        'chat_post',
-        'chat_delete',
     ].includes(action);
 
-    if (needsSession) {
+    if (chatActions.includes(action)) {
+        session = await optionalUserSession(req);
+        if (!session && !memberTokenFromReq(req)) {
+            partyReject(res, 401, 'unauthorized');
+            return;
+        }
+    } else if (needsSession) {
         session = await requireUserSession(req, res);
         if (!session) return;
     }

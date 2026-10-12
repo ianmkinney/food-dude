@@ -44,10 +44,11 @@ export function usePartyLivePoll({ livePartyId, enabled = true, onSnapshot, onCh
                         sinceVersion: party?.version ?? since,
                         sinceChatMs: 0,
                     });
-                    if (chatBootstrap.chat?.messages?.length) {
-                        const latest = chatBootstrap.chat.latestCreatedAt ?? 0;
-                        if (latest > 0) await setStoredChatSince(livePartyId, latest);
-                        onChatMessages?.(chatBootstrap.chat.messages, latest);
+                    const bootstrapMsgs = chatBootstrap.chat?.messages ?? [];
+                    const latestBootstrap = chatBootstrap.chat?.latestCreatedAt ?? 0;
+                    if (latestBootstrap > 0) await setStoredChatSince(livePartyId, latestBootstrap);
+                    if (bootstrapMsgs.length) {
+                        onChatMessages?.(bootstrapMsgs, latestBootstrap);
                     }
                     import('../sync/syncEvents')
                         .then(({ emitSyncData }) => emitSyncData({ kind: 'party' }))
@@ -55,10 +56,11 @@ export function usePartyLivePoll({ livePartyId, enabled = true, onSnapshot, onCh
                     return;
                 }
                 const result = await fetchLiveChanges({ livePartyId, sinceVersion: since, sinceChatMs: sinceChat });
-                if (result.chat?.messages?.length) {
-                    const latest = result.chat.latestCreatedAt ?? sinceChat;
+                const incoming = result.chat?.messages ?? [];
+                const latest = result.chat?.latestCreatedAt ?? sinceChat;
+                if (incoming.length) {
                     if (latest > sinceChat) await setStoredChatSince(livePartyId, latest);
-                    onChatMessages?.(result.chat.messages, latest);
+                    onChatMessages?.(incoming, latest);
                 }
                 if (Number(result.version) > since) {
                     const party =

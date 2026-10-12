@@ -18,26 +18,32 @@ async function onboard(page, appUrl) {
 }
 
 export async function prepareLivePartyPage(page, appUrl, memberToken = 'member-token-alex') {
-    await page.addInitScript((token, liveId) => {
-        globalThis.__PARTY_SCREENSHOT_SEED__ = true;
-        globalThis.__DESKTOP_SCREENSHOT_SEED__ = true;
-        try {
-            localStorage.setItem('amplifood.onboarding.v1', JSON.stringify({ completedAt: Date.now() }));
-            localStorage.setItem('amplifood.legal.accepted', JSON.stringify({ version: '2026-10-09', acceptedAt: Date.now() }));
-            sessionStorage.setItem('af.splash', '1');
-            localStorage.setItem('amplifood.party.privacyChipDismissed', '1');
-            localStorage.setItem('amplifood.party.membersCollapsed', '1');
-            localStorage.setItem(`amplifood.party.live.member.${liveId}`, token);
-            localStorage.setItem(`amplifood.party.live.version.${liveId}`, '1');
-            localStorage.setItem(`amplifood.party.live.chatSince.${liveId}`, '0');
-            localStorage.setItem(
-                'amplifood.owner.session.v1',
-                JSON.stringify({ token: 't', email: 'alex@example.com', name: 'Alex Cook', savedAt: Date.now() })
-            );
-        } catch {
-            // ignore
-        }
-    }, memberToken, LIVE_PARTY_ID);
+    await page.addInitScript(
+        ({ token, liveId }) => {
+            globalThis.__PARTY_SCREENSHOT_SEED__ = true;
+            globalThis.__DESKTOP_SCREENSHOT_SEED__ = true;
+            try {
+                localStorage.setItem('amplifood.onboarding.v1', JSON.stringify({ completedAt: Date.now() }));
+                localStorage.setItem(
+                    'amplifood.legal.accepted',
+                    JSON.stringify({ version: '2026-10-09', acceptedAt: Date.now() })
+                );
+                sessionStorage.setItem('af.splash', '1');
+                localStorage.setItem('amplifood.party.privacyChipDismissed', '1');
+                localStorage.setItem('amplifood.party.membersCollapsed', '1');
+                localStorage.setItem(`amplifood.party.live.member.${liveId}`, token);
+                localStorage.setItem(`amplifood.party.live.version.${liveId}`, '1');
+                localStorage.setItem(`amplifood.party.live.chatSince.${liveId}`, '0');
+                localStorage.setItem(
+                    'amplifood.owner.session.v1',
+                    JSON.stringify({ token: 't', email: 'alex@example.com', name: 'Alex Cook', savedAt: Date.now() })
+                );
+            } catch {
+                // ignore
+            }
+        },
+        { token: memberToken, liveId: LIVE_PARTY_ID }
+    );
 
     await onboard(page, appUrl);
     await page.waitForTimeout(8000);

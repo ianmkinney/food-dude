@@ -66,25 +66,44 @@ export function createSharedPartyMock() {
             }
         }
 
-        if (action === 'chat_post' && route.request().method() === 'POST') {
-            const body = route.request().postDataJSON() || {};
-            const text = sanitizePartyChatBody(body.body);
-            const row = {
-                id: randomUUID(),
-                party_id: LIVE_PARTY_ID,
-                sender_member_id: members[memberToken]?.memberId || members['member-token-alex'].memberId,
-                body: text,
-                created_at: new Date().toISOString(),
-                attachment_meta: null,
-                is_ampi: Boolean(body.isAmpi),
-            };
-            messages.push(row);
-            version += 1;
-            return route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify({ ok: true, message: rowToChatMessage(row) }),
-            });
+        if (route.request().method() === 'POST') {
+            let body = {};
+            try {
+                body = route.request().postDataJSON() || {};
+            } catch {
+                body = {};
+            }
+            const postAction = body.action || action;
+            if (postAction === 'chat_post') {
+                const member = members[memberToken];
+                if (!member) {
+                    return route.fulfill({
+                        status: 403,
+                        contentType: 'application/json',
+                        body: JSON.stringify({ error: 'forbidden' }),
+                    });
+                }
+                const text = sanitizePartyChatBody(body.body);
+                const row = {
+                    id: randomUUID(),
+                    party_id: LIVE_PARTY_ID,
+                    sender_member_id: body.isAmpi ? null : member.memberId,
+                    sender_display_name: body.isAmpi
+                        ? `Ampi (via ${body.ampiViaName})`
+                        : member.displayName,
+                    body: text,
+                    created_at: new Date().toISOString(),
+                    attachment_meta: null,
+                    is_ampi: Boolean(body.isAmpi),
+                };
+                messages.push(row);
+                version += 1;
+                return route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({ ok: true, message: rowToChatMessage(row) }),
+                });
+            }
         }
 
         return route.fulfill({

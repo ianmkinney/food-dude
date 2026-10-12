@@ -8,6 +8,7 @@ Mobile layout polish for pantry lists.
 
 - Move floating add (and grocery AI/add) buttons to the bottom-left, above the tab bar, with extra list padding so row actions stay tappable on iPhone Safari
 - Party chat on mobile Safari: pin the composer to the keyboard (`visualViewport`) and collapse party header chrome while typing
+- Fix party chat not persisting or syncing in production: `chat_post` and `changes_since` no longer require a Google session when a valid party member token is present (expired owner session had been causing silent 401s on poll and send); advance chat poll cursor after send; Playwright two-client party chat E2E
 
 ## [1.0.1] - 2026-10-12
 
