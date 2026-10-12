@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { userOperations, partyStatsOperations, recipeCookingHistoryOperations } from '../database/operations';
 import AiProviderSettings from '../components/AiProviderSettings';
 import VoicePreferences from '../components/VoicePreferences';
+import AutoRecipeImageSettings from '../components/AutoRecipeImageSettings';
 import PrivacyDataExplainer from '../components/PrivacyDataExplainer';
 import TextSizeSettings from '../components/TextSizeSettings';
 import MemorySettings from '../components/MemorySettings';
@@ -391,6 +392,7 @@ const AccountScreen = ({ navigation, route }) => {
             <View onLayout={markSection('ai')}>
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>
                 <AiProviderSettings theme={theme} />
+                <AutoRecipeImageSettings theme={theme} />
             </ElevatedCard>
 
             <ElevatedCard theme={theme} variant="card" style={styles.settingsCard}>

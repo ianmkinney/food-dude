@@ -1,5 +1,6 @@
 import { groceryOperations, pantryOperations, recipeOperations } from '../database/operations';
 import { generateImage, generateMultimodal, generateText } from './aiClient';
+import { buildRecipeImagePrompt } from './recipeImagePrompt';
 import { requireAiConfigured } from './aiSettings';
 import { prepareImageForAi, prepareVideoForAi } from './mediaPrep';
 import { friendlyMediaErrorMessage } from './mediaTypes';
@@ -844,24 +845,7 @@ Important:
         await requireAiConfigured();
 
         try {
-            const prompt = `Generate a professional, appetizing food photography image of this dish:
-
-Title: ${recipe.title}
-Description: ${recipe.description || 'A delicious recipe'}
-Cuisine: ${recipe.cuisine || 'General'}
-Difficulty: ${recipe.difficulty || 'Medium'}
-
-Key Ingredients: ${recipe.ingredients ? recipe.ingredients.slice(0, 5).map(ing => ing.ingredient).join(', ') : 'various ingredients'}
-
-Requirements:
-- Professional food photography style
-- High quality, well-lit, appetizing presentation
-- Realistic plating and garnish
-- Restaurant-quality presentation
-- Focus on the finished dish
-- Warm, inviting atmosphere
-
-Create a beautiful, mouth-watering photo that makes viewers want to cook and eat this dish.`;
+            const prompt = buildRecipeImagePrompt(recipe);
 
             const result = await this.retryOperation(async () => generateImage(prompt));
 
