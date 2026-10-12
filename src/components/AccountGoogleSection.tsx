@@ -24,10 +24,11 @@ export default function AccountGoogleSection({ theme }: Props) {
         setTestResult(null);
         try {
             const result = await testOwnerAi();
-            const fallback = result.fallbackFrom ? ` (configured ${result.fallbackFrom} was rejected)` : '';
-            setTestResult({ ok: true, text: `Working · ${result.model} · ${result.latencyMs} ms${fallback}` });
+            const note = result.modelFallbackNote ? ` · ${result.modelFallbackNote}` : '';
+            setTestResult({ ok: true, text: `Working · ${result.model} · ${result.latencyMs} ms${note}` });
         } catch (error) {
-            setTestResult({ ok: false, text: error instanceof Error ? error.message : 'Test failed.' });
+            const msg = error instanceof Error ? error.message : 'Test failed.';
+            setTestResult({ ok: false, text: msg });
         } finally {
             setTesting(false);
         }

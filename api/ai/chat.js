@@ -18,7 +18,7 @@ import { handleElevenLabsMode } from '../_lib/elevenLabs.js';
 import {
     fetchOpenRouterModelCatalog,
     getPlatformModelDefaults,
-    isChatCatalogModel,
+    isAmpiChatCatalogModel,
     isImageCatalogModel,
     resolveOwnerChatModelForVision,
     resolveOwnerImageModel,
@@ -142,10 +142,11 @@ function upstreamMessage(status, text) {
     return (text || '').replace(/\s+/g, ' ').trim().slice(0, 300) || `HTTP ${status}`;
 }
 
-const isModelRejected = (error) =>
-    error instanceof UpstreamError &&
-    (error.status === 400 || error.status === 404) &&
-    /model/i.test(error.message);
+const shouldTryNextModel = (error, hasMore) => {
+    if (!hasMore || !(error instanceof UpstreamError)) return false;
+    if (error.status === 400 || error.status === 404 || error.status === 422) return true;
+    return /model/i.test(error.message || '');
+};
 
 async function openRouterStream({ apiKey, model, messages, maxTokens, responseFormat }) {
     let response;
@@ -178,19 +179,34 @@ async function openRouterStream({ apiKey, model, messages, maxTokens, responseFo
 
 async function openRouterWithFallback({ apiKey, models, messages, maxTokens, responseFormat }) {
     let lastError;
-    for (const model of models) {
+    const failures = [];
+    for (let i = 0; i < models.length; i++) {
+        const model = models[i];
+        const hasMore = i < models.length - 1;
         try {
             return {
                 upstream: await openRouterStream({ apiKey, model, messages, maxTokens, responseFormat }),
                 model,
+                failures,
             };
         } catch (error) {
             lastError = error;
-            if (!isModelRejected(error)) throw error;
+            if (error instanceof UpstreamError) {
+                failures.push({ model, status: error.status, message: error.message });
+            }
+            if (!shouldTryNextModel(error, hasMore)) throw error;
             console.warn(`[ai/chat] model rejected by OpenRouter: ${model} (${error.status}) ${error.message}`);
         }
     }
     throw lastError;
+}
+
+function modelFallbackNote(failures, model) {
+    if (!failures?.length || !model) return null;
+    const first = failures[0];
+    if (!first?.model || first.model === model) return null;
+    const detail = first.message ? `: ${first.message}` : '';
+    return `${first.model} failed${detail}. Using ${model} instead.`;
 }
 
 function reject(res, status, error, extra = {}) {
@@ -255,7 +271,7 @@ export default async function handler(req, res) {
             const defaults = getPlatformModelDefaults();
             res.status(200).json({
                 defaults,
-                chatModels: catalog.models.filter(isChatCatalogModel).map(toPublicModelRow),
+                chatModels: catalog.models.filter(isAmpiChatCatalogModel).map(toPublicModelRow),
                 imageModels: catalog.models.filter(isImageCatalogModel).map(toPublicModelRow),
             });
         } catch (error) {
@@ -359,17 +375,19 @@ export default async function handler(req, res) {
 
     const streamRequested = !isTest && req.body?.stream !== false;
     const startedAt = Date.now();
-    const chatStructured =
-        !isTest && (req.body?.feature === 'chat' || req.body?.feature === 'partyChat') ? ampiChatResponseFormat() : null;
+    const wantsStructured =
+        req.body?.feature === 'chat' || req.body?.feature === 'partyChat' || (isTest && req.body?.validateAmpi === true);
+    const chatStructured = wantsStructured ? ampiChatResponseFormat() : null;
 
     try {
-        const { upstream, model } = await openRouterWithFallback({
+        const { upstream, model, failures } = await openRouterWithFallback({
             apiKey,
             models,
             messages,
             maxTokens,
             responseFormat: chatStructured,
         });
+        const fallbackNote = modelFallbackNote(failures, model);
 
         if (!streamRequested) {
             const reader = upstream.body.getReader();
@@ -401,6 +419,10 @@ export default async function handler(req, res) {
                 model,
                 ...(visionNote ? { visionNote } : null),
                 ...(model !== primary ? { fallbackFrom: primary } : null),
+                ...(fallbackNote ? { modelFallbackNote: fallbackNote } : null),
+                ...(failures?.length
+                    ? { upstreamErrors: failures.map((f) => ({ model: f.model, message: f.message })) }
+                    : null),
                 ...(isTest ? { latencyMs: Date.now() - startedAt } : null),
             });
             return;
@@ -409,6 +431,9 @@ export default async function handler(req, res) {
         res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
+        if (fallbackNote) {
+            res.write(`event: amplifood-meta\ndata: ${JSON.stringify({ modelFallbackNote: fallbackNote, model })}\n\n`);
+        }
 
         const reader = upstream.body.getReader();
         const decoder = new TextDecoder();

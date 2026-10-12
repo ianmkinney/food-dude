@@ -30,12 +30,23 @@ type ChatPayload = {
     model?: string;
     fallbackFrom?: string;
     visionNote?: string;
+    modelFallbackNote?: string;
+    upstreamErrors?: { model: string; message: string }[];
     latencyMs?: number;
     error?: string;
     message?: string;
 };
 
-export type OwnerMultimodalResult = { text: string; visionNote?: string | null };
+export type OwnerMultimodalResult = { text: string; visionNote?: string | null; modelFallbackNote?: string | null };
+
+let lastModelFallbackNote: string | null = null;
+
+/** One-shot UI note when the owner-selected model failed and a fallback was used. */
+export function peekModelFallbackNote(): string | null {
+    const note = lastModelFallbackNote;
+    lastModelFallbackNote = null;
+    return note;
+}
 
 async function postOwnerChat(body: Record<string, unknown>): Promise<ChatPayload> {
     const token = await getOwnerSessionToken();
@@ -86,19 +97,35 @@ async function ownerChat(body: Record<string, unknown>): Promise<OwnerMultimodal
     if (!text) {
         throw new Error('The model returned an empty response.');
     }
-    return { text, visionNote: payload.visionNote || null };
+    const modelFallbackNote =
+        payload.modelFallbackNote ||
+        (payload.fallbackFrom && payload.model
+            ? `${payload.fallbackFrom} failed. Using ${payload.model} instead.`
+            : null);
+    if (modelFallbackNote) lastModelFallbackNote = modelFallbackNote;
+    return { text, visionNote: payload.visionNote || null, modelFallbackNote };
 }
 
-export type OwnerAiTestResult = { model: string; latencyMs: number; fallbackFrom?: string };
+export type OwnerAiTestResult = {
+    model: string;
+    latencyMs: number;
+    fallbackFrom?: string;
+    modelFallbackNote?: string;
+    upstreamErrors?: { model: string; message: string }[];
+};
 
 /** One tiny request through the owner proxy, for the Account status "Test" button. */
 export async function testOwnerAi(): Promise<OwnerAiTestResult> {
     const started = Date.now();
-    const payload = await postOwnerChat(await ownerChatBody({ test: true, prompt: 'test' }));
+    const payload = await postOwnerChat(
+        await ownerChatBody({ test: true, validateAmpi: true, prompt: 'Reply with the single word: OK' })
+    );
     return {
         model: payload.model || 'unknown',
         latencyMs: payload.latencyMs ?? Date.now() - started,
         fallbackFrom: payload.fallbackFrom,
+        modelFallbackNote: payload.modelFallbackNote,
+        upstreamErrors: payload.upstreamErrors,
     };
 }
 

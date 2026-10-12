@@ -17,18 +17,29 @@ resetOpenRouterModelCache();
 resetOpenRouterStatsCache();
 
 const retired = new Set(['google/gemini-2.0-flash-001']);
+const AMPI_PARAMS = ['tools', 'response_format', 'structured_outputs'];
+
 const catalog = [
     {
         id: 'google/gemini-2.0-flash-001',
         name: 'Gemini 2.0 Flash (retired)',
         architecture: { output_modalities: ['text'] },
+        supported_parameters: AMPI_PARAMS,
         pricing: { prompt: '0.0000001', completion: '0.0000002' },
     },
     {
         id: 'google/gemini-2.5-flash',
         name: 'Gemini 2.5 Flash',
         architecture: { output_modalities: ['text'] },
+        supported_parameters: AMPI_PARAMS,
         pricing: { prompt: '0.00000015', completion: '0.0000006' },
+    },
+    {
+        id: 'openai/gpt-6-luna-pro',
+        name: 'GPT-6 Luna Pro',
+        architecture: { output_modalities: ['text'] },
+        supported_parameters: AMPI_PARAMS,
+        pricing: { prompt: '0.000001', completion: '0.000002' },
     },
     {
         id: 'google/gemini-2.5-flash-image',
@@ -85,8 +96,12 @@ globalThis.fetch = async (url, init) => {
     }
     assert.equal(url, 'https://openrouter.ai/api/v1/chat/completions');
     assert.equal(init.headers.Authorization, 'Bearer sk-or-fake');
-    const { model } = JSON.parse(init.body);
+    const body = JSON.parse(init.body);
+    const { model } = body;
     upstreamCalls.push(model);
+    if (model === 'openai/gpt-6-luna-pro' && body.response_format) {
+        return new Response(JSON.stringify({ error: { message: 'Provider returned error' } }), { status: 400 });
+    }
     if (upstreamMode === 'down') throw new TypeError('fetch failed');
     if (upstreamMode === 'badkey') {
         return new Response(JSON.stringify({ error: { message: 'No auth credentials found', code: 401 } }), { status: 401 });
@@ -94,7 +109,10 @@ globalThis.fetch = async (url, init) => {
     if (retired.has(model)) {
         return new Response(JSON.stringify({ error: { message: `${model} is not a valid model ID`, code: 400 } }), { status: 400 });
     }
-    const sse = `data: ${JSON.stringify({ choices: [{ delta: { content: 'OK' } }] })}\n\ndata: [DONE]\n\n`;
+    const piece = body.response_format
+        ? JSON.stringify({ reply: 'OK', actions: [] })
+        : 'OK';
+    const sse = `data: ${JSON.stringify({ choices: [{ delta: { content: piece } }] })}\n\ndata: [DONE]\n\n`;
     return new Response(sse, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
 };
 
@@ -143,6 +161,8 @@ assert.equal(r.status, 200);
 assert.equal(r.body.defaults.chat, 'google/gemini-2.0-flash-001');
 assert.equal(r.body.defaults.image, 'google/gemini-2.5-flash-image');
 assert.ok(r.body.chatModels.some((m) => m.id === 'google/gemini-2.5-flash'));
+assert.ok(!r.body.chatModels.some((m) => m.id === 'evil/not-in-catalog'));
+assert.ok(r.body.chatModels.some((m) => m.id === 'openai/gpt-6-luna-pro'));
 assert.ok(r.body.imageModels.some((m) => m.id === 'google/gemini-2.5-flash-image'));
 assert.equal(typeof r.body.chatModels[0].pricePerMillion, 'number');
 console.log('models list     ->', r.status, r.body.chatModels.length, 'chat', r.body.imageModels.length, 'image');
@@ -161,15 +181,28 @@ assert.equal(upstreamCalls.at(-1), 'google/gemini-2.5-flash');
 console.log('owner chat pick ->', r.status, upstreamCalls.at(-1));
 
 upstreamCalls.length = 0;
+r = await call({
+    token: owner,
+    body: { prompt: 'hi', stream: false, feature: 'chat', model: 'openai/gpt-6-luna-pro' },
+});
+assert.equal(r.status, 200);
+assert.equal(r.body.model, 'google/gemini-2.5-flash');
+assert.match(r.body.modelFallbackNote, /gpt-6-luna-pro/);
+assert.match(r.body.modelFallbackNote, /Provider returned error/);
+console.log('structured fail ->', r.body.modelFallbackNote, 'tried', upstreamCalls);
+
+upstreamCalls.length = 0;
 r = await call({ token: owner, body: { prompt: 'hi', stream: false, model: 'not-a-real-model' } });
 assert.equal(r.status, 200);
 assert.equal(upstreamCalls[0], 'google/gemini-2.0-flash-001');
 console.log('unknown model   -> default', upstreamCalls[0]);
 
-r = await call({ token: owner, body: { test: true } });
+r = await call({ token: owner, body: { test: true, validateAmpi: true, model: 'openai/gpt-6-luna-pro' } });
 assert.equal(r.status, 200);
 assert.equal(typeof r.body.latencyMs, 'number');
-console.log('test mode       ->', r.status, r.body);
+assert.equal(r.body.model, 'google/gemini-2.5-flash');
+assert.ok(r.body.modelFallbackNote);
+console.log('test mode       ->', r.status, r.body.model, r.body.modelFallbackNote);
 
 upstreamMode = 'badkey';
 r = await call({ token: owner, body: { prompt: 'hi', stream: false } });

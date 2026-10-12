@@ -1,6 +1,7 @@
 import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION, ASSISTANT_TAGLINE } from '../config/assistant';
 import { groceryOperations, pantryOperations, recipeOperations, userOperations } from '../database/operations';
 import { generateMultimodal, generateText, peekMultimodalVisionNote } from '../services/aiClient';
+import { peekModelFallbackNote } from '../monetization/livePlatformAi';
 import { parseAmpiResponse } from './parseAmpiResponse';
 import type { PendingAttachment } from './chatAttachments';
 import { prepareAttachmentPayload } from './chatAttachments';
@@ -224,7 +225,11 @@ export async function askSous(
               { feature: 'chat' }
           );
     const visionNote = peekMultimodalVisionNote();
+    const modelFallbackNote = peekModelFallbackNote();
     const { reply, actions } = parseAmpiResponse(raw);
+
+    const prefixNotes = [visionNote, modelFallbackNote].filter(Boolean).join('\n\n');
+    const withNotes = (text: string) => (prefixNotes && text ? `${prefixNotes}\n\n${text}` : prefixNotes || text);
 
     const mutating = actions.filter(isMutatingAction);
     const immediate = actions.filter((a) => !isMutatingAction(a));
@@ -235,7 +240,7 @@ export async function askSous(
         cards = [...cards, ...saved];
         await recordChatRecipes(CHAT_THREAD_AMPI, recipeEventsFromCards(saved)).catch(() => undefined);
         return {
-            reply: visionNote ? `${visionNote}\n\n${reply || 'Saved to your recipe book.'}` : reply || 'Saved to your recipe book.',
+            reply: withNotes(reply || 'Saved to your recipe book.'),
             cards,
             userRecipeImageUri,
             visionNote,
@@ -255,8 +260,7 @@ export async function askSous(
         };
     }
 
-    const replyText =
-        visionNote && reply ? `${visionNote}\n\n${reply}` : reply || (cards.length ? 'Done.' : "Sorry, I didn't get that. Try asking another way?");
+    const replyText = withNotes(reply || (cards.length ? 'Done.' : "Sorry, I didn't get that. Try asking another way?"));
 
     return {
         reply: replyText,
