@@ -26,7 +26,12 @@ import {
 } from '../_lib/openRouterModels.js';
 import { buildOpenRouterMessages, bodyHasImages } from '../_lib/chatOpenRouterMessages.js';
 import { fetchOpenRouterStats } from '../_lib/openRouterStats.js';
-import { ampiChatResponseFormat } from '../_lib/ampiResponseSchema.js';
+import {
+    buildAmpiOpenRouterBody,
+    completeAmpiTurn,
+    AmpiUpstreamError,
+    pickAmpiStrategy,
+} from '../_lib/ampiModelAdapter.js';
 
 const DAILY_CREDIT_MSG = 'Daily AI limit reached. Try again tomorrow or ask Ian to raise your OpenRouter credit limit.';
 
@@ -148,7 +153,7 @@ const shouldTryNextModel = (error, hasMore) => {
     return /model/i.test(error.message || '');
 };
 
-async function openRouterStream({ apiKey, model, messages, maxTokens, responseFormat }) {
+async function openRouterStream({ apiKey, model, messages, maxTokens, extraBody }) {
     let response;
     try {
         response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -164,7 +169,7 @@ async function openRouterStream({ apiKey, model, messages, maxTokens, responseFo
                 messages,
                 max_tokens: maxTokens,
                 stream: true,
-                ...(responseFormat ? { response_format: responseFormat } : null),
+                ...(extraBody || null),
             }),
         });
     } catch (error) {
@@ -177,15 +182,16 @@ async function openRouterStream({ apiKey, model, messages, maxTokens, responseFo
     return response;
 }
 
-async function openRouterWithFallback({ apiKey, models, messages, maxTokens, responseFormat }) {
+async function openRouterWithFallback({ apiKey, models, messages, maxTokens, extraBodyForModel }) {
     let lastError;
     const failures = [];
     for (let i = 0; i < models.length; i++) {
         const model = models[i];
         const hasMore = i < models.length - 1;
+        const extraBody = extraBodyForModel ? extraBodyForModel(model) : null;
         try {
             return {
-                upstream: await openRouterStream({ apiKey, model, messages, maxTokens, responseFormat }),
+                upstream: await openRouterStream({ apiKey, model, messages, maxTokens, extraBody }),
                 model,
                 failures,
             };
@@ -376,16 +382,60 @@ export default async function handler(req, res) {
     const streamRequested = !isTest && req.body?.stream !== false;
     const startedAt = Date.now();
     const wantsStructured =
-        req.body?.feature === 'chat' || req.body?.feature === 'partyChat' || (isTest && req.body?.validateAmpi === true);
-    const chatStructured = wantsStructured ? ampiChatResponseFormat() : null;
+        req.body?.feature === 'chat' ||
+        req.body?.feature === 'partyChat' ||
+        (isTest && req.body?.validateAmpi === true);
 
     try {
+        if (wantsStructured && !streamRequested) {
+            const catalog = await fetchOpenRouterModelCatalog(apiKey);
+            const getModelRow = (id) => catalog.byId.get(id);
+            const { text, model, failures, strategy } = await completeAmpiTurn({
+                apiKey,
+                models,
+                messages,
+                maxTokens,
+                getModelRow,
+            });
+            const fallbackNote = modelFallbackNote(failures, model);
+            res.status(200).json({
+                text,
+                model,
+                ampiStrategy: strategy,
+                ...(visionNote ? { visionNote } : null),
+                ...(model !== primary ? { fallbackFrom: primary } : null),
+                ...(fallbackNote ? { modelFallbackNote: fallbackNote } : null),
+                ...(failures?.length
+                    ? { upstreamErrors: failures.map((f) => ({ model: f.model, message: f.message })) }
+                    : null),
+                ...(isTest ? { latencyMs: Date.now() - startedAt } : null),
+            });
+            return;
+        }
+
+        const catalog = wantsStructured ? await fetchOpenRouterModelCatalog(apiKey) : null;
+        const getModelRow = catalog ? (id) => catalog.byId.get(id) : () => undefined;
+        const extraBodyForModel = wantsStructured
+            ? (model) => {
+                  const strategy = pickAmpiStrategy(getModelRow(model));
+                  const built = buildAmpiOpenRouterBody({
+                      model,
+                      messages,
+                      maxTokens,
+                      strategy,
+                      stream: true,
+                  });
+                  const { model: _m, messages: _msg, max_tokens: _t, stream: _s, ...rest } = built;
+                  return rest;
+              }
+            : null;
+
         const { upstream, model, failures } = await openRouterWithFallback({
             apiKey,
             models,
             messages,
             maxTokens,
-            responseFormat: chatStructured,
+            extraBodyForModel,
         });
         const fallbackNote = modelFallbackNote(failures, model);
 
@@ -452,7 +502,8 @@ export default async function handler(req, res) {
         }
         res.end();
     } catch (error) {
-        const upstreamStatus = error instanceof UpstreamError ? error.status : null;
+        const upstreamStatus =
+            error instanceof UpstreamError || error instanceof AmpiUpstreamError ? error.status : null;
         const reason = error?.message || 'Unknown error';
         console.error(
             `[ai/chat] upstream failed: status=${upstreamStatus} model=${error?.model || primary} ${reason}`,

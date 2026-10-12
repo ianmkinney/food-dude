@@ -1,5 +1,7 @@
 /** One-shot OpenRouter chat completion (non-streaming). */
 
+import { AMPI_STRATEGY, pickAmpiStrategy } from './ampiModelAdapter.js';
+
 export class OpenRouterJsonError extends Error {
     constructor(status, message, model) {
         super(message);
@@ -20,7 +22,26 @@ function upstreamMessage(status, text) {
     return (text || '').replace(/\s+/g, ' ').trim().slice(0, 300) || `HTTP ${status}`;
 }
 
-export async function openRouterChatJson({ apiKey, model, messages, maxTokens = 2048, signal }) {
+export async function openRouterChatJson({
+    apiKey,
+    model,
+    messages,
+    maxTokens = 2048,
+    signal,
+    modelRow,
+    responseFormat,
+}) {
+    const strategy = pickAmpiStrategy(modelRow);
+    const body = {
+        model,
+        messages,
+        max_tokens: maxTokens,
+        stream: false,
+    };
+    if (strategy === AMPI_STRATEGY.JSON_SCHEMA) {
+        body.response_format = responseFormat || { type: 'json_object' };
+    }
+
     let response;
     try {
         response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -31,12 +52,7 @@ export async function openRouterChatJson({ apiKey, model, messages, maxTokens = 
                 'HTTP-Referer': 'https://amplifood.vercel.app',
                 'X-Title': 'AmpliFood',
             },
-            body: JSON.stringify({
-                model,
-                messages,
-                max_tokens: maxTokens,
-                stream: false,
-            }),
+            body: JSON.stringify(body),
             signal,
         });
     } catch (error) {

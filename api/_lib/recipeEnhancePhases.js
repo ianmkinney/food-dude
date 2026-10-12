@@ -1,4 +1,5 @@
 import { openRouterChatJson } from './openRouterChatJson.js';
+import { fetchOpenRouterModelCatalog } from './openRouterModels.js';
 
 export const ENHANCE_DEFAULT_MODEL = 'google/gemini-2.5-flash';
 
@@ -63,9 +64,12 @@ Return ONLY JSON:
   "changes": [{"field": string, "oldValue": string|null, "newValue": string, "reason": string}]
 }`;
 
+    const catalog = await fetchOpenRouterModelCatalog(opts.apiKey);
+    const modelRow = catalog.byId.get(opts.model);
     const { text } = await openRouterChatJson({
         apiKey: opts.apiKey,
         model: opts.model,
+        modelRow,
         maxTokens: 2800,
         messages: [{ role: 'user', content: prompt }],
         signal: AbortSignal.timeout(55_000),
@@ -101,9 +105,12 @@ Return ONLY JSON:
   "changes": [{"field": string, "oldValue": string|null, "newValue": string, "reason": string}]
 }`;
 
+    const catalog = await fetchOpenRouterModelCatalog(opts.apiKey);
+    const modelRow = catalog.byId.get(opts.model);
     const { text } = await openRouterChatJson({
         apiKey: opts.apiKey,
         model: opts.model,
+        modelRow,
         maxTokens: 900,
         messages: [{ role: 'user', content: prompt }],
         signal: AbortSignal.timeout(55_000),
