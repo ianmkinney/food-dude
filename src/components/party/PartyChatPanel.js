@@ -26,7 +26,8 @@ import {
     mergePartyChatMessages,
     postPartyChatMessage,
 } from '../../services/partyLiveSync';
-import { messageMentionsAmpi, runPartyAmpiReply } from '../../services/partyAmpiChat';
+import { toDisplayText } from '../../chat/messageText';
+import { finalizePartyAmpiReplyForPost, messageMentionsAmpi, runPartyAmpiReply } from '../../services/partyAmpiChat';
 import { savePartyChatAttachmentLocal, loadPartyChatAttachmentLocal } from '../../party/partyChatLocalFiles';
 
 const MENTION_RE = /@ampi\b/i;
@@ -46,6 +47,7 @@ function avatarColor(name, theme) {
 function PartyChatBubble({ message, theme, position, isOwn, onDelete, canDelete }) {
     const c = theme.colors;
     const isAmpi = message.isAmpi;
+    const bodyText = isAmpi ? toDisplayText(message.body || '') : message.body;
     const joinedTop = !position.first;
     const joinedBottom = !position.last;
     const time = position.showTime ? (
@@ -101,16 +103,16 @@ function PartyChatBubble({ message, theme, position, isOwn, onDelete, canDelete 
                     joinedTop && styles.sousJoinedTop,
                     joinedBottom && styles.sousJoinedBottom,
                     {
-                        backgroundColor: isAmpi ? theme.primary[100] : c.surface,
+                        backgroundColor: c.surface,
                         borderColor: c.border,
                         alignSelf: 'flex-start',
                     },
                 ]}
             >
                 {isAmpi ? <AiBadge style={{ marginBottom: 4 }} /> : null}
-                {message.body ? (
+                {bodyText ? (
                     <Text style={[styles.sousText, { color: c.text.primary }]} selectable>
-                        {message.body}
+                        {bodyText}
                     </Text>
                 ) : null}
                 {message.attachment?.fileName ? (
@@ -272,9 +274,11 @@ export default function PartyChatPanel({
                                 : [],
                         });
                         if (reply) {
+                            const bodyForPost = await finalizePartyAmpiReplyForPost(reply);
+                            if (!bodyForPost) return;
                             const ampiRes = await postPartyChatMessage({
                                 livePartyId,
-                                body: reply,
+                                body: bodyForPost,
                                 isAmpi: true,
                                 ampiViaName: myDisplayName || 'You',
                             });

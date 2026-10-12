@@ -37,6 +37,7 @@
     "test:party-live-sync": "node scripts/test-party-live-sync.mjs",
     "test:party-chat-api": "node scripts/test-party-chat-api.mjs",
     "test:party-chat-auth": "node scripts/test-party-chat-auth.mjs",
+    "test:party-ampi-reply-parse": "node scripts/test-party-ampi-reply-parse.mjs",
     "test:party-chat-playwright": "node scripts/test-party-chat-playwright.mjs",
     "test:party-chat-safari-keyboard": "node scripts/test-party-chat-safari-keyboard.mjs",
     "test:party-image-mobile": "node scripts/test-party-image-mobile.mjs",
