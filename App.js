@@ -265,6 +265,10 @@ function AppContent() {
         const { runAmpiScrollTestSeed } = await import('./src/demo/runAmpiScrollTestSeed');
         await runAmpiScrollTestSeed();
       }
+      if (Platform.OS === 'web' && globalThis.__CORRUPT_RECIPE_DETAIL_TEST__) {
+        const { runCorruptRecipeFixtureSeed } = await import('./src/demo/runCorruptRecipeFixtureSeed');
+        await runCorruptRecipeFixtureSeed();
+      }
       console.log('✅ AmpliFood app initialized successfully');
       setDbMode(getDatabaseMode());
       setError(null);

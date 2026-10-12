@@ -3,6 +3,7 @@ import { runMigrations, ensureRequiredColumns } from './migrations';
 import { openAppDatabase } from './openDatabase';
 import { registerDatabase } from './dbRegistry';
 import { saveDatabaseSnapshot } from './webDbMirror';
+import { normalizeRecipe, templateToRecipeOperationsPayload, coerceRecipeTemplateFromToolArgs } from '../recipes/normalizeRecipe';
 
 let db = null;
 let dbMode = 'persistent';
@@ -91,6 +92,19 @@ export const recipeOperations = {
         const now = Date.now();
 
         try {
+            const coerced = templateToRecipeOperationsPayload(
+                coerceRecipeTemplateFromToolArgs({
+                    ...recipe,
+                    ingredients: recipe.ingredients,
+                    instructions: recipe.instructions,
+                    steps: recipe.instructions,
+                    prep_minutes: recipe.prepTime ?? recipe.prep_time,
+                    cook_minutes: recipe.cookTime ?? recipe.cook_time,
+                    ai_generated: recipe.nutritionAiEstimate ? true : recipe.isAiGenerated,
+                })
+            );
+            recipe = { ...recipe, ...coerced };
+
             // Format date_added - use provided date or default to today
             const dateAdded = recipe.dateAdded || new Date().toISOString().split('T')[0];
             
@@ -239,12 +253,13 @@ export const recipeOperations = {
                 [id]
             );
 
-            return {
+            const normalized = normalizeRecipe({
                 ...recipe,
                 ingredients,
-                instructions: instructions.map(i => i.instruction),
-                tags: tags.map(t => t.tag),
-            };
+                instructions: instructions.map((i) => i.instruction),
+                tags: tags.map((t) => t.tag),
+            });
+            return normalized;
         } catch (error) {
             console.error('Error getting recipe by ID:', error);
             throw error;
@@ -292,6 +307,40 @@ export const recipeOperations = {
             const current = await db.getFirstAsync('SELECT * FROM recipes WHERE id = ?', [id]);
             if (!current) {
                 throw new Error('Recipe not found');
+            }
+
+            if (updates.ingredients !== undefined || updates.instructions !== undefined || updates.title !== undefined) {
+                const template = coerceRecipeTemplateFromToolArgs({
+                    title: updates.title ?? current.title,
+                    description: updates.description ?? current.description,
+                    servings: updates.servings ?? current.servings,
+                    prep_minutes: updates.prepTime ?? updates.prep_time ?? current.prep_time,
+                    cook_minutes: updates.cookTime ?? updates.cook_time ?? current.cook_time,
+                    difficulty: updates.difficulty ?? current.difficulty,
+                    ingredients: updates.ingredients,
+                    instructions: updates.instructions,
+                    steps: updates.instructions,
+                    tags: updates.tags,
+                    nutrition: {
+                        calories: updates.calories ?? current.calories,
+                        protein_g: updates.protein ?? current.protein,
+                        carbs_g: updates.carbohydrates ?? current.carbohydrates,
+                        fat_g: updates.fat ?? current.fat,
+                        fiber_g: updates.fiber ?? current.fiber,
+                        sugar_g: updates.sugar ?? current.sugar,
+                        sodium_mg: updates.sodium ?? current.sodium,
+                    },
+                });
+                const coerced = templateToRecipeOperationsPayload(template);
+                if (updates.ingredients !== undefined) updates.ingredients = coerced.ingredients;
+                if (updates.instructions !== undefined) updates.instructions = coerced.instructions;
+                if (updates.title !== undefined) updates.title = coerced.title;
+                if (updates.description !== undefined) updates.description = coerced.description;
+                if (updates.servings !== undefined) updates.servings = coerced.servings;
+                if (updates.prepTime !== undefined || updates.prep_time !== undefined) updates.prepTime = coerced.prepTime;
+                if (updates.cookTime !== undefined || updates.cook_time !== undefined) updates.cookTime = coerced.cookTime;
+                if (updates.totalTime !== undefined || updates.total_time !== undefined) updates.totalTime = coerced.totalTime;
+                if (updates.difficulty !== undefined) updates.difficulty = coerced.difficulty;
             }
 
             // Update main recipe table - use provided values or keep existing ones
