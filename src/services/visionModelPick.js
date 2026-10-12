@@ -32,7 +32,7 @@ export function resolveByokVisionModel(provider, model) {
         openai: 'gpt-4o-mini',
         anthropic: 'claude-3-5-haiku-latest',
         xai: 'grok-2-vision-1212',
-        gemini: 'gemini-2.0-flash',
+        gemini: 'gemini-2.5-flash',
     };
     const next = fallbacks[provider] || current;
     if (next === current) return { model: current, visionNote: null };

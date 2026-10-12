@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
     View,
     Text,
@@ -22,7 +22,11 @@ import { useLayoutMode } from '../layout/useLayoutMode';
 import { desktopListStyles, desktopPageStyles } from '../components/layout/desktopTheme';
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 import PantryExpirationBadge from '../components/PantryExpirationBadge';
+import PantryFreshnessBars from '../components/PantryFreshnessBars';
+import PantryPhotoEstimateButton from '../components/PantryPhotoEstimateButton';
+import PantryBulkEstimateModal from '../components/PantryBulkEstimateModal';
 import { expirationBadge, sortPantryItemsByExpiration } from '../utils/pantryExpiration';
+import { estimatePantryBulkFromPhoto } from '../services/pantryVisionEstimate';
 
 const PantryScreen = () => {
     const navigation = useNavigation();
@@ -34,12 +38,29 @@ const PantryScreen = () => {
         () => sortPantryItemsByExpiration(data || []),
         [data]
     );
+    const [bulkEstimates, setBulkEstimates] = useState([]);
+    const [bulkModalOpen, setBulkModalOpen] = useState(false);
+
     const expiringSoonCount = useMemo(
         () =>
             (data || []).filter((item) => {
                 const badge = expirationBadge(item.expiration_date);
                 return badge && (badge.tone === 'soon' || badge.tone === 'expired');
             }).length,
+        [data]
+    );
+
+    const handleBulkPhoto = useCallback(
+        async (image) => {
+            const list = data || [];
+            if (!list.length) {
+                Alert.alert('Pantry', 'Add items before using bulk photo estimate.');
+                return;
+            }
+            const estimates = await estimatePantryBulkFromPhoto(image, list);
+            setBulkEstimates(estimates);
+            setBulkModalOpen(true);
+        },
         [data]
     );
 
@@ -97,6 +118,7 @@ const PantryScreen = () => {
                             {item.category}
                         </Text>
                     )}
+                    <PantryFreshnessBars item={item} theme={theme} />
                 </View>
             </View>
             <View style={styles.itemActions}>
@@ -154,6 +176,15 @@ const PantryScreen = () => {
                 showSkeleton ? <ScreenSkeleton /> : null
             ) : (
                 <>
+                {(data?.length || 0) > 0 ? (
+                    <View style={styles.bulkPhotoWrap}>
+                        <PantryPhotoEstimateButton
+                            theme={theme}
+                            label="Estimate all from photo"
+                            onEstimate={handleBulkPhoto}
+                        />
+                    </View>
+                ) : null}
                 {expiringSoonCount > 0 && !isDesktop ? (
                     <View style={[styles.soonBanner, { backgroundColor: theme.accent.yellow + '18' }]}>
                         <Ionicons name="time-outline" size={18} color={theme.accent.yellow} />
@@ -188,6 +219,13 @@ const PantryScreen = () => {
                     <Ionicons name="add" size={28} color="#FFFFFF" />
                 </FloatingActionButton>
             ) : null}
+            <PantryBulkEstimateModal
+                visible={bulkModalOpen}
+                theme={theme}
+                estimates={bulkEstimates}
+                onClose={() => setBulkModalOpen(false)}
+                onSaved={loadPantryItems}
+            />
         </View >
     );
 };
@@ -198,6 +236,10 @@ const styles = StyleSheet.create({
     },
     listContent: {
         padding: 16,
+    },
+    bulkPhotoWrap: {
+        paddingHorizontal: 16,
+        paddingTop: 8,
     },
     soonBanner: {
         flexDirection: 'row',
