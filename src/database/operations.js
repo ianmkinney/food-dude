@@ -480,8 +480,8 @@ export const pantryOperations = {
         try {
             const result = await db.runAsync(
                 `INSERT INTO pantry_items (name, category, quantity, unit, barcode, image_uri, 
-         expiration_date, location, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         expiration_date, location, notes, freshness_pct, amount_pct, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     item.name,
                     item.category || null,
@@ -492,6 +492,8 @@ export const pantryOperations = {
                     item.expirationDate || null,
                     item.location || null,
                     item.notes || null,
+                    item.freshnessPct ?? item.freshness_pct ?? 100,
+                    item.amountPct ?? item.amount_pct ?? 100,
                     now,
                     now,
                 ]
@@ -499,6 +501,16 @@ export const pantryOperations = {
             return result.lastInsertRowId;
         } catch (error) {
             console.error('Error adding pantry item:', error);
+            throw error;
+        }
+    },
+
+    async getById(id) {
+        const db = getDatabase();
+        try {
+            return await db.getFirstAsync('SELECT * FROM pantry_items WHERE id = ?', [id]);
+        } catch (error) {
+            console.error('Error getting pantry item:', error);
             throw error;
         }
     },
@@ -534,6 +546,8 @@ export const pantryOperations = {
                     expiration_date = ?,
                     location = ?,
                     notes = ?,
+                    freshness_pct = ?,
+                    amount_pct = ?,
                     updated_at = ?
          WHERE id = ?`,
                 [
@@ -546,6 +560,8 @@ export const pantryOperations = {
                     updates.expirationDate || null,
                     updates.location || null,
                     updates.notes || null,
+                    updates.freshnessPct ?? updates.freshness_pct ?? 100,
+                    updates.amountPct ?? updates.amount_pct ?? 100,
                     now,
                     id
                 ]

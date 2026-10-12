@@ -20,7 +20,12 @@ import { pantryOperations } from '../database/operations';
 import { lookupBarcode } from '../services/barcodeService';
 import { goBackOr } from '../navigation/goBackOr';
 import PantryExpirationDateField from '../components/PantryExpirationDateField';
+import PantryPctSliders from '../components/PantryPctSliders';
+import PantryPhotoEstimateButton from '../components/PantryPhotoEstimateButton';
 import { pantryExpirationFromStorage, pantryExpirationToStorage } from '../utils/pantryExpiration';
+import { clampPantryPct } from '../utils/pantryLevels';
+import { estimatePantryItemFromPhoto } from '../services/pantryVisionEstimate';
+import { runSyncPush } from '../sync/engine';
 
 const EditPantryItemScreen = () => {
     const navigation = useNavigation();
@@ -44,6 +49,10 @@ const EditPantryItemScreen = () => {
     const [location, setLocation] = useState(item.location || '');
     const [notes, setNotes] = useState(item.notes || '');
     const [imageUri, setImageUri] = useState(item.image_uri || null);
+    const [freshnessPct, setFreshnessPct] = useState(clampPantryPct(item.freshness_pct));
+    const [amountPct, setAmountPct] = useState(clampPantryPct(item.amount_pct));
+    const [freshnessAi, setFreshnessAi] = useState(false);
+    const [amountAi, setAmountAi] = useState(false);
 
     useEffect(() => {
         // Initialize form with item data
@@ -57,6 +66,8 @@ const EditPantryItemScreen = () => {
             setLocation(item.location || '');
             setNotes(item.notes || '');
             setImageUri(item.image_uri || null);
+            setFreshnessPct(clampPantryPct(item.freshness_pct));
+            setAmountPct(clampPantryPct(item.amount_pct));
         }
     }, [item]);
 
@@ -140,7 +151,10 @@ const EditPantryItemScreen = () => {
                 expirationDate: pantryExpirationToStorage(expirationDate),
                 location,
                 notes,
+                freshnessPct,
+                amountPct,
             });
+            await runSyncPush();
             Alert.alert('Success', 'Item updated successfully', [
                 { text: 'OK', onPress: () => goBackOr(navigation, 'Pantry') }
             ]);
@@ -247,6 +261,34 @@ const EditPantryItemScreen = () => {
                             theme={theme}
                             value={expirationDate}
                             onChange={setExpirationDate}
+                        />
+
+                        <PantryPhotoEstimateButton
+                            theme={theme}
+                            disabled={!name.trim()}
+                            onEstimate={async (image) => {
+                                const est = await estimatePantryItemFromPhoto(image, name.trim());
+                                setFreshnessPct(est.freshness_pct);
+                                setAmountPct(est.amount_pct);
+                                setFreshnessAi(true);
+                                setAmountAi(true);
+                            }}
+                        />
+
+                        <PantryPctSliders
+                            theme={theme}
+                            freshnessPct={freshnessPct}
+                            amountPct={amountPct}
+                            freshnessAi={freshnessAi}
+                            amountAi={amountAi}
+                            onFreshnessChange={(v) => {
+                                setFreshnessPct(v);
+                                setFreshnessAi(false);
+                            }}
+                            onAmountChange={(v) => {
+                                setAmountPct(v);
+                                setAmountAi(false);
+                            }}
                         />
 
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Location</Text>

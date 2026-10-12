@@ -21,7 +21,11 @@ import { pantryOperations } from '../database/operations';
 import { lookupBarcode } from '../services/barcodeService';
 import { goBackOr } from '../navigation/goBackOr';
 import PantryExpirationDateField from '../components/PantryExpirationDateField';
+import PantryPctSliders from '../components/PantryPctSliders';
+import PantryPhotoEstimateButton from '../components/PantryPhotoEstimateButton';
 import { pantryExpirationFromStorage, pantryExpirationToStorage } from '../utils/pantryExpiration';
+import { estimatePantryItemFromPhoto } from '../services/pantryVisionEstimate';
+import { runSyncPush } from '../sync/engine';
 
 const AddPantryItemScreen = () => {
     const navigation = useNavigation();
@@ -42,6 +46,10 @@ const AddPantryItemScreen = () => {
     const [barcode, setBarcode] = useState('');
     const [expirationDate, setExpirationDate] = useState('');
     const [imageUri, setImageUri] = useState(null);
+    const [freshnessPct, setFreshnessPct] = useState(100);
+    const [amountPct, setAmountPct] = useState(100);
+    const [freshnessAi, setFreshnessAi] = useState(false);
+    const [amountAi, setAmountAi] = useState(false);
 
     const startScanning = async () => {
         if (!isCameraAvailable) {
@@ -122,7 +130,10 @@ const AddPantryItemScreen = () => {
                 barcode,
                 imageUri,
                 expirationDate: pantryExpirationToStorage(expirationDate),
+                freshnessPct,
+                amountPct,
             });
+            await runSyncPush();
             Alert.alert('Success', 'Item added to pantry', [
                 { text: 'OK', onPress: () => goBackOr(navigation, 'Pantry') }
             ]);
@@ -215,6 +226,34 @@ const AddPantryItemScreen = () => {
                             theme={theme}
                             value={expirationDate}
                             onChange={setExpirationDate}
+                        />
+
+                        <PantryPhotoEstimateButton
+                            theme={theme}
+                            disabled={!name.trim()}
+                            onEstimate={async (image) => {
+                                const est = await estimatePantryItemFromPhoto(image, name.trim());
+                                setFreshnessPct(est.freshness_pct);
+                                setAmountPct(est.amount_pct);
+                                setFreshnessAi(true);
+                                setAmountAi(true);
+                            }}
+                        />
+
+                        <PantryPctSliders
+                            theme={theme}
+                            freshnessPct={freshnessPct}
+                            amountPct={amountPct}
+                            freshnessAi={freshnessAi}
+                            amountAi={amountAi}
+                            onFreshnessChange={(v) => {
+                                setFreshnessPct(v);
+                                setFreshnessAi(false);
+                            }}
+                            onAmountChange={(v) => {
+                                setAmountPct(v);
+                                setAmountAi(false);
+                            }}
                         />
 
                         <Text style={[styles.label, { color: theme.colors.text.secondary }]}>Barcode</Text>

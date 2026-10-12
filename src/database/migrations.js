@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 19;
+export const CURRENT_SCHEMA_VERSION = 20;
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
@@ -483,6 +483,18 @@ export const MIGRATIONS = [
         up: async (db) => {
             const { applySyncV17 } = await import('./syncV17.js');
             await applySyncV17(db);
+        },
+    },
+    {
+        version: 20,
+        name: 'pantry_freshness_amount_pct',
+        up: async (db) => {
+            await addColumnIfMissing(db, 'pantry_items', 'freshness_pct', 'INTEGER', '100');
+            await addColumnIfMissing(db, 'pantry_items', 'amount_pct', 'INTEGER', '100');
+            await db.execAsync(
+                `UPDATE pantry_items SET freshness_pct = 100 WHERE freshness_pct IS NULL;
+                 UPDATE pantry_items SET amount_pct = 100 WHERE amount_pct IS NULL;`
+            );
         },
     },
     {

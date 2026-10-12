@@ -83,6 +83,8 @@ export const createTablesSQL = `
     expiration_date TEXT,
     location TEXT,
     notes TEXT,
+    freshness_pct INTEGER NOT NULL DEFAULT 100,
+    amount_pct INTEGER NOT NULL DEFAULT 100,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   );

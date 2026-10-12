@@ -26,6 +26,7 @@
     "test:party-members": "node scripts/test-party-members.mjs",
     "test:party-schema-dedupe": "node scripts/test-party-schema-dedupe.mjs",
     "test:pantry-expiration": "node scripts/test-pantry-expiration.mjs",
+    "test:pantry-levels": "node scripts/test-pantry-levels.mjs",
     "test:party-live-sync": "node scripts/test-party-live-sync.mjs",
     "test:desktop-sidebar": "node scripts/test-desktop-sidebar-active.mjs",
     "test:cross-tab-sync": "node scripts/test-cross-tab-cloud-sync.mjs",

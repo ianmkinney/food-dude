@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { expirationBadge } from '../utils/pantryExpiration';
 
-export default function PantryExpirationBadge({ expirationDate, theme }) {
+export default function PantryExpirationBadge({ expirationDate, theme, compact = false }) {
     const info = expirationBadge(expirationDate);
     if (!info) return null;
     const colors =
@@ -13,9 +13,11 @@ export default function PantryExpirationBadge({ expirationDate, theme }) {
               ? { bg: theme.accent.yellow + '22', fg: theme.accent.yellow, icon: 'time-outline' }
               : { bg: theme.primary[100], fg: theme.primary[700], icon: 'calendar-outline' };
     return (
-        <View style={[styles.badge, { backgroundColor: colors.bg }]}>
-            <Ionicons name={colors.icon} size={14} color={colors.fg} />
-            <Text style={[styles.text, { color: colors.fg }]}>{info.label}</Text>
+        <View style={[styles.badge, compact && styles.badgeCompact, { backgroundColor: colors.bg }]}>
+            <Ionicons name={colors.icon} size={compact ? 12 : 14} color={colors.fg} />
+            <Text style={[styles.text, compact && styles.textCompact, { color: colors.fg }]} numberOfLines={1}>
+                {info.label}
+            </Text>
         </View>
     );
 }
@@ -30,5 +32,11 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         alignSelf: 'flex-start',
     },
+    badgeCompact: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        maxWidth: 88,
+    },
     text: { fontSize: 12, fontWeight: '600' },
+    textCompact: { fontSize: 10 },
 });

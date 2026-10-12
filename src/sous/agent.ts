@@ -55,10 +55,15 @@ async function kitchenContext(userMessage: string): Promise<string> {
         .slice(0, 40)
         .map((r) => `#${r.id} ${r.title}`)
         .join('; ');
-    const pantryLines = (pantry as { name: string }[])
+    const pantryLines = (pantry as { name: string; freshness_pct?: number; amount_pct?: number }[])
         .slice(0, 60)
-        .map((p) => p.name)
-        .join(', ');
+        .map((p) => {
+            const fresh = p.freshness_pct != null ? `freshness ${p.freshness_pct}%` : '';
+            const amt = p.amount_pct != null ? `amount ${p.amount_pct}%` : '';
+            const extra = [fresh, amt].filter(Boolean).join(', ');
+            return extra ? `${p.name} (${extra})` : p.name;
+        })
+        .join('; ');
     const groceryLines = (grocery as { name: string; is_checked?: number }[])
         .slice(0, 60)
         .map((g) => g.name)
@@ -74,7 +79,7 @@ async function kitchenContext(userMessage: string): Promise<string> {
         chatRecipes
             ? `Recipes saved in this conversation (oldest first; the LAST one is what "it", "this recipe" or a follow-up answer refers to):\n${chatRecipes}`
             : '',
-        `Pantry: ${pantryLines || 'empty'}.`,
+        `Pantry (freshness/amount are 0–100% estimates; suggest using low-freshness or low-amount items first): ${pantryLines || 'empty'}.`,
         `Grocery list: ${groceryLines || 'empty'}.`,
         flavor ? `Flavor preferences: ${flavor}.` : '',
         allergies ? `Allergies (hard exclusion, never duplicate in memory — reference this field only): ${allergies}.` : '',
