@@ -4,6 +4,7 @@ import { openAppDatabase } from './openDatabase';
 import { registerDatabase } from './dbRegistry';
 import { saveDatabaseSnapshot } from './webDbMirror';
 import { normalizeRecipe, templateToRecipeOperationsPayload, coerceRecipeTemplateFromToolArgs } from '../recipes/normalizeRecipe';
+import { resolveRecipeTitleForSave, recipeTitleRequiredMessage } from '../../api/_lib/recipeTitle.js';
 
 let db = null;
 let dbMode = 'persistent';
@@ -104,6 +105,11 @@ export const recipeOperations = {
                 })
             );
             recipe = { ...recipe, ...coerced };
+            const saveTitle = resolveRecipeTitleForSave(recipe);
+            if (!saveTitle) {
+                throw new Error(recipeTitleRequiredMessage());
+            }
+            recipe.title = saveTitle;
 
             // Format date_added - use provided date or default to today
             const dateAdded = recipe.dateAdded || new Date().toISOString().split('T')[0];

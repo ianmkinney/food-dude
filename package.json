@@ -24,6 +24,8 @@
     "test:ampi-json-parse": "node scripts/test-ampi-json-parse.mjs",
     "test:ampi-adapter-contract": "node scripts/test-ampi-adapter-contract.mjs",
     "test:ampi-openrouter-smoke": "node scripts/test-ampi-openrouter-smoke.mjs",
+    "test:parse-recipe-json": "node scripts/test-parse-recipe-json.mjs",
+    "test:recipe-title": "node scripts/test-recipe-title.mjs",
     "test:web-back": "node scripts/test-web-back-after-actions.mjs",
     "test:chat-text": "node scripts/test-chat-text.mjs",
     "test:auto-recipe-image": "node scripts/test-auto-recipe-image.mjs",

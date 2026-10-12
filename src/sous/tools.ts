@@ -15,6 +15,7 @@ import type { ChatRecipeAction } from '../chat/chatRecipes';
 import { ensureRecipeNutritionAsync, nutritionFieldsFromCreateArgs } from '../utils/ensureRecipeNutrition';
 import { hasAnyNutrition } from '../utils/recipeNutrition';
 import { normalizeToolCalls, parseRecipeId } from '../../api/_lib/ampiToolNormalize.js';
+import { resolveRecipeTitleForSave, recipeTitleRequiredMessage } from '../../api/_lib/recipeTitle.js';
 import {
     coerceRecipeTemplateFromToolArgs,
     RECIPE_TEMPLATE_DEFAULTS,
@@ -231,6 +232,11 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
                 }
                 throw new Error(err || "Couldn't read a recipe from that.");
             }
+            const importTitle = resolveRecipeTitleForSave(result.recipe);
+            if (!importTitle) {
+                throw new Error(recipeTitleRequiredMessage());
+            }
+            result.recipe.title = importTitle;
             const aiExtracted = Boolean(
                 ('aiExtracted' in result && result.aiExtracted) || result.recipe.aiExtracted
             );
@@ -284,9 +290,14 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
                 ai_generated: true,
             });
             const payload = templateToRecipeOperationsPayload(template);
+            const createTitle = resolveRecipeTitleForSave({ ...a, ...template, title: template.title });
+            if (!createTitle) {
+                throw new Error(recipeTitleRequiredMessage());
+            }
             const id = Number(
                 await recipeOperations.create({
                     ...payload,
+                    title: createTitle,
                     sourcePlatform: 'Ampi',
                     imageUri: cover,
                     nutritionAiEstimate: 1,
@@ -299,7 +310,7 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
             return {
                 type: 'recipe',
                 title: 'Saved to your recipe book',
-                recipe: { id, title: template.title, is_ai_generated: 1, image_uri: cover },
+                recipe: { id, title: createTitle, is_ai_generated: 1, image_uri: cover },
                 aiGenerated: true,
                 fromUserFile: fromFile,
                 sourceLabel: fromFile ? ATTACHMENT_SOURCE_LABEL : undefined,

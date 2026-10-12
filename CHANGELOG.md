@@ -13,6 +13,7 @@ Mobile layout polish for pantry lists.
 - Party chat persistence: load full history on open (`chat_history` with pagination), refresh owner member token when missing, loading spinner and retry on history failure, failed sends stay visible with tap-to-retry
 - Ampi `update_recipe`: normalize recipe ids across models (`10`, `"#10"`, `recipeId`), infer id from reply/context, validate via recipe template coercion, update nutrition fields, clearer errors
 - OpenRouter model-agnostic Ampi adapter: canonical tool schema, per-model strategy (native tools → `json_schema` → prompt JSON), unified extract/normalize/repair + fallback; owner chat model picker lists all text models; contract tests and optional live smoke script
+- TikTok / social link import in Ampi: safe API JSON parsing (no raw `JSON.parse` on HTML errors), server caption extraction via the adapter, friendly client errors; block saving recipes without a real title (infer from content or fail with a clear message)
 
 ## [1.0.1] - 2026-10-12
 

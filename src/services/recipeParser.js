@@ -4,6 +4,8 @@ import { isAiConfigured, requireAiConfigured } from './aiSettings';
 import { prepareImagesForAi, toPersistentImageUri } from './mediaPrep';
 import { friendlyMediaErrorMessage } from './mediaTypes';
 import { fetchRecipeImportViaApi, isSocialPostUrl } from './recipeUrlImport';
+import { parseRecipeJsonFromModelText } from '../../api/_lib/parseRecipeJson.js';
+import { resolveRecipeTitleForSave, recipeTitleRequiredMessage } from '../../api/_lib/recipeTitle.js';
 
 function sourcePlatformLabel({ sourceUrl, sourcePlatform, author }) {
     if (sourcePlatform === 'instagram') {
@@ -87,9 +89,8 @@ For nutritional info:
         const images = prepared.map((image) => ({ data: image.base64, mimeType: image.mimeType }));
 
         const text = await retryOperation(() => generateMultimodal({ prompt, images }));
-        const cleanedText = stripCodeFences(text);
 
-        const parsedRecipe = JSON.parse(cleanedText);
+        const parsedRecipe = parseRecipeJsonFromModelText(text);
 
         // Determine which image to use
         let finalImageUri = null;
@@ -224,9 +225,8 @@ Recipe content to parse:
 ${input}`;
 
         const text = await retryOperation(() => generateText(prompt, { feature: 'textImport' }));
-        const cleanedText = stripCodeFences(text);
 
-        const parsedRecipe = JSON.parse(cleanedText);
+        const parsedRecipe = parseRecipeJsonFromModelText(text);
 
         return {
             success: true,
@@ -263,6 +263,11 @@ export const parseRecipeFromUrl = async (url) => {
                 if (!parsed.success) {
                     return parsed;
                 }
+                const titled = resolveRecipeTitleForSave(parsed.recipe);
+                if (!titled) {
+                    return { success: false, error: recipeTitleRequiredMessage() };
+                }
+                parsed.recipe.title = titled;
                 const sourceUrl = viaApi.sourceUrl || url;
                 const aiExtracted = Boolean(viaApi.aiExtracted);
                 return {
@@ -336,9 +341,8 @@ HTML content (truncated to first 10000 chars):
 ${html.substring(0, 10000)}`;
 
         const text = await retryOperation(() => generateText(prompt, { feature: 'textImport' }));
-        const cleanedText = stripCodeFences(text);
 
-        const parsedRecipe = JSON.parse(cleanedText);
+        const parsedRecipe = parseRecipeJsonFromModelText(text);
 
         return {
             success: true,

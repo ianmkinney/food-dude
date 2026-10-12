@@ -1,6 +1,7 @@
 import { coerceRecipeTemplateFromToolArgs } from './recipeNormalize.js';
 import { normalizeToolCalls, parseRecipeId } from './ampiToolNormalize.js';
 import { AMPI_TOOL_NAMES } from './ampiActionSchema.js';
+import { resolveRecipeTitleForSave } from './recipeTitle.js';
 
 const MEMORY_CATEGORIES = new Set(['likes', 'dislikes', 'household', 'equipment', 'skill', 'goals']);
 const MEAL_TYPES = new Set(['breakfast', 'lunch', 'dinner']);
@@ -32,7 +33,7 @@ export function validateCanonicalAction(action) {
             break;
         case 'create_recipe': {
             const t = coerceRecipeTemplateFromToolArgs(args);
-            if (!hasText(t.title) || t.title === 'Untitled recipe') errors.push('create_recipe requires title');
+            if (!resolveRecipeTitleForSave({ ...args, ...t })) errors.push('create_recipe requires a real title');
             if (!t.ingredients?.length) errors.push('create_recipe requires ingredients');
             if (!t.steps?.length) errors.push('create_recipe requires instructions/steps');
             break;
