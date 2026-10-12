@@ -124,10 +124,10 @@ export async function runRenamePartyJob(localPartyId, { livePartyId, name }) {
     });
 }
 
-export async function runUploadImageJob(localPartyId, { livePartyId, imageBase64 }) {
+export async function runUploadImageJob(localPartyId, { livePartyId, imageBase64, thumbImageBase64 }) {
     await runPartyLiveJob(localPartyId, {
         run: async () => {
-            await uploadLivePartyImage({ livePartyId, imageBase64 });
+            await uploadLivePartyImage({ livePartyId, imageBase64, thumbImageBase64 });
         },
     });
 }

@@ -50,7 +50,12 @@ export function stripMarkdown(text: string): string {
 }
 
 function respellAssistantName(text: string): string {
-    return text.replace(new RegExp(`\\b${ASSISTANT_NAME}\\b`, 'g'), ASSISTANT_PRONUNCIATION.replace(/-/g, ' '));
+    return text.replace(new RegExp(`\\b${ASSISTANT_NAME}\\b`, 'gi'), ASSISTANT_PRONUNCIATION);
+}
+
+/** Exported for speech/TTS tests — whole-word Ampi → Ampy (display name unchanged). */
+export function respellAssistantNameForSpeech(text: string): string {
+    return respellAssistantName(text);
 }
 
 export function stripSsml(text: string): string {

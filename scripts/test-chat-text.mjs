@@ -89,7 +89,7 @@ test('audio tags are hidden on screen but kept for ElevenLabs', () => {
 
 test('speech text has no Markdown symbols or tags', () => {
     const spoken = toSpokenText('[warmly] **Ampi** here!\n\n1. Brown the *sausage*\n2. Add `noodles`\n\n## Tips\n- Use basil');
-    assert.equal(spoken, 'AM pee here! 1. Brown the sausage. 2. Add noodles. Tips. Use basil.');
+    assert.equal(spoken, 'Ampy here! 1. Brown the sausage. 2. Add noodles. Tips. Use basil.');
     assert.ok(!/[*#`[\]]/.test(spoken));
 });
 

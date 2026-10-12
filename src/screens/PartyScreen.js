@@ -47,7 +47,9 @@ import {
     runPartyLiveJob,
 } from '../services/partyLiveSyncStatus';
 import PartySyncStatusChip from '../components/party/PartySyncStatusChip';
-import { pickPartyCoverImageBase64 } from '../utils/partyImage';
+import { pickPartyCoverImages } from '../utils/partyImage';
+import { resolveRecipeContributorName } from '../utils/partyMealMeta';
+import ImageLightbox from '../components/ImageLightbox';
 
 const PartyScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -77,6 +79,7 @@ const PartyScreen = ({ navigation }) => {
     const [pantryMatches, setPantryMatches] = useState({});
     const [ingredientClaims, setIngredientClaims] = useState([]);
     const [partyMembers, setPartyMembers] = useState([]);
+    const [lightboxUri, setLightboxUri] = useState(null);
     const [userColors, setUserColors] = useState({});
     const [estimatingCosts, setEstimatingCosts] = useState(false);
     const [matchingIngredients, setMatchingIngredients] = useState(false);
@@ -203,7 +206,7 @@ const PartyScreen = ({ navigation }) => {
 
     useSyncDataRefresh(refreshParty);
 
-    const loadMealStats = async (partyId, partyMeals) => {
+    const loadMealStats = async (partyId, partyMeals, members = partyMembers) => {
         setMealsLoading(true);
         try {
             const claims = await partyMealIngredientClaimOperations.getClaimsByPartyId(partyId);
@@ -221,10 +224,12 @@ const PartyScreen = ({ navigation }) => {
                         meal.recipeMeta?.[String(recipe.id)] ||
                         meal.recipeMeta?.[recipe.id] ||
                         {};
+                    const resolved =
+                        resolveRecipeContributorName(meta, members, meal, currentUser) || 'Guest cook';
                     contributors.push({
                         recipeId: recipe.id,
                         recipeTitle: recipe.title,
-                        name: meta.addedByDisplayName || meta.addedByName || 'Someone',
+                        name: resolved,
                         memberId: meta.addedByMemberId,
                     });
                 });
@@ -247,19 +252,20 @@ const PartyScreen = ({ navigation }) => {
         try {
             const partyMeals = await partyMealOperations.getByPartyId(partyId);
             setMeals(partyMeals);
-            await loadMealStats(partyId, partyMeals);
+            await loadMealStats(partyId, partyMeals, partyMembers);
         } catch (error) {
             console.error('Error loading meals:', error);
         }
     };
 
-    const partyCoverUri = (party) => {
+    const partyCoverUri = (party, variant = 'thumb') => {
         if (!party?.live_party_id) return null;
+        const q = `action=image&partyId=${encodeURIComponent(party.live_party_id)}&variant=${variant}`;
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
-            return `${window.location.origin}/api/party?action=image&partyId=${party.live_party_id}`;
+            return `${window.location.origin}/api/party?${q}`;
         }
         const base = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://amplifood.vercel.app/api';
-        return `${base.replace(/\/$/, '')}/party?action=image&partyId=${party.live_party_id}`;
+        return `${base.replace(/\/$/, '')}/party?${q}`;
     };
 
     const promptSignIn = () => {
@@ -722,11 +728,12 @@ const PartyScreen = ({ navigation }) => {
             return;
         }
         try {
-            const imageBase64 = await pickPartyCoverImageBase64();
-            if (!imageBase64) return;
+            const images = await pickPartyCoverImages();
+            if (!images?.full) return;
             await runUploadImageJob(selectedParty.id, {
                 livePartyId: selectedParty.live_party_id,
-                imageBase64,
+                imageBase64: images.full,
+                thumbImageBase64: images.thumb,
             });
             await refreshParty();
         } catch (error) {
@@ -908,7 +915,13 @@ const PartyScreen = ({ navigation }) => {
                     else setShowCreatePartyModal(true);
                 }}
             />
-            <PartyHero name={selectedParty.name} imageUri={partyCoverUri(selectedParty)} theme={theme} />
+            <PartyHero
+                name={selectedParty.name}
+                imageUri={partyCoverUri(selectedParty, 'thumb')}
+                fullImageUri={partyCoverUri(selectedParty, 'full')}
+                theme={theme}
+                onImagePress={setLightboxUri}
+            />
             <PartyActionBar
                 theme={theme}
                 isOwner={isPartyOwner}
@@ -962,6 +975,7 @@ const PartyScreen = ({ navigation }) => {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            <ImageLightbox visible={!!lightboxUri} uri={lightboxUri} onClose={() => setLightboxUri(null)} isDark={isDark} />
             {mealsLoading && meals.length === 0 && selectedParty ? <PartyScreenSkeleton theme={theme} /> : null}
             <FlatList
                 data={selectedParty ? meals : []}

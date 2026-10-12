@@ -1,4 +1,5 @@
 import { checkMinuteRateLimit } from './store.js';
+import { applyPronunciationLocators } from './elevenLabsPronunciation.js';
 
 export const ELEVENLABS_TTS_MAX_CHARS = 1000;
 export const ELEVENLABS_REQUESTS_PER_MINUTE = 20;
@@ -159,11 +160,13 @@ export async function fetchElevenLabsTts({ voiceId, text, modelId = ELEVENLABS_V
                 'content-type': 'application/json',
                 accept: 'audio/mpeg',
             },
-            body: JSON.stringify({
-                text: String(text).replace(SSML_TAG, '').replace(/<break[^>]*\/?>/gi, ''),
-                model_id: modelId,
-                voice_settings: voiceSettings || defaultVoiceSettings(),
-            }),
+            body: JSON.stringify(
+                applyPronunciationLocators({
+                    text: String(text).replace(SSML_TAG, '').replace(/<break[^>]*\/?>/gi, ''),
+                    model_id: modelId,
+                    voice_settings: voiceSettings || defaultVoiceSettings(),
+                })
+            ),
         });
     } catch (error) {
         throw new Error(`Couldn't reach ElevenLabs: ${error?.message || 'network error'}`);

@@ -174,18 +174,32 @@ function parseValidatedImage(imageBase64, res) {
     return { buffer, contentType: sniffed.contentType };
 }
 
-async function persistPartyImage(sql, partyId, buffer, contentType) {
+async function persistPartyImage(sql, partyId, buffer, contentType, thumbBuffer = null, thumbContentType = null) {
     let imageUrl = null;
     let imageBytea = null;
+    let thumbUrl = null;
+    let thumbBytea = null;
     if (isBlobConfigured()) {
         const uploaded = await uploadPartyImage({ partyId, buffer, contentType });
         imageUrl = uploaded.url;
+        if (thumbBuffer) {
+            const thumbUploaded = await uploadPartyImage({
+                partyId: `${partyId}-thumb`,
+                buffer: thumbBuffer,
+                contentType: thumbContentType || 'image/jpeg',
+            });
+            thumbUrl = thumbUploaded.url;
+        }
     } else {
         imageBytea = buffer;
+        thumbBytea = thumbBuffer;
     }
     await sql`
         UPDATE parties SET image_url = ${imageUrl}, image_bytea = ${imageBytea},
-            image_content_type = ${contentType}, updated_at = now()
+            image_content_type = ${contentType},
+            image_thumb_url = ${thumbUrl}, image_thumb_bytea = ${thumbBytea},
+            image_thumb_content_type = ${thumbContentType},
+            updated_at = now()
         WHERE id = ${partyId}::uuid`;
 }
 
@@ -601,6 +615,7 @@ async function handleUploadImage(req, res, session) {
     const body = parseBody(req);
     const partyId = String(body.partyId || '').trim();
     const imageBase64 = String(body.imageBase64 || '').trim();
+    const thumbBase64 = String(body.thumbImageBase64 || body.imageThumbBase64 || '').trim();
     if (!partyId || !imageBase64) {
         partyReject(res, 400, 'bad_request');
         return;
@@ -615,10 +630,26 @@ async function handleUploadImage(req, res, session) {
     const parsed = parseValidatedImage(imageBase64, res);
     if (!parsed) return;
 
-    await persistPartyImage(sql, partyId, parsed.buffer, parsed.contentType);
+    let thumbParsed = null;
+    if (thumbBase64) {
+        thumbParsed = parseValidatedImage(thumbBase64, res);
+        if (!thumbParsed) return;
+    }
+    await persistPartyImage(
+        sql,
+        partyId,
+        parsed.buffer,
+        parsed.contentType,
+        thumbParsed?.buffer ?? null,
+        thumbParsed?.contentType ?? null
+    );
     await sql`UPDATE parties SET version = version + 1, updated_at = now() WHERE id = ${partyId}::uuid`;
-    const rows = await sql`SELECT image_url FROM parties WHERE id = ${partyId}::uuid LIMIT 1`;
-    res.status(200).json({ ok: true, imageUrl: rows[0]?.image_url || null });
+    const rows = await sql`SELECT image_url, image_thumb_url FROM parties WHERE id = ${partyId}::uuid LIMIT 1`;
+    res.status(200).json({
+        ok: true,
+        imageUrl: rows[0]?.image_url || null,
+        thumbUrl: rows[0]?.image_thumb_url || null,
+    });
 }
 
 async function handleChangesSince(req, res, session) {
@@ -753,20 +784,29 @@ async function handlePartyImage(req, res) {
         return;
     }
     const sql = await getPartySql();
+    const variant = String(req.query?.variant || 'full').toLowerCase() === 'thumb' ? 'thumb' : 'full';
     const rows = await sql`
-        SELECT image_url, image_bytea, image_content_type FROM parties WHERE id = ${partyId}::uuid LIMIT 1`;
+        SELECT image_url, image_bytea, image_content_type,
+               image_thumb_url, image_thumb_bytea, image_thumb_content_type
+        FROM parties WHERE id = ${partyId}::uuid LIMIT 1`;
     const row = rows[0];
     if (!row) {
         partyReject(res, 404, 'not_found');
         return;
     }
-    if (row.image_url) {
-        res.redirect(302, row.image_url);
+    const url = variant === 'thumb' ? row.image_thumb_url || row.image_url : row.image_url;
+    const bytea = variant === 'thumb' ? row.image_thumb_bytea || row.image_bytea : row.image_bytea;
+    const contentType =
+        variant === 'thumb'
+            ? row.image_thumb_content_type || row.image_content_type
+            : row.image_content_type;
+    if (url) {
+        res.redirect(302, url);
         return;
     }
-    if (row.image_bytea) {
-        applyBinaryImageHeaders(res, row.image_content_type || 'application/octet-stream');
-        res.status(200).send(Buffer.from(row.image_bytea));
+    if (bytea) {
+        applyBinaryImageHeaders(res, contentType || 'application/octet-stream');
+        res.status(200).send(Buffer.from(bytea));
         return;
     }
     partyReject(res, 404, 'not_found');

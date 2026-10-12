@@ -41,6 +41,8 @@ import { useViewTransitionTarget } from '../motion/viewTransition';
 import useReducedMotion from '../hooks/useReducedMotion';
 import { goBackOr } from '../navigation/goBackOr';
 import SectionErrorBoundary from '../components/SectionErrorBoundary';
+import CoverImage from '../components/CoverImage';
+import ImageLightbox from '../components/ImageLightbox';
 
 // Below this width the current/new photo comparison stacks vertically.
 const safeText = (value) => {
@@ -86,6 +88,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
     const [imageCandidate, setImageCandidate] = useState(null);
     const [applyingImage, setApplyingImage] = useState(false);
     const [imageNotice, setImageNotice] = useState(null);
+    const [lightboxUri, setLightboxUri] = useState(null);
     const editedRef = useRef(null);
     editedRef.current = editedRecipe;
     const scrollRef = useRef(null);
@@ -531,6 +534,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
             style={[styles.container, { backgroundColor: theme.colors.background }]}
             edges={['top']}
         >
+            <ImageLightbox visible={!!lightboxUri} uri={lightboxUri} onClose={() => setLightboxUri(null)} isDark={isDark} />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
@@ -539,9 +543,15 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                 {/* Header Image */}
                 <View ref={heroRef} style={[styles.imageContainer, { backgroundColor: theme.primary[100] }]}>
                     {(isEditing ? editedRecipe.image_uri : recipe.image_uri) ? (
-                        <Image
-                            source={{ uri: isEditing ? editedRecipe.image_uri : recipe.image_uri }}
+                        <CoverImage
+                            uri={isEditing ? editedRecipe.image_uri : recipe.image_uri}
                             style={styles.image}
+                            onPress={
+                                isEditing
+                                    ? undefined
+                                    : () => setLightboxUri(recipe.image_uri)
+                            }
+                            accessibilityLabel={`${recipe.title} photo`}
                         />
                     ) : (
                         <Ionicons name="restaurant" size={80} color={theme.primary[300]} />
