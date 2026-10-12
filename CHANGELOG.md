@@ -7,6 +7,7 @@ All notable user-facing changes to AmpliFood are documented here. Versions follo
 Mobile layout polish for pantry lists.
 
 - Move floating add (and grocery AI/add) buttons to the bottom-left, above the tab bar, with extra list padding so row actions stay tappable on iPhone Safari
+- Party chat on mobile Safari: pin the composer to the keyboard (`visualViewport`) and collapse party header chrome while typing
 
 ## [1.0.1] - 2026-10-12
 

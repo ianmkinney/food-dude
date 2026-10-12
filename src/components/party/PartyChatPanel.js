@@ -18,6 +18,7 @@ import { AiBadge } from '../../ai/AiLabel';
 import AnimatedPressable from '../AnimatedPressable';
 import { formatChatTime, groupPosition } from '../../chat/messageGroups';
 import { useKeyboardViewport } from '../../chat/useKeyboardViewport';
+import { setComposerFocused as setGlobalComposerFocused } from '../../chat/composerFocus';
 import { ASSISTANT_NAME } from '../../config/assistant';
 import { motion } from '../../theme';
 import {
@@ -141,6 +142,7 @@ export default function PartyChatPanel({
     myMemberId,
     isPartyOwner,
     isDesktop,
+    onComposerFocusChange,
 }) {
     const c = theme.colors;
     const insets = useSafeAreaInsets();
@@ -148,10 +150,42 @@ export default function PartyChatPanel({
     const [inputHeight, setInputHeight] = useState(INPUT_MIN_HEIGHT);
     const [pendingAttachment, setPendingAttachment] = useState(null);
     const [thinking, setThinking] = useState(false);
-    const [composerFocused, setComposerFocused] = useState(false);
+    const [composerFocused, setComposerFocusedState] = useState(false);
     const listRef = useRef(null);
+    const inputRef = useRef(null);
+    const blurTimer = useRef(null);
     const { keyboardOpen } = useKeyboardViewport(composerFocused, () =>
-        listRef.current?.scrollToEnd?.({ animated: true })
+        listRef.current?.scrollToEnd?.({ animated: true }),
+        { pageBackground: c.background }
+    );
+
+    const setComposerActive = useCallback(
+        (active) => {
+            setComposerFocusedState(active);
+            setGlobalComposerFocused(active);
+            onComposerFocusChange?.(active);
+        },
+        [onComposerFocusChange]
+    );
+
+    const onComposerFocus = useCallback(() => {
+        if (blurTimer.current) clearTimeout(blurTimer.current);
+        setComposerActive(true);
+    }, [setComposerActive]);
+
+    const onComposerBlur = useCallback(() => {
+        if (blurTimer.current) clearTimeout(blurTimer.current);
+        blurTimer.current = setTimeout(() => {
+            setComposerActive(false);
+        }, 150);
+    }, [setComposerActive]);
+
+    useEffect(
+        () => () => {
+            if (blurTimer.current) clearTimeout(blurTimer.current);
+            setGlobalComposerFocused(false);
+        },
+        []
     );
 
     const grouped = useMemo(
@@ -259,12 +293,19 @@ export default function PartyChatPanel({
         [livePartyId, meals, ingredientClaims, messages, myDisplayName, setMessages]
     );
 
+    const releaseComposer = useCallback(() => {
+        if (blurTimer.current) clearTimeout(blurTimer.current);
+        inputRef.current?.blur?.();
+        setComposerActive(false);
+    }, [setComposerActive]);
+
     const onSend = () => {
         const body = input;
         setInput('');
         setInputHeight(INPUT_MIN_HEIGHT);
         const attach = pendingAttachment;
         setPendingAttachment(null);
+        releaseComposer();
         void sendMessage(body, { attachment: attach, askAmpi: messageMentionsAmpi(body) });
     };
 
@@ -272,6 +313,7 @@ export default function PartyChatPanel({
         const body = input.trim() || `Hey @${ASSISTANT_NAME}, what should we cook?`;
         setInput('');
         setInputHeight(INPUT_MIN_HEIGHT);
+        releaseComposer();
         void sendMessage(body, { askAmpi: true });
     };
 
@@ -392,13 +434,14 @@ export default function PartyChatPanel({
             >
                 <View style={styles.composerInputRow}>
                     <TextInput
+                        ref={inputRef}
                         value={input}
                         onChangeText={(text) => {
                             setInput(text);
                             if (!text.trim()) setInputHeight(INPUT_MIN_HEIGHT);
                         }}
-                        onFocus={() => setComposerFocused(true)}
-                        onBlur={() => setComposerFocused(false)}
+                        onFocus={onComposerFocus}
+                        onBlur={onComposerBlur}
                         placeholder={`Message the party… (@${ASSISTANT_NAME} for help)`}
                         placeholderTextColor={c.text.tertiary}
                         accessibilityLabel="Party chat message"
