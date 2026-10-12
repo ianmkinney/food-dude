@@ -8,10 +8,23 @@ import {
     freshnessLabel,
 } from '../utils/pantryLevels';
 
-export default function PantryFreshnessBars({ item, theme, compact = true }) {
+export default function PantryFreshnessBars({ item, theme, compact = true, variant = 'default' }) {
     const freshness = clampPantryPct(item?.freshness_pct);
     const amount = clampPantryPct(item?.amount_pct);
     const track = theme.colors.borderSoft || theme.colors.border;
+
+    if (variant === 'tiny') {
+        return (
+            <View style={styles.tinyWrap} accessibilityLabel={`Freshness ${freshnessLabel(freshness)}, amount ${amountLabel(amount)}`}>
+                <View style={[styles.tinyTrack, { backgroundColor: track }]}>
+                    <View style={[styles.tinyFill, { width: `${freshness}%`, backgroundColor: freshnessBarColor(freshness, theme) }]} />
+                </View>
+                <View style={[styles.tinyTrack, { backgroundColor: track }]}>
+                    <View style={[styles.tinyFill, { width: `${amount}%`, backgroundColor: amountBarColor(amount, theme) }]} />
+                </View>
+            </View>
+        );
+    }
 
     return (
         <View style={[styles.wrap, compact && styles.wrapCompact]}>
@@ -52,6 +65,9 @@ function BarRow({ label, valueLabel, pct, fillColor, trackColor, textColor }) {
 }
 
 const styles = StyleSheet.create({
+    tinyWrap: { width: 56, gap: 3 },
+    tinyTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
+    tinyFill: { height: '100%', borderRadius: 2 },
     wrap: { gap: 6, marginTop: 8 },
     wrapCompact: { marginTop: 6 },
     row: { flexDirection: 'row', alignItems: 'center', gap: 8 },

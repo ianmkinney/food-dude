@@ -56,6 +56,14 @@ async function main() {
         const listPath = join(outDir, 'pantry-freshness-list-390.png');
         await page.screenshot({ path: listPath, fullPage: true });
         console.log('Wrote', listPath);
+        const expand = page.getByRole('button', { name: /^Expand / }).first();
+        if (await expand.count()) {
+            await expand.click();
+            await page.waitForTimeout(1500);
+            const expandedPath = join(outDir, 'pantry-freshness-expanded-390.png');
+            await page.screenshot({ path: expandedPath, fullPage: true });
+            console.log('Wrote', expandedPath);
+        }
         const edit = page.getByLabel('Edit item').first();
         if (await edit.count()) {
             await edit.click();

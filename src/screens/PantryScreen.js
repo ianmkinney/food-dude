@@ -13,7 +13,6 @@ import { useTheme } from '../context/ThemeContext';
 import { pantryOperations } from '../database/operations';
 import { useQuery } from '../data/queryCache';
 import { pantryQuery } from '../data/queries';
-import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
 import FloatingActionButton from '../components/FloatingActionButton';
 import EmptyState from '../components/EmptyState';
@@ -21,9 +20,8 @@ import ScreenSkeleton from '../components/Skeleton';
 import { useLayoutMode } from '../layout/useLayoutMode';
 import { desktopListStyles, desktopPageStyles } from '../components/layout/desktopTheme';
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
-import PantryExpirationBadge from '../components/PantryExpirationBadge';
-import PantryFreshnessBars from '../components/PantryFreshnessBars';
 import PantryPhotoEstimateButton from '../components/PantryPhotoEstimateButton';
+import PantryExpandableItemCard from '../components/PantryExpandableItemCard';
 import PantryBulkEstimateModal from '../components/PantryBulkEstimateModal';
 import { expirationBadge, sortPantryItemsByExpiration } from '../utils/pantryExpiration';
 import { estimatePantryBulkFromPhoto } from '../services/pantryVisionEstimate';
@@ -40,6 +38,11 @@ const PantryScreen = () => {
     );
     const [bulkEstimates, setBulkEstimates] = useState([]);
     const [bulkModalOpen, setBulkModalOpen] = useState(false);
+    const [expandedItemId, setExpandedItemId] = useState(null);
+
+    const handleToggleExpand = useCallback((id) => {
+        setExpandedItemId((prev) => (prev === id ? null : id));
+    }, []);
 
     const expiringSoonCount = useMemo(
         () =>
@@ -85,6 +88,7 @@ const PantryScreen = () => {
                     onPress: async () => {
                         try {
                             await pantryOperations.delete(item.id);
+                            setExpandedItemId((id) => (id === item.id ? null : id));
                             loadPantryItems();
                         } catch (error) {
                             console.error('Error deleting item:', error);
@@ -101,44 +105,16 @@ const PantryScreen = () => {
     };
 
     const renderPantryItem = ({ item, index }) => (
-        <ElevatedCard theme={theme} index={index} style={styles.itemCard}>
-            <View style={styles.itemContent}>
-                <Ionicons name="cube" size={32} color={theme.primary[500]} />
-                <View style={styles.itemInfo}>
-                    <Text style={[styles.itemName, { color: theme.colors.text.primary }]}>
-                        {item.name}
-                    </Text>
-                    {item.quantity && (
-                        <Text style={[styles.itemQuantity, { color: theme.colors.text.secondary }]}>
-                            {item.quantity} {item.unit || ''}
-                        </Text>
-                    )}
-                    {item.category && (
-                        <Text style={[styles.itemCategory, { color: theme.colors.text.tertiary }]}>
-                            {item.category}
-                        </Text>
-                    )}
-                    <PantryFreshnessBars item={item} theme={theme} />
-                </View>
-            </View>
-            <View style={styles.itemActions}>
-                <PantryExpirationBadge expirationDate={item.expiration_date} theme={theme} />
-                <View style={styles.actionButtons}>
-                    <AnimatedPressable accessibilityRole="button" accessibilityLabel="Edit item"
-                        style={[styles.actionButton, { backgroundColor: theme.primary[100] }]}
-                        onPress={() => handleEdit(item)}
-                    >
-                        <Ionicons name="pencil" size={18} color={theme.primary[500]} />
-                    </AnimatedPressable>
-                    <AnimatedPressable accessibilityRole="button" accessibilityLabel="Delete item"
-                        style={[styles.actionButton, { backgroundColor: theme.colors.error + '20' }]}
-                        onPress={() => handleDelete(item)}
-                    >
-                        <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
-                    </AnimatedPressable>
-                </View>
-            </View>
-        </ElevatedCard>
+        <PantryExpandableItemCard
+            item={item}
+            index={index}
+            theme={theme}
+            expanded={expandedItemId === item.id}
+            onToggleExpand={handleToggleExpand}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onSaved={loadPantryItems}
+        />
     );
 
     const renderEmptyState = () => (
@@ -255,62 +231,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         flex: 1,
-    },
-    itemCard: {
-        padding: 16,
-        marginBottom: 14,
-    },
-    itemContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    itemInfo: {
-        flex: 1,
-        marginLeft: 16,
-    },
-    itemName: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 4,
-    },
-    itemQuantity: {
-        fontSize: 14,
-        marginBottom: 2,
-    },
-    itemCategory: {
-        fontSize: 12,
-        textTransform: 'capitalize',
-    },
-    expirationBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        alignSelf: 'flex-start',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-        marginTop: 8,
-        gap: 4,
-    },
-    expirationText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    itemActions: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: 8,
-    },
-    actionButtons: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    actionButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
     },
     fab: {
         position: 'absolute',
