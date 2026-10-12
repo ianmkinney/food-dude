@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { fetchOwnerOpenRouterModels, type OpenRouterModelRow } from '../platform/ownerModelsApi';
 import {
+    clearOwnerChatModelPreference,
+    clearOwnerImageModelPreference,
     getOwnerChatModelPreference,
     getOwnerImageModelPreference,
     setOwnerChatModelPreference,
@@ -23,13 +25,17 @@ function ModelPicker({
     label,
     models,
     selectedId,
+    defaultId,
     onSelect,
+    onReset,
     theme,
 }: {
     label: string;
     models: OpenRouterModelRow[];
     selectedId: string;
+    defaultId: string;
     onSelect: (id: string) => void;
+    onReset?: () => void;
     theme: ReturnType<typeof import('../theme').getTheme>;
 }) {
     const [query, setQuery] = useState('');
@@ -48,22 +54,34 @@ function ModelPicker({
     return (
         <View style={styles.block}>
             <Text style={[styles.label, { color: c.text.primary }]}>{label}</Text>
-            <Pressable
-                onPress={() => setOpen((v) => !v)}
-                style={[styles.selectedRow, { borderColor: c.border, backgroundColor: c.surface }]}
-                accessibilityRole="button"
-                accessibilityLabel={`${label}, ${selected?.name || selectedId}`}
-            >
-                <View style={styles.selectedText}>
-                    <Text style={[styles.selectedName, { color: c.text.primary }]} numberOfLines={1}>
-                        {selected?.name || selectedId}
-                    </Text>
-                    <Text style={[styles.selectedMeta, { color: c.text.tertiary }]} numberOfLines={1}>
-                        {formatPricePerMillion(selected?.pricePerMillion)} · {selectedId}
-                    </Text>
-                </View>
-                <Text style={{ color: theme.primary[500], fontWeight: '700' }}>{open ? 'Done' : 'Change'}</Text>
-            </Pressable>
+            <View style={styles.selectedRowWrap}>
+                <Pressable
+                    onPress={() => setOpen((v) => !v)}
+                    style={[styles.selectedRow, { borderColor: c.border, backgroundColor: c.surface, flex: 1 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${label}, ${selected?.name || selectedId}`}
+                >
+                    <View style={styles.selectedText}>
+                        <Text style={[styles.selectedName, { color: c.text.primary }]} numberOfLines={1}>
+                            {selected?.name || selectedId}
+                        </Text>
+                        <Text style={[styles.selectedMeta, { color: c.text.tertiary }]} numberOfLines={1}>
+                            {formatPricePerMillion(selected?.pricePerMillion)} · {selectedId}
+                        </Text>
+                    </View>
+                    <Text style={{ color: theme.primary[500], fontWeight: '700' }}>{open ? 'Done' : 'Change'}</Text>
+                </Pressable>
+                {onReset && selectedId !== defaultId ? (
+                    <Pressable
+                        onPress={onReset}
+                        style={[styles.resetPill, { borderColor: c.border, backgroundColor: c.surfaceMuted }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Reset ${label} to default`}
+                    >
+                        <Text style={[styles.resetText, { color: c.text.secondary }]}>Reset to default</Text>
+                    </Pressable>
+                ) : null}
+            </View>
             {open ? (
                 <>
                     <TextInput
@@ -120,6 +138,8 @@ export default function OwnerModelPickers({ theme }: Props) {
     const [imageModels, setImageModels] = useState<OpenRouterModelRow[]>([]);
     const [chatId, setChatId] = useState('');
     const [imageId, setImageId] = useState('');
+    const [defaultChatId, setDefaultChatId] = useState('');
+    const [defaultImageId, setDefaultImageId] = useState('');
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -132,6 +152,8 @@ export default function OwnerModelPickers({ theme }: Props) {
             ]);
             setChatModels(catalog.chatModels);
             setImageModels(catalog.imageModels);
+            setDefaultChatId(catalog.defaults.chat);
+            setDefaultImageId(catalog.defaults.image);
             const chatDefault =
                 (savedChat && catalog.chatModels.some((m) => m.id === savedChat) ? savedChat : null) ||
                 catalog.defaults.chat;
@@ -172,16 +194,21 @@ export default function OwnerModelPickers({ theme }: Props) {
         <View style={styles.wrap}>
             <Text style={[styles.title, { color: c.text.primary }]}>OpenRouter models</Text>
             <Text style={[styles.hint, { color: c.text.secondary }]}>
-                Choose which models the owner proxy uses on this device. Only allowlisted owner sessions can override
-                server defaults.
+                Chat models must support Ampi tools and structured JSON replies. Only compatible models are listed.
+                Overrides apply on this device for allowlisted owner sessions.
             </Text>
             <ModelPicker
                 label="Chat model"
                 models={chatModels}
                 selectedId={chatId}
+                defaultId={defaultChatId}
                 onSelect={async (id) => {
                     setChatId(id);
                     await setOwnerChatModelPreference(id);
+                }}
+                onReset={async () => {
+                    await clearOwnerChatModelPreference();
+                    setChatId(defaultChatId);
                 }}
                 theme={theme}
             />
@@ -189,9 +216,14 @@ export default function OwnerModelPickers({ theme }: Props) {
                 label="Image model"
                 models={imageModels}
                 selectedId={imageId}
+                defaultId={defaultImageId}
                 onSelect={async (id) => {
                     setImageId(id);
                     await setOwnerImageModelPreference(id);
+                }}
+                onReset={async () => {
+                    await clearOwnerImageModelPreference();
+                    setImageId(defaultImageId);
                 }}
                 theme={theme}
             />
@@ -205,6 +237,7 @@ const styles = StyleSheet.create({
     title: { fontSize: 16, fontWeight: '700' },
     hint: { fontSize: 14, lineHeight: 20 },
     label: { fontSize: 14, fontWeight: '600' },
+    selectedRowWrap: { flexDirection: 'row', alignItems: 'stretch', gap: 8, flexWrap: 'wrap' },
     selectedRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -215,6 +248,15 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         minHeight: 44,
     },
+    resetPill: {
+        minHeight: 44,
+        paddingHorizontal: 12,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    resetText: { fontSize: 13, fontWeight: '600' },
     selectedText: { flex: 1, gap: 2 },
     selectedName: { fontSize: 15, fontWeight: '600' },
     selectedMeta: { fontSize: 12 },

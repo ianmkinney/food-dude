@@ -10,8 +10,11 @@ let cache = { fetchedAt: 0, models: [], byId: new Map() };
 export const VISION_FALLBACK_CHAT_MODEL = 'google/gemini-2.5-flash';
 
 /**
- * @typedef {{ id: string, name: string, inputModalities: string[], outputModalities: string[], pricePerMillionPrompt: number | null, pricePerMillionCompletion: number | null }} NormalizedModel
+ * @typedef {{ id: string, name: string, inputModalities: string[], outputModalities: string[], supportedParameters: string[], pricePerMillionPrompt: number | null, pricePerMillionCompletion: number | null }} NormalizedModel
  */
+
+/** OpenRouter `supported_parameters` entries Ampi chat relies on (structured JSON + tool actions). */
+export const AMPI_CHAT_SUPPORTED_PARAMS = ['tools', 'response_format', 'structured_outputs'];
 
 function modalityList(raw, key) {
     const arch = raw?.architecture?.[key];
@@ -41,6 +44,12 @@ function pricePerMillionUsd(perToken) {
     return n * 1_000_000;
 }
 
+function supportedParameters(raw) {
+    const list = raw?.supported_parameters;
+    if (!Array.isArray(list)) return [];
+    return list.map((p) => String(p).trim()).filter(Boolean);
+}
+
 function normalizeModel(raw) {
     const id = String(raw?.id || '').trim();
     if (!id) return null;
@@ -50,6 +59,7 @@ function normalizeModel(raw) {
         name: String(raw?.name || id).trim(),
         inputModalities: inputModalities(raw),
         outputModalities: outputModalities(raw),
+        supportedParameters: supportedParameters(raw),
         pricePerMillionPrompt: pricePerMillionUsd(pricing.prompt),
         pricePerMillionCompletion: pricePerMillionUsd(pricing.completion),
     };
@@ -92,6 +102,20 @@ export function isChatCatalogModel(model) {
     return model.outputModalities.includes('text');
 }
 
+export function modelSupportsParameter(model, param) {
+    return (model?.supportedParameters || []).includes(param);
+}
+
+/** Models safe for Ampi chat (structured JSON actions + tool schema). */
+export function isAmpiChatCatalogModel(model) {
+    if (!model || !isChatCatalogModel(model)) return false;
+    const params = model.supportedParameters || [];
+    if (!params.length) return false;
+    if (!params.includes('tools')) return false;
+    if (!params.includes('response_format') && !params.includes('structured_outputs')) return false;
+    return true;
+}
+
 export function isImageCatalogModel(model) {
     return model.outputModalities.includes('image');
 }
@@ -128,7 +152,7 @@ export async function resolveOwnerChatModel(requested, apiKey) {
     }
     const { byId } = await fetchOpenRouterModelCatalog(apiKey);
     const row = byId.get(trimmed);
-    if (row && isChatCatalogModel(row)) {
+    if (row && isAmpiChatCatalogModel(row)) {
         return { primary: trimmed, fallbackModels, fromRequest: true };
     }
     return { primary: defaultModel, fallbackModels, fromRequest: false };
