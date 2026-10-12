@@ -1,8 +1,8 @@
 import React from 'react';
 import { Linking, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
 import { BrandMark } from './Brand';
+import { getAppVersionLabel } from '../config/appRelease';
 
 type Theme = ReturnType<typeof import('../theme').getTheme>;
 
@@ -26,7 +26,7 @@ type Props = {
 };
 
 export default function AccountAboutSheet({ visible, onClose, theme }: Props) {
-    const version = Constants.expoConfig?.version || '1.0.0';
+    const version = getAppVersionLabel();
     const c = theme.colors;
 
     return (

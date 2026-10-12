@@ -30,10 +30,10 @@ import SyncDiagnosticsPanel from '../components/SyncDiagnosticsPanel';
 import { runFullSync } from '../sync/engine';
 import { isGoogleSignInConfigured } from '../platform/ownerSignInConfig';
 import AccountAboutSheet from '../components/AccountAboutSheet';
+import AccountVersionFooter from '../components/AccountVersionFooter';
 import ElevatedCard from '../components/ElevatedCard';
 import { PRIVACY_URL } from '../consent/consentStore';
 import AnimatedPressable from '../components/AnimatedPressable';
-import { BrandMark } from '../components/Brand';
 import { useMonetization } from '../monetization/MonetizationContext';
 import { USER_SAFETY_SUMMARY, USER_SAFETY_TITLE } from '../constants/userSafety';
 import { useLayoutMode } from '../layout/useLayoutMode';
@@ -467,12 +467,7 @@ const AccountScreen = ({ navigation, route }) => {
 
             <AccountAboutSheet visible={aboutOpen} onClose={() => setAboutOpen(false)} theme={theme} />
 
-            <View style={styles.stamp}>
-                <BrandMark variant="ink" size={56} />
-                <Text style={[styles.stampText, { color: theme.colors.text.tertiary }]}>
-                    AmpliFood v1.0.0 · cooking, turned up
-                </Text>
-            </View>
+            <AccountVersionFooter theme={theme} />
         </>
     );
 
@@ -507,18 +502,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         lineHeight: 17,
         marginTop: 6,
-    },
-    stamp: {
-        alignItems: 'center',
-        paddingTop: 8,
-        paddingBottom: 40,
-        opacity: 0.85,
-    },
-    stampText: {
-        marginTop: 10,
-        fontSize: 12,
-        fontWeight: '600',
-        letterSpacing: 0.4,
     },
     container: {
         flex: 1,

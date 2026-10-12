@@ -1,0 +1,74 @@
+{
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-10-12",
+      "body": "First tagged stable web release: party group chat, demo data tools, and AI model reliability.\n\n- Party group chat with @Ampi, attachments, and polling (#71, #72)\n- Fill or remove demo data from Account (#70)\n- Auto-generate recipe images after save (#67)\n- Safer Ampi recipe saves and corrupted-recipe repair (#68)\n- Owner OpenRouter model picker filters chat-only models and retries bad requests (#73)"
+    },
+    {
+      "version": "0.13.0",
+      "date": "2026-10-12",
+      "body": "Richer recipe and party visuals.\n\n- Cover images, lightbox, party thumbnails, and Ampy TTS (#69)"
+    },
+    {
+      "version": "0.12.0",
+      "date": "2026-10-12",
+      "body": "Pantry upgrades and Ampi polish.\n\n- Pantry freshness and amount sliders with photo estimates (#66)\n- More reliable Ampi JSON replies and ElevenLabs expressiveness (#65)\n- Visible Clear chat on Ampi (#64)\n- Ampi voice: listen until you stop (Safari-friendly, 2-minute cap) (#63)\n- Fix Grocery tab crash on mobile Safari (#62)\n- Pantry expiration date picker and expiring-soon badges (#61)\n- Party identity dedupe migration (unblocks backup and sync) (#60)"
+    },
+    {
+      "version": "0.11.0",
+      "date": "2026-10-11",
+      "body": "Cross-tab sync, party live updates, and recipe enhancements.\n\n- Async AI enhance, nutrition on Ampi recipes, chat auto-scroll (#59)\n- Clear Ampi chat, sidebar highlight, cross-tab sync refresh (#58)\n- Ampi vision: image attachments on platform OpenRouter path (#57)\n- Party live auto-sync with server-first mutations (#56)\n- Fix duplicate party member list entries (#55)"
+    },
+    {
+      "version": "0.10.0",
+      "date": "2026-10-11",
+      "body": "Encrypted cloud sync and desktop web layout.\n\n- Encrypted cloud sync and unified Google sign-in (#53)\n- Desktop layout (1024px+) with sidebar navigation (#54)"
+    },
+    {
+      "version": "0.9.0",
+      "date": "2026-10-11",
+      "body": "Party refresh and Ampi chat experience.\n\n- Compact party redesign with meal claim progress (#50)\n- Add recipe from link on Add Recipe (#49)\n- TikTok /t/ links, photo posts, and Ampi link import fixes (#48)\n- Safari tab take-over and back-button fixes on web (#46, #47)\n- Ampi chat: iMessage-style keyboard, Markdown replies, ElevenLabs voice with audio tags (#51)\n- iOS Safari Ampi composer keyboard gap fix (#52)"
+    },
+    {
+      "version": "0.8.0",
+      "date": "2026-10-10",
+      "body": "Google sign-in, cloud backups, and live parties.\n\n- Google sign-in, live-only parties, and cloud backups (#45)\n- Party OG image rendering fix (#44)\n- Party live sync via Neon Postgres (#42)\n- Owner ElevenLabs voice through /api/ai/chat (#41)\n- Resilient web database open (OPFS multi-tab) (#40)\n- Link-first party invites, join receipts, member management (#39)"
+    },
+    {
+      "version": "0.7.0",
+      "date": "2026-10-10",
+      "body": "Recipe images, imports, and party email.\n\n- Platform AI OpenRouter recipe image generation (#37)\n- Ampi recipe follow-ups and image generation UX (#38)\n- Party email sync via Resend (signed payloads) (#31)\n- Instagram recipe import: captions, video AI, Ampi upload (#32)\n- Server-side recipe URL import for web (#29)\n- Security hardening for server AI proxy (#28)\n- Vercel Hobby 12-function limit: shared code moved to api/_lib (#35)\n- Deploy and /api/ai/chat hotfixes (#33, #36)"
+    },
+    {
+      "version": "0.6.0",
+      "date": "2026-10-10",
+      "body": "Ampi depth: meal planning, attachments, redesign, and memory.\n\n- Ampi full meal planning, ElevenLabs BYOK voice, privacy clarity (#27)\n- Ampi chat attachments (images, PDFs, recipe files) (#23)\n- AmpliFood redesign: layout cleanup and motion system (#24)\n- Chat context persistence and Ampi memory store (#25)\n- Faster web startup: run bundle after first frame (#26)"
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-10-10",
+      "body": "Platform AI with Google sign-in and OpenRouter.\n\n- Platform AI: Google sign-in and OpenRouter proxy (#17)\n- Account and Plus web UX on amplifood.vercel.app (#18)\n- Hotfixes: Google client IDs unset, Vercel ESM/jose, OPFS lock, retired OpenRouter model (#19–#22)"
+    },
+    {
+      "version": "0.4.0",
+      "date": "2026-10-10",
+      "body": "Ampi assistant launch.\n\n- AmpliFood Plus and credit packs (client-side, platform AI stubbed) (#11)\n- Ampi phase 1: chat-first home, tool calls, on-device voice, AI labels (#12)\n- Ampi onboarding and interactive tour (#13)\n- Architecture diagram at /architecture (#14)\n- Web: lazy routes, 480px layout, recipe empty states (#15)\n- Copy and architecture updates for Ampi launch (#16)"
+    },
+    {
+      "version": "0.3.0",
+      "date": "2026-10-07",
+      "body": "AmpliFood rebrand and web deploy readiness.\n\n- AmpliFood rebrand and web deploy readiness (#5)\n- Fix deep-link 404s on Vercel (#7)\n- Camera barcode scanning on web (#8)\n- Trim Android/iOS permissions to camera and system photo picker (#9)\n- Legal pages: /about, /privacy, /terms, /support, /accessibility (#10)"
+    },
+    {
+      "version": "0.2.0",
+      "date": "2025-08-30",
+      "body": "Web-native bring-your-own-key flow.\n\n- Web native BYOK (#3)"
+    },
+    {
+      "version": "0.1.0",
+      "date": "2025-08-30",
+      "body": "Initial web and Expo Go support with on-device BYOK.\n\n- Web + Expo Go support with on-device BYOK (#1)"
+    }
+  ]
+}
