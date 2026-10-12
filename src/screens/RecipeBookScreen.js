@@ -26,6 +26,8 @@ import { useLayoutMode } from '../layout/useLayoutMode';
 import { desktopPageStyles, desktopRecipeStyles } from '../components/layout/desktopTheme';
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 import RecipeBookDesktopGrid from './RecipeBookDesktopGrid';
+import CoverImage from '../components/CoverImage';
+import ImageLightbox from '../components/ImageLightbox';
 
 const safeRecipeText = (value) => {
     if (value == null) return '';
@@ -33,7 +35,7 @@ const safeRecipeText = (value) => {
     return '';
 };
 
-const RecipeCard = ({ item, index, theme, navigation, layout = 'horizontal', enhancing = false }) => {
+const RecipeCard = ({ item, index, theme, navigation, layout = 'horizontal', enhancing = false, onImagePress }) => {
     const thumbRef = useRef(null);
     const cooked = item.is_cooked === 1 || item.is_cooked === true;
     const vertical = layout === 'vertical';
@@ -55,9 +57,11 @@ const RecipeCard = ({ item, index, theme, navigation, layout = 'horizontal', enh
             <View style={[styles.recipeCardContent, vertical && styles.recipeCardContentVertical]}>
                 <View ref={thumbRef} style={vertical ? desktopRecipeStyles.gridCardImage : styles.thumb}>
                     {item.image_uri ? (
-                        <Image
-                            source={{ uri: item.image_uri }}
+                        <CoverImage
+                            uri={item.image_uri}
                             style={vertical ? desktopRecipeStyles.gridCardImageFill : styles.recipeImage}
+                            onPress={onImagePress ? () => onImagePress(item.image_uri) : undefined}
+                            accessibilityLabel={`${item.title} photo`}
                         />
                     ) : (
                         <View
@@ -121,6 +125,7 @@ const RecipeBookScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // 'all', 'cooked', 'uncooked'
     const enhancingIds = useActiveEnhanceRecipeIds();
+    const [lightboxUri, setLightboxUri] = useState(null);
 
     // Header customization removed as per user request
     const loadRecipes = useCallback(async () => {
@@ -215,6 +220,7 @@ const RecipeBookScreen = ({ navigation }) => {
                 navigation={navigation}
                 layout="horizontal"
                 enhancing={enhancingIds.has(item.id)}
+                onImagePress={setLightboxUri}
             />
         ),
         [navigation, theme, enhancingIds]
@@ -235,6 +241,7 @@ const RecipeBookScreen = ({ navigation }) => {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            <ImageLightbox visible={!!lightboxUri} uri={lightboxUri} onClose={() => setLightboxUri(null)} isDark={isDark} />
             {isDesktop ? (
                 <DesktopPageHeader title="Recipe Book" subtitle={recipeCountLabel}>
                     <View style={desktopPageStyles.searchRow}>
@@ -378,6 +385,7 @@ const RecipeBookScreen = ({ navigation }) => {
                                     navigation={navigation}
                                     layout="vertical"
                                     enhancing={enhancingIds.has(item.id)}
+                                    onImagePress={setLightboxUri}
                                 />
                             ))}
                         </RecipeBookDesktopGrid>

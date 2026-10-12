@@ -92,11 +92,11 @@ export async function joinLiveParty({ inviteToken, displayName, email }) {
     return data;
 }
 
-export async function migrateLocalPartyToLive({ name, meals, members, imageBase64 }) {
+export async function migrateLocalPartyToLive({ name, meals, members, imageBase64, thumbImageBase64 }) {
     const sessionToken = await getOwnerSessionToken();
     if (!sessionToken) throw new Error('Sign in on Account to move this party to live sync.');
     const data = await partyFetch('/party?action=migrate', {
-        body: { action: 'migrate', name, meals, members, imageBase64 },
+        body: { action: 'migrate', name, meals, members, imageBase64, thumbImageBase64 },
         sessionToken,
     });
     await setStoredMemberToken(data.partyId, data.ownerMemberToken);
@@ -193,11 +193,16 @@ export async function pushLiveMeals({ livePartyId, meals, memberToken }) {
     });
 }
 
-export async function uploadLivePartyImage({ livePartyId, imageBase64 }) {
+export async function uploadLivePartyImage({ livePartyId, imageBase64, thumbImageBase64 }) {
     const sessionToken = await getOwnerSessionToken();
     if (!sessionToken) throw new Error('Sign in to upload a party photo.');
     return partyFetch('/party?action=upload_image', {
-        body: { action: 'upload_image', partyId: livePartyId, imageBase64 },
+        body: {
+            action: 'upload_image',
+            partyId: livePartyId,
+            imageBase64,
+            thumbImageBase64: thumbImageBase64 || undefined,
+        },
         sessionToken,
     });
 }

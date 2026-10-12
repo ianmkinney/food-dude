@@ -1,6 +1,7 @@
 import { hasAudioTags, stripAudioTags, stripSsml, toElevenLabsText } from '../chat/messageText';
 import { enhanceTextForSpeech } from './enhanceForSpeech';
 import { getVoiceSettings, voiceStabilityForExpressiveness } from './voiceSettings';
+import { applyPronunciationLocators } from './elevenLabsPronunciation';
 
 export const ELEVEN_V4 = 'eleven_v4';
 export const ELEVEN_V4_TURBO = 'eleven_v4_turbo';
@@ -18,6 +19,7 @@ export type ElevenTtsBody = {
         style?: number;
         use_speaker_boost?: boolean;
     };
+    pronunciation_dictionary_locators?: { pronunciation_dictionary_id: string; version_id: string }[];
 };
 
 export async function prepareElevenLabsSpeechText(displayText: string): Promise<string> {
@@ -28,7 +30,7 @@ export async function prepareElevenLabsSpeechText(displayText: string): Promise<
 
 export async function buildElevenLabsTtsBodyForUser(text: string, modelId: string): Promise<ElevenTtsBody> {
     const { expressiveness } = await getVoiceSettings();
-    return {
+    return applyPronunciationLocators({
         text: stripSsml(text),
         model_id: modelId,
         voice_settings: {
@@ -37,7 +39,7 @@ export async function buildElevenLabsTtsBodyForUser(text: string, modelId: strin
             style: expressiveness === 'very_expressive' ? 0.55 : 0.4,
             use_speaker_boost: true,
         },
-    };
+    });
 }
 
 export function pickElevenLabsModelChain(text: string, preferTurbo = false): string[] {

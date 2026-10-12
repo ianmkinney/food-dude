@@ -23,7 +23,7 @@ import {
     pushLocalPartyMealsToLive,
     uploadLivePartyImage,
 } from '../services/partyLiveSync';
-import { pickPartyCoverImageBase64 } from '../utils/partyImage';
+import { pickPartyCoverImages } from '../utils/partyImage';
 
 async function loadPartyBundle(partyId) {
     const party = await partyOperations.getById(partyId);
@@ -238,16 +238,21 @@ export default function PartySyncPanel({
                 email: m.member_email,
             }));
             let imageBase64;
+            let thumbImageBase64;
             try {
-                imageBase64 = await pickPartyCoverImageBase64();
+                const picked = await pickPartyCoverImages();
+                imageBase64 = picked?.full ?? null;
+                thumbImageBase64 = picked?.thumb ?? null;
             } catch {
                 imageBase64 = null;
+                thumbImageBase64 = null;
             }
             const result = await migrateLocalPartyToLive({
                 name: bundle.party.name,
                 meals,
                 members,
                 imageBase64,
+                thumbImageBase64,
             });
             await partyOperations.setLiveSyncFields(selectedParty.id, {
                 livePartyId: result.partyId,
@@ -272,11 +277,12 @@ export default function PartySyncPanel({
         if (!isLive || !isOwner) return;
         setBusy(true);
         try {
-            const imageBase64 = await pickPartyCoverImageBase64();
-            if (!imageBase64) return;
+            const images = await pickPartyCoverImages();
+            if (!images?.full) return;
             await uploadLivePartyImage({
                 livePartyId: selectedParty.live_party_id,
-                imageBase64,
+                imageBase64: images.full,
+                thumbImageBase64: images.thumb,
             });
             Alert.alert('Uploaded', 'Party cover photo updated.');
         } catch (error) {

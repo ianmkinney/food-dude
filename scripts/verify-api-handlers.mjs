@@ -35,6 +35,7 @@ const modules = [
     '_lib/openRouterChatJson.js',
     '_lib/recipeEnhancePhases.js',
     '_lib/elevenLabs.js',
+    '_lib/elevenLabsPronunciation.js',
     'auth/google.js',
     'auth/session.js',
     'ai/chat.js',

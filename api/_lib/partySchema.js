@@ -95,6 +95,9 @@ export const PARTY_CORE_SCHEMA_STATEMENTS = [
 )`,
     'ALTER TABLE parties ADD COLUMN IF NOT EXISTS image_bytea BYTEA',
     'ALTER TABLE parties ADD COLUMN IF NOT EXISTS image_content_type TEXT',
+    'ALTER TABLE parties ADD COLUMN IF NOT EXISTS image_thumb_url TEXT',
+    'ALTER TABLE parties ADD COLUMN IF NOT EXISTS image_thumb_bytea BYTEA',
+    'ALTER TABLE parties ADD COLUMN IF NOT EXISTS image_thumb_content_type TEXT',
     'ALTER TABLE invite_tokens ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ',
     `UPDATE invite_tokens SET expires_at = created_at + interval '30 days'
      WHERE expires_at IS NULL`,

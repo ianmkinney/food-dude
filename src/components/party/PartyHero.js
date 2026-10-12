@@ -1,12 +1,19 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import CoverImage from '../CoverImage';
 
-export default function PartyHero({ name, imageUri, theme }) {
+export default function PartyHero({ name, imageUri, fullImageUri, theme, onImagePress }) {
+    const zoomUri = fullImageUri || imageUri;
     return (
         <View style={styles.wrap}>
             <View style={[styles.photo, { backgroundColor: theme.colors.surfaceMuted, borderColor: theme.colors.border }]}>
                 {imageUri ? (
-                    <Image source={{ uri: imageUri }} style={styles.image} accessibilityIgnoresInvertColors />
+                    <CoverImage
+                        uri={imageUri}
+                        style={styles.imageFill}
+                        onPress={zoomUri && onImagePress ? () => onImagePress(zoomUri) : undefined}
+                        accessibilityLabel={`${name} cover photo`}
+                    />
                 ) : (
                     <Text style={{ fontSize: 36 }}>🎉</Text>
                 )}
@@ -29,6 +36,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    image: { width: '100%', height: '100%' },
+    imageFill: { width: '100%', height: '100%' },
     name: { flex: 1, fontSize: 22, fontWeight: '700', fontFamily: undefined },
 });
