@@ -6,10 +6,10 @@ import AnimatedPressable from '../AnimatedPressable';
 
 const DISMISS_KEY = 'amplifood.party.privacyChipDismissed';
 const ONE_LINE =
-    'Parties sync online so friends can join — everything else stays on your phone.';
+    'Party chat and plans sync online; attachment files stay only on your device.';
 
 const DETAIL =
-    'Parties and encrypted sync (when enabled) store kitchen data online; keys stay on your device.';
+    'Party chat messages, meals, and members are stored online with the party so everyone can stay in sync. Encrypted backup (when enabled) keeps keys on your device. Chat attachments are never uploaded — other members only see the file name.';
 
 export default function PartyPrivacyChip({ theme }) {
     const [dismissed, setDismissed] = useState(false);

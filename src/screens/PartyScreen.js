@@ -50,6 +50,9 @@ import PartySyncStatusChip from '../components/party/PartySyncStatusChip';
 import { pickPartyCoverImages } from '../utils/partyImage';
 import { resolveRecipeContributorName } from '../utils/partyMealMeta';
 import ImageLightbox from '../components/ImageLightbox';
+import { useLayoutMode } from '../layout/useLayoutMode';
+import PartyChatPanel from '../components/party/PartyChatPanel';
+import { mergePartyChatMessages } from '../services/partyLiveSync';
 
 const PartyScreen = ({ navigation }) => {
     const { isDark } = useTheme();
@@ -90,6 +93,9 @@ const PartyScreen = ({ navigation }) => {
     const [mealsLoading, setMealsLoading] = useState(false);
     const [showRenameModal, setShowRenameModal] = useState(false);
     const [renameValue, setRenameValue] = useState('');
+    const [partySection, setPartySection] = useState('meals');
+    const [chatMessages, setChatMessages] = useState([]);
+    const { isDesktop } = useLayoutMode();
 
     useFocusEffect(
         useCallback(() => {
@@ -119,10 +125,15 @@ const PartyScreen = ({ navigation }) => {
         [selectedParty?.id]
     );
 
+    const onChatMessages = useCallback((incoming) => {
+        setChatMessages((prev) => mergePartyChatMessages(prev, incoming));
+    }, []);
+
     usePartyLivePoll({
         livePartyId: selectedParty?.live_party_id || null,
         enabled: Boolean(selectedParty?.live_party_id),
         onSnapshot: onLiveSnapshot,
+        onChatMessages,
     });
 
     const loadCurrentUser = async () => {
@@ -140,6 +151,11 @@ const PartyScreen = ({ navigation }) => {
             loadPartyMembers(selectedParty.id);
         }
     }, [selectedParty]);
+
+    useEffect(() => {
+        setChatMessages([]);
+        setPartySection('meals');
+    }, [selectedParty?.id, selectedParty?.live_party_id]);
 
     useEffect(() => {
         let cancelled = false;
@@ -949,7 +965,49 @@ const PartyScreen = ({ navigation }) => {
             {selectedParty.live_party_id ? (
                 <PartySyncStatusChip partyId={selectedParty.id} theme={theme} />
             ) : null}
-            <Text style={[styles.sectionLabel, { color: theme.colors.text.secondary }]}>Meals</Text>
+            {selectedParty.live_party_id ? (
+                <View style={styles.sectionTabs}>
+                    <TouchableOpacity
+                        onPress={() => setPartySection('meals')}
+                        style={[
+                            styles.sectionTab,
+                            partySection === 'meals' && { backgroundColor: theme.primary[500] },
+                        ]}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected: partySection === 'meals' }}
+                    >
+                        <Text
+                            style={{
+                                color: partySection === 'meals' ? '#fff' : theme.colors.text.secondary,
+                                fontWeight: '700',
+                            }}
+                        >
+                            Meals
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => setPartySection('chat')}
+                        style={[
+                            styles.sectionTab,
+                            partySection === 'chat' && { backgroundColor: theme.primary[500] },
+                        ]}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected: partySection === 'chat' }}
+                    >
+                        <Text
+                            style={{
+                                color: partySection === 'chat' ? '#fff' : theme.colors.text.secondary,
+                                fontWeight: '700',
+                            }}
+                        >
+                            Chat
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            ) : null}
+            {partySection === 'meals' || isDesktop ? (
+                <Text style={[styles.sectionLabel, { color: theme.colors.text.secondary }]}>Meals</Text>
+            ) : null}
         </>
     ) : (
         <>
@@ -973,12 +1031,44 @@ const PartyScreen = ({ navigation }) => {
         </>
     );
 
+    const myPartyMember = partyMembers.find(
+        (m) =>
+            (currentUser?.user_id && m.user_id === currentUser.user_id) ||
+            (viewerEmail && (m.email || '').toLowerCase() === viewerEmail)
+    );
+    const myDisplayName = myPartyMember?.name || currentUser?.name || googleSession?.name || 'You';
+
+    const chatPanel = selectedParty?.live_party_id ? (
+        <PartyChatPanel
+            theme={theme}
+            livePartyId={selectedParty.live_party_id}
+            messages={chatMessages}
+            setMessages={setChatMessages}
+            meals={meals}
+            ingredientClaims={ingredientClaims}
+            myDisplayName={myDisplayName}
+            myMemberId={myPartyMember?.sync_member_id || null}
+            isPartyOwner={isPartyOwner}
+            isDesktop={isDesktop}
+        />
+    ) : null;
+
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <ImageLightbox visible={!!lightboxUri} uri={lightboxUri} onClose={() => setLightboxUri(null)} isDark={isDark} />
-            {mealsLoading && meals.length === 0 && selectedParty ? <PartyScreenSkeleton theme={theme} /> : null}
-            <FlatList
-                data={selectedParty ? meals : []}
+            {mealsLoading && meals.length === 0 && selectedParty && partySection === 'meals' ? (
+                <PartyScreenSkeleton theme={theme} />
+            ) : null}
+            <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column', minHeight: 0 }}>
+                {!isDesktop && partySection === 'chat' && selectedParty ? (
+                    <View style={{ flex: 1, minHeight: 0 }}>
+                        {listHeader}
+                        {chatPanel}
+                    </View>
+                ) : (
+                    <FlatList
+                        style={{ flex: 1 }}
+                        data={selectedParty ? meals : []}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item }) => (
                     <PartyMealCard
@@ -1000,7 +1090,10 @@ const PartyScreen = ({ navigation }) => {
                         </View>
                     ) : null
                 }
-            />
+                    />
+                )}
+                {isDesktop && chatPanel ? <View style={{ width: 400, minHeight: 0 }}>{chatPanel}</View> : null}
+            </View>
 
             <Modal visible={showRenameModal} transparent animationType="fade" onRequestClose={() => setShowRenameModal(false)}>
                 <View style={styles.modalOverlay}>
