@@ -108,6 +108,7 @@ await (async () => {
         assert.equal(calls[0].text, 'Hi Ampy');
         assert.equal(calls[1].pronunciation_dictionary_locators, undefined);
         assert.equal(calls[1].text, 'Hi Ampy');
+        console.log('ok  ', 'fetchElevenLabsTts retries without locators on dictionary 404');
     } finally {
         globalThis.fetch = realFetch;
         delete process.env.ELEVENLABS_PRONUNCIATION_DICTIONARY_ID;
