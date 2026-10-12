@@ -30,7 +30,8 @@
     "test:cross-tab-sync": "node scripts/test-cross-tab-cloud-sync.mjs",
     "test:ampi-vision": "node scripts/test-ampi-vision.mjs",
     "test:grocery-normalize": "node scripts/test-grocery-normalize.mjs",
-    "test:web-all-tabs": "node scripts/test-web-all-tabs-smoke.mjs"
+    "test:web-all-tabs": "node scripts/test-web-all-tabs-smoke.mjs",
+    "test:speech-input-session": "node scripts/test-speech-input-session.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/fredoka": "^0.4.1",

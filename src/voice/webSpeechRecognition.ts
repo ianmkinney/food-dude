@@ -31,11 +31,35 @@ export function getWebRecognitionCtor(): RecognitionCtor | null {
 
 /** Joined transcript of every result so far, and whether the last one is final. */
 export function readTranscript(event: RecognitionResultEvent): { text: string; isFinal: boolean } {
-    let text = '';
-    let isFinal = false;
+    const parts = readTranscriptParts(event);
+    return { text: parts.display, isFinal: parts.lastIsFinal };
+}
+
+/** Split committed (final) vs interim text within the current browser recognition session. */
+export function readTranscriptParts(event: RecognitionResultEvent): {
+    committed: string;
+    interim: string;
+    display: string;
+    lastIsFinal: boolean;
+} {
+    let committed = '';
+    let interim = '';
+    let lastIsFinal = false;
     for (let i = 0; i < event.results.length; i += 1) {
-        text += event.results[i][0].transcript;
-        isFinal = event.results[i].isFinal;
+        const piece = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+            committed += piece;
+            lastIsFinal = true;
+        } else {
+            interim += piece;
+            lastIsFinal = false;
+        }
     }
-    return { text: text.trim(), isFinal };
+    const display = `${committed}${interim}`.trim();
+    return {
+        committed: committed.trim(),
+        interim: interim.trim(),
+        display,
+        lastIsFinal,
+    };
 }
