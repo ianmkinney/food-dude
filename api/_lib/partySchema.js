@@ -115,6 +115,18 @@ export const PARTY_CORE_SCHEMA_STATEMENTS = [
     UNIQUE (meal_id, recipe_id, ingredient_key)
 )`,
     'CREATE INDEX IF NOT EXISTS idx_party_meal_claims_meal ON party_meal_ingredient_claims(meal_id)',
+    `CREATE TABLE IF NOT EXISTS party_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    party_id UUID NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+    sender_member_id UUID REFERENCES party_members(member_id) ON DELETE SET NULL,
+    sender_display_name TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    is_ampi BOOLEAN NOT NULL DEFAULT false,
+    ampi_via_name TEXT,
+    attachment_meta JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+)`,
+    'CREATE INDEX IF NOT EXISTS idx_party_messages_party_created ON party_messages(party_id, created_at ASC)',
 ];
 
 export const PARTY_MEMBERS_IDENTITY_UNIQUE_INDEX = `CREATE UNIQUE INDEX IF NOT EXISTS idx_party_members_party_identity

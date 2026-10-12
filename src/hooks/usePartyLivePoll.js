@@ -4,7 +4,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import {
     fetchLiveChanges,
     fetchLivePartySnapshot,
+    getStoredChatSince,
     getStoredLiveVersion,
+    setStoredChatSince,
     setStoredLiveVersion,
 } from '../services/partyLiveSync';
 
@@ -13,9 +15,14 @@ const BACKGROUND_MS = 30000;
 
 /**
  * Poll Neon party changes while the Party screen is focused.
- * @param {{ livePartyId?: string | null, enabled?: boolean, onSnapshot: (party: object) => void }} options
+ * @param {{
+ *   livePartyId?: string | null,
+ *   enabled?: boolean,
+ *   onSnapshot: (party: object) => void,
+ *   onChatMessages?: (messages: object[], latestCreatedAt: number) => void,
+ * }} options
  */
-export function usePartyLivePoll({ livePartyId, enabled = true, onSnapshot }) {
+export function usePartyLivePoll({ livePartyId, enabled = true, onSnapshot, onChatMessages }) {
     const timerRef = useRef(null);
     const focusedRef = useRef(false);
     const appActiveRef = useRef(true);
@@ -25,18 +32,34 @@ export function usePartyLivePoll({ livePartyId, enabled = true, onSnapshot }) {
             if (!livePartyId || !enabled) return;
             try {
                 const since = await getStoredLiveVersion(livePartyId);
+                const sinceChat = await getStoredChatSince(livePartyId);
                 if (forceFull) {
                     const party = await fetchLivePartySnapshot(livePartyId);
                     if (party?.version != null) {
                         await setStoredLiveVersion(livePartyId, party.version);
                     }
                     onSnapshot?.(party);
+                    const chatBootstrap = await fetchLiveChanges({
+                        livePartyId,
+                        sinceVersion: party?.version ?? since,
+                        sinceChatMs: 0,
+                    });
+                    if (chatBootstrap.chat?.messages?.length) {
+                        const latest = chatBootstrap.chat.latestCreatedAt ?? 0;
+                        if (latest > 0) await setStoredChatSince(livePartyId, latest);
+                        onChatMessages?.(chatBootstrap.chat.messages, latest);
+                    }
                     import('../sync/syncEvents')
                         .then(({ emitSyncData }) => emitSyncData({ kind: 'party' }))
                         .catch(() => undefined);
                     return;
                 }
-                const result = await fetchLiveChanges({ livePartyId, sinceVersion: since });
+                const result = await fetchLiveChanges({ livePartyId, sinceVersion: since, sinceChatMs: sinceChat });
+                if (result.chat?.messages?.length) {
+                    const latest = result.chat.latestCreatedAt ?? sinceChat;
+                    if (latest > sinceChat) await setStoredChatSince(livePartyId, latest);
+                    onChatMessages?.(result.chat.messages, latest);
+                }
                 if (Number(result.version) > since) {
                     const party =
                         result.changed && result.party
@@ -52,7 +75,7 @@ export function usePartyLivePoll({ livePartyId, enabled = true, onSnapshot }) {
                 console.warn('[party live poll]', error?.message || error);
             }
         },
-        [livePartyId, enabled, onSnapshot]
+        [livePartyId, enabled, onSnapshot, onChatMessages]
     );
 
     const schedule = useCallback(() => {

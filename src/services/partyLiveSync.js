@@ -10,6 +10,7 @@ import {
 
 const MEMBER_KEY_PREFIX = 'amplifood.party.live.member.';
 const VERSION_KEY_PREFIX = 'amplifood.party.live.version.';
+const CHAT_SINCE_KEY_PREFIX = 'amplifood.party.live.chatSince.';
 
 function apiBase() {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -57,6 +58,18 @@ export async function getStoredLiveVersion(livePartyId) {
 export async function setStoredLiveVersion(livePartyId, version) {
     await AsyncStorage.setItem(`${VERSION_KEY_PREFIX}${livePartyId}`, String(version));
 }
+
+export async function getStoredChatSince(livePartyId) {
+    const raw = await AsyncStorage.getItem(`${CHAT_SINCE_KEY_PREFIX}${livePartyId}`);
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+}
+
+export async function setStoredChatSince(livePartyId, ms) {
+    await AsyncStorage.setItem(`${CHAT_SINCE_KEY_PREFIX}${livePartyId}`, String(ms));
+}
+
+export { mergePartyChatMessages } from '../../api/_lib/partyChat.js';
 
 export async function isLivePartySyncAvailable() {
     try {
@@ -124,13 +137,14 @@ export async function fetchLivePartySnapshot(livePartyId) {
     return data.party;
 }
 
-export async function fetchLiveChanges({ livePartyId, sinceVersion, memberToken, sessionToken }) {
+export async function fetchLiveChanges({ livePartyId, sinceVersion, sinceChatMs, memberToken, sessionToken }) {
     const token = memberToken || (await getStoredMemberToken(livePartyId));
     const ownerToken = sessionToken || (await getOwnerSessionToken());
     const query = new URLSearchParams({
         action: 'changes_since',
         partyId: livePartyId,
         sinceVersion: String(sinceVersion ?? 0),
+        sinceChatMs: String(sinceChatMs ?? 0),
     });
     const headers = {};
     if (ownerToken) headers.Authorization = `Bearer ${ownerToken}`;
@@ -215,6 +229,33 @@ export async function removeLiveMember({ livePartyId, memberId }) {
         sessionToken,
     });
     return data;
+}
+
+export async function postPartyChatMessage({ livePartyId, body, attachment, isAmpi, ampiViaName }) {
+    const memberToken = await getStoredMemberToken(livePartyId);
+    const sessionToken = await getOwnerSessionToken();
+    return partyFetch('/party?action=chat_post', {
+        body: {
+            action: 'chat_post',
+            partyId: livePartyId,
+            body,
+            attachment,
+            isAmpi,
+            ampiViaName,
+        },
+        memberToken,
+        sessionToken,
+    });
+}
+
+export async function deletePartyChatMessage({ livePartyId, messageId }) {
+    const memberToken = await getStoredMemberToken(livePartyId);
+    const sessionToken = await getOwnerSessionToken();
+    return partyFetch('/party?action=chat_delete', {
+        body: { action: 'chat_delete', partyId: livePartyId, messageId },
+        memberToken,
+        sessionToken,
+    });
 }
 
 export async function renameLiveParty({ livePartyId, name }) {

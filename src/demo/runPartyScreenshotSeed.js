@@ -10,10 +10,26 @@ import {
 /**
  * Deterministic local data for Party UI screenshots (web only, gated by __PARTY_SCREENSHOT_SEED__).
  */
+const LIVE_PARTY_SEED_ID = '11111111-1111-4111-8111-111111111111';
+
+async function ensureLiveSyncOnWeekendBbq(partyId) {
+    await partyOperations.setLiveSyncFields(partyId, {
+        livePartyId: LIVE_PARTY_SEED_ID,
+        syncMode: 'live',
+        liveInviteToken: 'seed-invite-token',
+        liveVersion: 1,
+    });
+}
+
 export async function runPartyScreenshotSeed() {
     const existing = await partyOperations.getAll();
     if (existing.length >= 2) {
-        return { partyId: existing[0].id, mealId: (await partyMealOperations.getByPartyId(existing[0].id))[0]?.id };
+        const bbq = existing.find((p) => p.name === 'Weekend BBQ') || existing[0];
+        if (bbq?.id) await ensureLiveSyncOnWeekendBbq(bbq.id);
+        return {
+            partyId: bbq?.id ?? existing[0].id,
+            mealId: (await partyMealOperations.getByPartyId(bbq?.id ?? existing[0].id))[0]?.id,
+        };
     }
 
     let user = await userOperations.getCurrent();
@@ -154,6 +170,8 @@ export async function runPartyScreenshotSeed() {
         claimedByUserId: 'u-m-sam',
         claimedByUserName: 'Sam Patel',
     });
+
+    await ensureLiveSyncOnWeekendBbq(party1Id);
 
     return { partyId: party1Id, mealId: meal1 };
 }

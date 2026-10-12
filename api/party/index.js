@@ -17,6 +17,12 @@ import {
     MAX_MIGRATE_MEMBERS,
 } from '../_lib/partyConstants.js';
 import { dedupeServerMemberRows, upsertActivePartyMember, isHumanPartyMember } from '../_lib/partyMembers.js';
+import {
+    MAX_CHAT_BATCH,
+    normalizeAttachmentMeta,
+    rowToChatMessage,
+    sanitizePartyChatBody,
+} from '../_lib/partyChat.js';
 
 const MAX_NAME = 200;
 const MAX_DISPLAY = 120;
@@ -134,6 +140,42 @@ async function assertMemberAccess(sql, partyId, memberToken) {
         return { ok: false, status: 403, error: 'forbidden' };
     }
     return { ok: true, memberId: row.member_id };
+}
+
+async function assertPartyChatAccess(sql, partyId, session, memberToken) {
+    const ownerView = session ? await isPartyOwner(sql, partyId, session) : false;
+    if (ownerView && session) {
+        const rows = await sql`
+            SELECT member_id, display_name FROM party_members
+            WHERE party_id = ${partyId}::uuid AND status = 'active'
+            AND (google_sub = ${session.sub} OR lower(email) = ${session.email.toLowerCase()})
+            LIMIT 1`;
+        const row = rows[0];
+        if (row) {
+            return {
+                ok: true,
+                memberId: row.member_id,
+                displayName: row.display_name,
+                isOwner: true,
+            };
+        }
+        return {
+            ok: true,
+            memberId: null,
+            displayName: String(session.name || session.email?.split('@')[0] || 'Owner').slice(0, MAX_DISPLAY),
+            isOwner: true,
+        };
+    }
+    const member = await assertMemberAccess(sql, partyId, memberToken);
+    if (!member.ok) return member;
+    const nameRows = await sql`
+        SELECT display_name FROM party_members WHERE member_id = ${member.memberId}::uuid LIMIT 1`;
+    return {
+        ok: true,
+        memberId: member.memberId,
+        displayName: nameRows[0]?.display_name || 'Member',
+        isOwner: false,
+    };
 }
 
 async function countActiveMembers(client, partyId) {
@@ -676,13 +718,106 @@ async function handleChangesSince(req, res, session) {
         return;
     }
     const changed = Number(bundle.party.version) > sinceVersion;
+    const sinceChatMs = Number(body.sinceChatMs ?? req.query?.sinceChatMs ?? 0);
+    let chatMessages = [];
+    let latestChatMs = sinceChatMs;
+    if (Number.isFinite(sinceChatMs) && sinceChatMs >= 0) {
+        const sinceDate = new Date(sinceChatMs);
+        const rows = await sql`
+            SELECT * FROM party_messages
+            WHERE party_id = ${partyId}::uuid AND created_at > ${sinceDate}
+            ORDER BY created_at ASC
+            LIMIT ${MAX_CHAT_BATCH}`;
+        chatMessages = rows.map(rowToChatMessage);
+        if (rows.length) {
+            latestChatMs = new Date(rows[rows.length - 1].created_at).getTime();
+        }
+    }
     res.status(200).json({
         ok: true,
         changed,
         version: bundle.party.version,
         updatedAt: new Date(bundle.party.updated_at).getTime(),
         party: changed ? rowToPartySnapshot(bundle, { isOwner: ownerView }) : null,
+        chat: { messages: chatMessages, latestCreatedAt: latestChatMs },
     });
+}
+
+async function handleChatPost(req, res, session) {
+    const body = parseBody(req);
+    const partyId = String(body.partyId || '').trim();
+    if (!partyId) {
+        partyReject(res, 400, 'bad_request');
+        return;
+    }
+    const sql = await getPartySql();
+    if (!(await durableRateLimit(res, sql, `party:chat:${clientKey(req)}`, 40))) return;
+    const access = await assertPartyChatAccess(sql, partyId, session, memberTokenFromReq(req));
+    if (!access.ok) {
+        partyReject(res, access.status, access.error);
+        return;
+    }
+    const text = sanitizePartyChatBody(body.body ?? body.text ?? '');
+    const attachment = normalizeAttachmentMeta(body.attachment || body.attachmentMeta);
+    const isAmpi = Boolean(body.isAmpi);
+    const ampiViaName = isAmpi
+        ? String(body.ampiViaName || access.displayName || '').trim().slice(0, MAX_DISPLAY)
+        : null;
+    if (!text && !attachment) {
+        partyReject(res, 400, 'bad_request', { message: 'Message cannot be empty.' });
+        return;
+    }
+    if (isAmpi && !ampiViaName) {
+        partyReject(res, 400, 'bad_request');
+        return;
+    }
+    const displayName = isAmpi ? `Ampi (via ${ampiViaName})` : String(access.displayName || 'Member').slice(0, MAX_DISPLAY);
+    const inserted = await sql`
+        INSERT INTO party_messages (
+            party_id, sender_member_id, sender_display_name, body, is_ampi, ampi_via_name, attachment_meta
+        ) VALUES (
+            ${partyId}::uuid,
+            ${access.memberId ? access.memberId : null}::uuid,
+            ${displayName},
+            ${text},
+            ${isAmpi},
+            ${isAmpi ? ampiViaName : null},
+            ${attachment ? JSON.stringify(attachment) : null}
+        )
+        RETURNING *`;
+    res.status(200).json({ ok: true, message: rowToChatMessage(inserted[0]) });
+}
+
+async function handleChatDelete(req, res, session) {
+    const body = parseBody(req);
+    const partyId = String(body.partyId || '').trim();
+    const messageId = String(body.messageId || '').trim();
+    if (!partyId || !messageId) {
+        partyReject(res, 400, 'bad_request');
+        return;
+    }
+    const sql = await getPartySql();
+    const access = await assertPartyChatAccess(sql, partyId, session, memberTokenFromReq(req));
+    if (!access.ok) {
+        partyReject(res, access.status, access.error);
+        return;
+    }
+    const rows = await sql`
+        SELECT id, sender_member_id FROM party_messages
+        WHERE id = ${messageId}::uuid AND party_id = ${partyId}::uuid LIMIT 1`;
+    const row = rows[0];
+    if (!row) {
+        partyReject(res, 404, 'not_found');
+        return;
+    }
+    const ownerView = session ? await isPartyOwner(sql, partyId, session) : false;
+    const ownMessage = row.sender_member_id && access.memberId && row.sender_member_id === access.memberId;
+    if (!ownerView && !ownMessage) {
+        partyReject(res, 403, 'forbidden');
+        return;
+    }
+    await sql`DELETE FROM party_messages WHERE id = ${messageId}::uuid`;
+    res.status(200).json({ ok: true, messageId });
 }
 
 async function handleMigrate(req, res, session) {
@@ -857,6 +992,8 @@ export default async function handler(req, res) {
         'changes_since',
         'claim_ingredient',
         'unclaim_ingredient',
+        'chat_post',
+        'chat_delete',
     ].includes(action);
 
     if (needsSession) {
@@ -904,6 +1041,12 @@ export default async function handler(req, res) {
                 break;
             case 'unclaim_ingredient':
                 await handleUnclaimIngredient(req, res, session);
+                break;
+            case 'chat_post':
+                await handleChatPost(req, res, session);
+                break;
+            case 'chat_delete':
+                await handleChatDelete(req, res, session);
                 break;
             default:
                 partyReject(res, 400, 'bad_request');
