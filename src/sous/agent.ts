@@ -8,7 +8,13 @@ import { prepareAttachmentPayload } from './chatAttachments';
 import { isMutatingAction, summarizeActions } from './confirmActions';
 import { loadThreadTurns, memoriesForPrompt } from '../chat/promptContext';
 import { CHAT_THREAD_AMPI } from '../chat/chatThreads';
-import { chatRecipesForPrompt, recipeEventsFromCards, recordChatRecipes } from '../chat/chatRecipes';
+import {
+    chatRecipesForPrompt,
+    recentChatRecipeIds,
+    recipeEventsFromCards,
+    recordChatRecipes,
+} from '../chat/chatRecipes';
+import { parseRecipeId, normalizeToolCalls } from '../../api/_lib/ampiToolNormalize.js';
 import { TOOL_SPEC, runTools, type SousCard, type ToolCall } from './tools';
 import { getIncludeHealthData } from '../consent/consentStore';
 
@@ -227,16 +233,18 @@ export async function askSous(
     const visionNote = peekMultimodalVisionNote();
     const modelFallbackNote = peekModelFallbackNote();
     const { reply, actions } = parseAmpiResponse(raw);
+    const recentRecipeIds = await recentChatRecipeIds(CHAT_THREAD_AMPI).catch(() => []);
+    const toolOptions = { userRecipeImageUri, recentRecipeIds, reply };
 
     const prefixNotes = [visionNote, modelFallbackNote].filter(Boolean).join('\n\n');
     const withNotes = (text: string) => (prefixNotes && text ? `${prefixNotes}\n\n${text}` : prefixNotes || text);
 
     const mutating = actions.filter(isMutatingAction);
     const immediate = actions.filter((a) => !isMutatingAction(a));
-    let cards = immediate.length ? await runTools(immediate, { userRecipeImageUri }) : [];
+    let cards = immediate.length ? await runTools(immediate, toolOptions) : [];
 
     if (mutating.length && shouldAutoApplyRecipeSave(message, attachments, mutating)) {
-        const saved = await runTools(mutating, { userRecipeImageUri });
+        const saved = await runTools(mutating, toolOptions);
         cards = [...cards, ...saved];
         await recordChatRecipes(CHAT_THREAD_AMPI, recipeEventsFromCards(saved)).catch(() => undefined);
         return {
@@ -273,11 +281,28 @@ export async function askSous(
 
 async function titlesForUpdates(actions: ToolCall[]): Promise<Record<number, string>> {
     const titles: Record<number, string> = {};
-    for (const action of actions) {
+    const recentRecipeIds = await recentChatRecipeIds(CHAT_THREAD_AMPI).catch(() => []);
+    const normalized = normalizeToolCalls(actions, { recentRecipeIds }) as ToolCall[];
+    for (const action of normalized) {
         if (action.tool !== 'update_recipe') continue;
-        const id = Number(action.args.recipe_id);
-        const recipe = (await recipeOperations.getById(id).catch(() => null)) as { title?: string } | null;
-        if (recipe?.title) titles[id] = recipe.title;
+        let id = parseRecipeId(action.args.recipe_id);
+        let recipe = id ? ((await recipeOperations.getById(id).catch(() => null)) as { id: number; title?: string } | null) : null;
+        if (!recipe && action.args.recipe_title) {
+            const matches = (await recipeOperations.search(String(action.args.recipe_title)).catch(() => [])) as {
+                id: number;
+                title?: string;
+            }[];
+            recipe = matches[0] ?? null;
+            id = recipe?.id ?? id;
+        }
+        if (!recipe && recentRecipeIds[0]) {
+            recipe = (await recipeOperations.getById(recentRecipeIds[0]).catch(() => null)) as {
+                id: number;
+                title?: string;
+            } | null;
+            id = recipe?.id ?? id;
+        }
+        if (recipe?.title && id) titles[id] = recipe.title;
     }
     return titles;
 }
@@ -286,7 +311,8 @@ export async function confirmSousActions(
     actions: ToolCall[],
     userRecipeImageUri?: string | null
 ): Promise<SousCard[]> {
-    const cards = await runTools(actions, { userRecipeImageUri });
+    const recentRecipeIds = await recentChatRecipeIds(CHAT_THREAD_AMPI).catch(() => []);
+    const cards = await runTools(actions, { userRecipeImageUri, recentRecipeIds });
     await recordChatRecipes(CHAT_THREAD_AMPI, recipeEventsFromCards(cards)).catch(() => undefined);
     return cards;
 }

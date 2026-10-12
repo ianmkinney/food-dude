@@ -19,6 +19,8 @@
     "party-db:migrate": "node scripts/party-db/migrate.mjs",
     "test:web-db-tabs": "node scripts/test-web-db-two-tabs.mjs",
     "test:ampi": "node scripts/test-ampi-recipe-followup.mjs",
+    "test:ampi-recipe-update-parse": "node scripts/test-ampi-recipe-update-parse.mjs",
+    "test:ampi-recipe-update-tools": "node scripts/test-ampi-recipe-update-tools.mjs",
     "test:ampi-json-parse": "node scripts/test-ampi-json-parse.mjs",
     "test:web-back": "node scripts/test-web-back-after-actions.mjs",
     "test:chat-text": "node scripts/test-chat-text.mjs",

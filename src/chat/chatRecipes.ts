@@ -51,6 +51,22 @@ function eventsFromRow(row: { meta_json?: string | null }): ChatRecipeEvent[] {
 }
 
 /** One line per recipe from this thread, oldest first; the last line is the one follow-ups refer to. */
+/** Most recent recipe ids mentioned in this thread (newest first). */
+export async function recentChatRecipeIds(threadId: string): Promise<number[]> {
+    const rows = (await chatOperations.getRecent(threadId, SCAN_LIMIT)) as { meta_json?: string | null }[];
+    const ordered: number[] = [];
+    const seen = new Set<number>();
+    for (const row of rows) {
+        for (const event of eventsFromRow(row)) {
+            const id = Number(event.id);
+            if (!Number.isFinite(id) || seen.has(id)) continue;
+            seen.add(id);
+            ordered.push(id);
+        }
+    }
+    return ordered.reverse();
+}
+
 export async function chatRecipesForPrompt(threadId: string): Promise<string> {
     const rows = (await chatOperations.getRecent(threadId, SCAN_LIMIT)) as { meta_json?: string | null }[];
     const seen = new Map<number, { origin: ChatRecipeAction; edited: boolean }>();

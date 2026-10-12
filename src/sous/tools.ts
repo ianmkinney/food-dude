@@ -14,7 +14,12 @@ import { ATTACHMENT_SOURCE_LABEL } from './attachmentLimits';
 import type { ChatRecipeAction } from '../chat/chatRecipes';
 import { ensureRecipeNutritionAsync, nutritionFieldsFromCreateArgs } from '../utils/ensureRecipeNutrition';
 import { hasAnyNutrition } from '../utils/recipeNutrition';
-import { coerceRecipeTemplateFromToolArgs, templateToRecipeOperationsPayload } from '../recipes/normalizeRecipe';
+import { normalizeToolCalls, parseRecipeId } from '../../api/_lib/ampiToolNormalize.js';
+import {
+    coerceRecipeTemplateFromToolArgs,
+    RECIPE_TEMPLATE_DEFAULTS,
+    templateToRecipeOperationsPayload,
+} from '../recipes/normalizeRecipe';
 
 // What Sous can actually do in the app. The model asks for these by name in its
 // JSON reply (see agent.ts); each one runs against the local database and
@@ -50,12 +55,21 @@ export type ToolCall =
     | {
           tool: 'update_recipe';
           args: {
-              recipe_id: number;
+              recipe_id?: number | string;
+              recipe_title?: string;
               title?: string;
               description?: string;
               servings?: number;
               prep_time?: number;
               cook_time?: number;
+              calories?: number;
+              protein?: number;
+              carbohydrates?: number;
+              carbs?: number;
+              fat?: number;
+              fiber?: number;
+              sugar?: number;
+              sodium?: number;
               ingredients?: { ingredient: string; quantity?: string | number | null; unit?: string | null }[];
               instructions?: string[];
           };
@@ -101,7 +115,7 @@ export const TOOL_SPEC = `
 - find_recipes {"query": string}: search the user's saved recipes.
 - import_recipe {"url"?: string, "text"?: string}: import a recipe from a link, pasted text, or an attached file into the recipe book.
 - create_recipe {"title", "description"?, "servings"?, "prep_time"?, "cook_time"?, "calories"?, "protein"?, "carbohydrates"?, "fat"?, "fiber"?, "sugar"?, "sodium"?, "ingredients": [{"ingredient", "quantity"?, "unit"?}], "instructions": [string]}: save a NEW recipe (from an attachment or your draft). Always include per-serving nutrition estimates (calories, protein, carbohydrates, fat, fiber, sugar, sodium) and servings when saving.
-- update_recipe {"recipe_id": number, "title"?, "description"?, "servings"?, "prep_time"?, "cook_time"?, "ingredients"?: [{"ingredient", "quantity"?, "unit"?}], "instructions"?: [string]}: rename or edit a recipe that is already saved. Send only the fields that change; ingredients and instructions replace the whole list.
+- update_recipe {"recipe_id": number (or "#10"), "title"?, "description"?, "servings"?, "prep_time"?, "cook_time"?, "calories"?, "protein"?, "carbohydrates"?, "fat"?, "fiber"?, "sugar"?, "sodium"?, "ingredients"?: [{"ingredient", "quantity"?, "unit"?}], "instructions"?: [string]}: rename or edit a recipe that is already saved. Always set recipe_id to the numeric id from the recipe list (e.g. 10, not "?"). Send only fields that change; ingredients and instructions replace the whole list. Nutrition fields update per-serving estimates on the recipe.
 If the user attached a photo, the app uses it as the recipe image automatically; never put image URLs in tool arguments.
 - add_to_meal_plan {"recipe_id"?: number, "recipe_title"?: string, "date": "YYYY-MM-DD", "meal_type": "breakfast"|"lunch"|"dinner"}: schedule a saved recipe.
 - add_to_pantry {"items": [{"name", "quantity"?, "unit"?, "category"?}]}: record items the user has at home.
@@ -131,16 +145,34 @@ function matchGroceryRow<T extends { id: number; name: string }>(query: string, 
 
 const IMPORT_ASSIST_CODES = new Set(['instagram_login_wall', 'instagram_no_caption']);
 
-async function findRecipe(args: { recipe_id?: number; recipe_title?: string }): Promise<RecipeSummary | null> {
-    if (args.recipe_id) {
-        const byId = await recipeOperations.getById(Number(args.recipe_id));
+type ResolveContext = { recentRecipeIds?: number[] };
+
+async function resolveRecipe(
+    args: { recipe_id?: number | string; recipe_title?: string; title?: string },
+    context: ResolveContext = {}
+): Promise<RecipeSummary | null> {
+    const id = parseRecipeId(args.recipe_id);
+    if (id) {
+        const byId = await recipeOperations.getById(id);
         if (byId) return byId as RecipeSummary;
     }
-    if (args.recipe_title) {
-        const matches = (await recipeOperations.search(args.recipe_title)) as RecipeSummary[];
-        return matches[0] ?? null;
+    const title = String(args.recipe_title || args.title || '').trim();
+    if (title) {
+        const matches = (await recipeOperations.search(title)) as RecipeSummary[];
+        if (matches[0]) return matches[0];
+    }
+    for (const rid of context.recentRecipeIds || []) {
+        const recent = await recipeOperations.getById(rid);
+        if (recent) return recent as RecipeSummary;
     }
     return null;
+}
+
+async function findRecipe(
+    args: { recipe_id?: number | string; recipe_title?: string; title?: string },
+    context?: ResolveContext
+): Promise<RecipeSummary | null> {
+    return resolveRecipe(args, context);
 }
 
 type SavedRecipe = RecipeSummary & {
@@ -152,6 +184,8 @@ type SavedRecipe = RecipeSummary & {
 type RunOptions = {
     /** First image the user attached in this chat turn; the only image Sous may store as a cover. */
     userRecipeImageUri?: string | null;
+    recentRecipeIds?: number[];
+    reply?: string;
 };
 
 // Native pickers hand back local file URIs; they never leave the device.
@@ -277,31 +311,64 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
         }
         case 'update_recipe': {
             const a = call.args;
-            const id = Number(a.recipe_id);
-            const existing = Number.isFinite(id) && id > 0 ? ((await recipeOperations.getById(id)) as SavedRecipe | null) : null;
-            if (!existing) throw new Error(`I couldn't find recipe #${a.recipe_id ?? '?'} to update.`);
+            const existing = (await resolveRecipe(a, options)) as SavedRecipe | null;
+            if (!existing) {
+                const idHint = parseRecipeId(a.recipe_id);
+                const label = idHint ? `#${idHint}` : a.recipe_title || a.title || 'that recipe';
+                const recent = options.recentRecipeIds?.[0];
+                const suffix = recent
+                    ? ` The most recent recipe in this chat is #${recent}.`
+                    : ' Open your recipe book to confirm the recipe number.';
+                throw new Error(`I couldn't find ${label} in your recipe book to update.${suffix}`);
+            }
+            const patch = coerceRecipeTemplateFromToolArgs({
+                ...a,
+                title: a.title ?? a.recipe_title,
+                ingredients: a.ingredients,
+                instructions: a.instructions,
+            });
             const updates: Record<string, unknown> = {};
-            const title = typeof a.title === 'string' ? a.title.trim() : '';
+            const title = patch.title && patch.title !== RECIPE_TEMPLATE_DEFAULTS.title ? patch.title : '';
             if (title && title !== existing.title) updates.title = title;
             if (typeof a.description === 'string') updates.description = a.description.trim() || null;
-            if (a.servings != null) updates.servings = Number(a.servings) || null;
-            if (a.prep_time != null) updates.prepTime = Number(a.prep_time) || null;
-            if (a.cook_time != null) updates.cookTime = Number(a.cook_time) || null;
-            if (a.prep_time != null || a.cook_time != null) {
-                const prep = Number(a.prep_time ?? existing.prep_time) || 0;
-                const cook = Number(a.cook_time ?? existing.cook_time) || 0;
+            if (a.servings != null || patch.servings != null) {
+                updates.servings = Number(a.servings ?? patch.servings) || null;
+            }
+            if (a.prep_time != null || patch.prep_minutes != null) {
+                updates.prepTime = Number(a.prep_time ?? patch.prep_minutes) || null;
+            }
+            if (a.cook_time != null || patch.cook_minutes != null) {
+                updates.cookTime = Number(a.cook_time ?? patch.cook_minutes) || null;
+            }
+            if (updates.prepTime != null || updates.cookTime != null) {
+                const prep = Number(updates.prepTime ?? existing.prep_time) || 0;
+                const cook = Number(updates.cookTime ?? existing.cook_time) || 0;
                 updates.totalTime = prep && cook ? prep + cook : null;
             }
-            if (Array.isArray(a.ingredients) && a.ingredients.length) {
+            const nutrition = nutritionFieldsFromCreateArgs(a);
+            for (const [key, val] of Object.entries(nutrition)) {
+                if (val != null) updates[key] = val;
+            }
+            if (patch.ingredients?.length) {
+                updates.ingredients = patch.ingredients.map((ing) => ({
+                    ingredient: ing.name,
+                    quantity: asText(ing.quantity),
+                    unit: ing.unit || null,
+                }));
+            } else if (Array.isArray(a.ingredients) && a.ingredients.length) {
                 updates.ingredients = a.ingredients.map((ing) => ({
                     ingredient: ing.ingredient,
                     quantity: asText(ing.quantity),
                     unit: ing.unit || null,
                 }));
             }
-            if (Array.isArray(a.instructions) && a.instructions.length) updates.instructions = a.instructions;
+            if (patch.steps?.length) updates.instructions = patch.steps;
+            else if (Array.isArray(a.instructions) && a.instructions.length) updates.instructions = a.instructions;
             const keys = Object.keys(updates);
-            if (!keys.length) throw new Error(`“${existing.title}” already looks like that, so nothing changed.`);
+            if (!keys.length) {
+                throw new Error(`“${existing.title}” already looks like that, so nothing changed.`);
+            }
+            if (Object.keys(nutrition).length) updates.nutritionAiEstimate = 1;
             await recipeOperations.update(existing.id, updates);
             if (updates.ingredients || updates.instructions) {
                 await recipeOperations.setProvenance(existing.id, { isAiGenerated: true });
@@ -325,7 +392,7 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
             };
         }
         case 'add_to_meal_plan': {
-            const recipe = await findRecipe(call.args);
+            const recipe = await findRecipe(call.args, options);
             if (!recipe) throw new Error(`I couldn't find "${call.args.recipe_title ?? call.args.recipe_id}" in your recipes.`);
             await mealPlanOperations.add({ recipeId: recipe.id, date: call.args.date, mealType: call.args.meal_type, servings: 1 });
             return { type: 'meal_plan', recipeTitle: recipe.title, date: call.args.date, mealType: call.args.meal_type };
@@ -434,8 +501,12 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
 }
 
 export async function runTools(calls: ToolCall[], options: RunOptions = {}): Promise<SousCard[]> {
+    const normalized = normalizeToolCalls(calls, {
+        reply: options.reply,
+        recentRecipeIds: options.recentRecipeIds,
+    }) as ToolCall[];
     const cards: SousCard[] = [];
-    for (const call of calls.slice(0, 5)) {
+    for (const call of normalized.slice(0, 5)) {
         try {
             cards.push(await run(call, options));
         } catch (error) {

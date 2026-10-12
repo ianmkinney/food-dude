@@ -76,6 +76,9 @@ export const recipeOperations = {
         if (updates.cookTime !== undefined) recipe.cook_time = updates.cookTime;
         if (Array.isArray(updates.ingredients)) recipe.ingredients = updates.ingredients.map((ing) => ({ ...ing }));
         if (Array.isArray(updates.instructions)) recipe.instructions = [...updates.instructions];
+        for (const key of ['calories', 'protein', 'carbohydrates', 'fat', 'fiber', 'sugar', 'sodium', 'servings']) {
+            if (updates[key] !== undefined) recipe[key] = updates[key];
+        }
         return true;
     },
     async setProvenance(id, { isAiGenerated } = {}) {
@@ -157,6 +160,9 @@ export async function generateMultimodal(opts) {
     ampiTest.lastMultimodal = opts;
     return generateText(opts?.turns?.[opts.turns.length - 1]?.text || opts?.prompt || '');
 }
+export async function generateImage() {
+    return null;
+}
 
 export const peekMultimodalVisionNote = () => null;
 
@@ -173,3 +179,4 @@ export async function parseRecipeFromUrl(url) {
 export const parseRecipe = parseRecipeFromUrl;
 export const estimateGroceryCost = async () => ({ success: false, error: 'not in tests' });
 export const toPersistentImageUri = async (uri) => uri;
+export const fetchEnhanceNutritionPhase = async () => ({});
