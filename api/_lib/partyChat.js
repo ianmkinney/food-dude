@@ -32,6 +32,18 @@ export function mergePartyChatMessages(existing, incoming) {
     return [...map.values()].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 }
 
+export function isPendingPartyChatMessage(message) {
+    if (!message) return false;
+    if (message.sendState === 'pending' || message.sendState === 'failed') return true;
+    return String(message.id || '').startsWith('pending-');
+}
+
+/** Replace server history while keeping unsent / failed local rows. */
+export function mergeServerPartyChatWithLocal(serverMessages, localMessages) {
+    const pending = (localMessages || []).filter(isPendingPartyChatMessage);
+    return mergePartyChatMessages(serverMessages, pending);
+}
+
 export function rowToChatMessage(row) {
     const attachment = row.attachment_meta && typeof row.attachment_meta === 'object' ? row.attachment_meta : null;
     return {

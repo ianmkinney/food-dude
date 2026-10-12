@@ -39,7 +39,31 @@ export function createSharedPartyMock() {
         const action = url.searchParams.get('action') || '';
         const memberToken = route.request().headers()['x-party-member-token'] || '';
 
-        if (action === 'changes_since' || url.pathname.endsWith('/party')) {
+        if (action === 'changes_since' || action === 'chat_history' || url.pathname.endsWith('/party')) {
+            if (action === 'chat_history') {
+                const limit = Number(url.searchParams.get('limit') || 100);
+                const beforeMs = Number(url.searchParams.get('beforeMs') || 0);
+                const sorted = messages
+                    .slice()
+                    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                let batch = sorted;
+                if (beforeMs > 0) {
+                    batch = sorted.filter((m) => new Date(m.created_at).getTime() < beforeMs);
+                }
+                batch = batch.slice(-limit);
+                const mapped = batch.map(rowToChatMessage);
+                return route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({
+                        ok: true,
+                        messages: mapped,
+                        hasMore: beforeMs > 0 ? batch.length === limit : sorted.length > limit,
+                        oldestCreatedAt: mapped[0]?.createdAt ?? null,
+                        latestCreatedAt: mapped[mapped.length - 1]?.createdAt ?? 0,
+                    }),
+                });
+            }
             if (action === 'changes_since') {
                 const sinceChatMs = Number(url.searchParams.get('sinceChatMs') || 0);
                 const rows = messages.filter((m) => new Date(m.created_at).getTime() > sinceChatMs);
@@ -74,6 +98,13 @@ export function createSharedPartyMock() {
                 body = {};
             }
             const postAction = body.action || action;
+            if (postAction === 'refresh_owner_member_token') {
+                return route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({ ok: true, memberToken: 'member-token-alex' }),
+                });
+            }
             if (postAction === 'chat_post') {
                 const member = members[memberToken];
                 if (!member) {

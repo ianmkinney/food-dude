@@ -5,6 +5,7 @@ import {
     fetchLivePartySnapshot,
     migrateLocalPartyToLive,
     setStoredLiveVersion,
+    ensurePartyMemberToken,
     setStoredMemberToken,
 } from './partyLiveSync';
 import { isHumanPartyMemberRow } from '../utils/partyMemberList';
@@ -45,6 +46,7 @@ export async function ensurePartyLiveReady(party) {
         try {
             const snapshot = await fetchLivePartySnapshot(party.live_party_id);
             await setStoredLiveVersion(party.live_party_id, snapshot.version);
+            await ensurePartyMemberToken(party.live_party_id);
             await applyLivePartySnapshot(party.id, snapshot);
         } catch (error) {
             console.warn('[party ensure live]', error?.message || error);

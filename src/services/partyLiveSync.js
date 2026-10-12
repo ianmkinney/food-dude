@@ -69,7 +69,76 @@ export async function setStoredChatSince(livePartyId, ms) {
     await AsyncStorage.setItem(`${CHAT_SINCE_KEY_PREFIX}${livePartyId}`, String(ms));
 }
 
-export { mergePartyChatMessages } from '../../api/_lib/partyChat.js';
+export {
+    mergePartyChatMessages,
+    mergeServerPartyChatWithLocal,
+    isPendingPartyChatMessage,
+} from '../../api/_lib/partyChat.js';
+
+/** Restore owner member token when missing (session required). */
+export async function ensurePartyMemberToken(livePartyId) {
+    if (!livePartyId) return null;
+    const existing = await getStoredMemberToken(livePartyId);
+    if (existing) return existing;
+    const sessionToken = await getOwnerSessionToken();
+    if (!sessionToken) return null;
+    try {
+        const data = await partyFetch('/party?action=refresh_owner_member_token', {
+            body: { action: 'refresh_owner_member_token', partyId: livePartyId },
+            sessionToken,
+        });
+        if (data.memberToken) {
+            await setStoredMemberToken(livePartyId, data.memberToken);
+            return data.memberToken;
+        }
+    } catch {
+        // Not owner or party not found — session-only chat may still work.
+    }
+    return null;
+}
+
+export async function fetchPartyChatHistoryPage(livePartyId, { beforeMs = 0, limit = 100 } = {}) {
+    await ensurePartyMemberToken(livePartyId);
+    const memberToken = await getStoredMemberToken(livePartyId);
+    const sessionToken = await getOwnerSessionToken();
+    const query = new URLSearchParams({
+        action: 'chat_history',
+        partyId: livePartyId,
+        limit: String(limit),
+    });
+    if (beforeMs > 0) query.set('beforeMs', String(beforeMs));
+    const headers = {};
+    if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`;
+    if (memberToken) headers['X-Party-Member-Token'] = memberToken;
+    const res = await fetch(`${apiBase()}/party?${query}`, { method: 'GET', headers });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const err = new Error(data.message || 'Could not load party chat');
+        err.code = data.error;
+        err.status = res.status;
+        throw err;
+    }
+    return data;
+}
+
+export async function fetchAllPartyChatHistory(livePartyId) {
+    let all = [];
+    let beforeMs = 0;
+    let latestCreatedAt = 0;
+    for (;;) {
+        const page = await fetchPartyChatHistoryPage(livePartyId, { beforeMs, limit: 100 });
+        const batch = page.messages || [];
+        if (!batch.length) break;
+        all = beforeMs > 0 ? [...batch, ...all] : batch;
+        latestCreatedAt = Math.max(
+            latestCreatedAt,
+            page.latestCreatedAt || batch[batch.length - 1]?.createdAt || 0
+        );
+        if (!page.hasMore) break;
+        beforeMs = page.oldestCreatedAt || batch[0].createdAt;
+    }
+    return { messages: all, latestCreatedAt };
+}
 
 export async function isLivePartySyncAvailable() {
     try {
@@ -138,6 +207,7 @@ export async function fetchLivePartySnapshot(livePartyId) {
 }
 
 export async function fetchLiveChanges({ livePartyId, sinceVersion, sinceChatMs, memberToken, sessionToken }) {
+    await ensurePartyMemberToken(livePartyId);
     const token = memberToken || (await getStoredMemberToken(livePartyId));
     const ownerToken = sessionToken || (await getOwnerSessionToken());
     const query = new URLSearchParams({
@@ -232,8 +302,12 @@ export async function removeLiveMember({ livePartyId, memberId }) {
 }
 
 export async function postPartyChatMessage({ livePartyId, body, attachment, isAmpi, ampiViaName }) {
+    await ensurePartyMemberToken(livePartyId);
     const memberToken = await getStoredMemberToken(livePartyId);
     const sessionToken = await getOwnerSessionToken();
+    if (!memberToken && !sessionToken) {
+        throw new Error('Sign in on Account or re-join the party to send chat messages.');
+    }
     const data = await partyFetch('/party?action=chat_post', {
         body: {
             action: 'chat_post',

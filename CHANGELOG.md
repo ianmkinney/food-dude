@@ -10,6 +10,7 @@ Mobile layout polish for pantry lists.
 - Party chat on mobile Safari: pin the composer to the keyboard (`visualViewport`) and collapse party header chrome while typing
 - Fix party chat not persisting or syncing in production: `chat_post` and `changes_since` no longer require a Google session when a valid party member token is present (expired owner session had been causing silent 401s on poll and send); advance chat poll cursor after send; Playwright two-client party chat E2E
 - Party @Ampi: parse JSON model replies (same parser as Ampi chat), store/display reply text only, repair already-saved JSON bodies on render; match Ampi bubble styling in dark mode (`surface` + primary text)
+- Party chat persistence: load full history on open (`chat_history` with pagination), refresh owner member token when missing, loading spinner and retry on history failure, failed sends stay visible with tap-to-retry
 
 ## [1.0.1] - 2026-10-12
 

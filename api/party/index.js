@@ -718,6 +718,91 @@ async function handleUploadImage(req, res, session) {
     });
 }
 
+async function assertPartyChatReadAccess(sql, partyId, session, memberToken) {
+    const ownerView = session ? await isPartyOwner(sql, partyId, session) : false;
+    if (!ownerView) {
+        const member = await assertMemberAccess(sql, partyId, memberToken);
+        if (!member.ok) {
+            return member;
+        }
+    }
+    return { ok: true, ownerView };
+}
+
+async function handleChatHistory(req, res, session) {
+    const partyId = String(req.query?.partyId || '').trim();
+    if (!partyId) {
+        partyReject(res, 400, 'bad_request');
+        return;
+    }
+    const sql = await getPartySql();
+    const memberToken = memberTokenFromReq(req);
+    if (!session && !memberToken) {
+        partyReject(res, 401, 'unauthorized');
+        return;
+    }
+    const access = await assertPartyChatReadAccess(sql, partyId, session, memberToken);
+    if (!access.ok) {
+        partyReject(res, access.status, access.error);
+        return;
+    }
+    const limit = Math.min(Math.max(Number(req.query?.limit) || MAX_CHAT_BATCH, 1), MAX_CHAT_BATCH);
+    const beforeMs = Number(req.query?.beforeMs ?? req.query?.beforeChatMs ?? 0);
+    let rows;
+    if (Number.isFinite(beforeMs) && beforeMs > 0) {
+        const beforeDate = new Date(beforeMs);
+        rows = await sql`
+            SELECT * FROM party_messages
+            WHERE party_id = ${partyId}::uuid AND created_at < ${beforeDate}
+            ORDER BY created_at DESC
+            LIMIT ${limit}`;
+        rows = rows.reverse();
+    } else {
+        rows = await sql`
+            SELECT * FROM party_messages
+            WHERE party_id = ${partyId}::uuid
+            ORDER BY created_at DESC
+            LIMIT ${limit}`;
+        rows = rows.reverse();
+    }
+    const messages = rows.map(rowToChatMessage);
+    const oldestCreatedAt = messages.length ? messages[0].createdAt : null;
+    const latestCreatedAt = messages.length ? messages[messages.length - 1].createdAt : 0;
+    res.status(200).json({
+        ok: true,
+        messages,
+        hasMore: rows.length === limit,
+        oldestCreatedAt,
+        latestCreatedAt,
+    });
+}
+
+async function handleRefreshOwnerMemberToken(req, res, session) {
+    const body = parseBody(req);
+    const partyId = String(body.partyId || '').trim();
+    if (!partyId) {
+        partyReject(res, 400, 'bad_request');
+        return;
+    }
+    const sql = await getPartySql();
+    const owner = await assertPartyOwner(sql, partyId, session);
+    if (!owner.ok) {
+        partyReject(res, owner.status, owner.error);
+        return;
+    }
+    const memberToken = generateToken(32);
+    await withPartyTransaction(async (client) => {
+        await upsertActivePartyMember(client, {
+            partyId,
+            displayName: String(session.name || session.email?.split('@')[0] || 'Owner').slice(0, MAX_DISPLAY),
+            email: session.email.toLowerCase(),
+            googleSub: session.sub,
+            memberTokenHash: hashToken(memberToken),
+        });
+    });
+    res.status(200).json({ ok: true, memberToken });
+}
+
 async function handleChangesSince(req, res, session) {
     const body = parseBody(req);
     const partyId = String(body.partyId || req.query?.partyId || '').trim();
@@ -1006,7 +1091,8 @@ export default async function handler(req, res) {
         return;
     }
 
-    if (req.method !== 'POST' && !(action === 'changes_since' && req.method === 'GET')) {
+    const chatGetActions = ['changes_since', 'chat_history'];
+    if (req.method !== 'POST' && !(chatGetActions.includes(action) && req.method === 'GET')) {
         partyReject(res, 405, 'method_not_allowed');
         return;
     }
@@ -1018,7 +1104,7 @@ export default async function handler(req, res) {
     if (!softRateLimit(req, res, 'party-api', 40)) return;
 
     let session = null;
-    const chatActions = ['changes_since', 'chat_post', 'chat_delete'];
+    const chatActions = ['changes_since', 'chat_history', 'chat_post', 'chat_delete'];
     const needsSession = [
         'create',
         'join',
@@ -1032,6 +1118,7 @@ export default async function handler(req, res) {
         'update_meals',
         'claim_ingredient',
         'unclaim_ingredient',
+        'refresh_owner_member_token',
     ].includes(action);
 
     if (chatActions.includes(action)) {
@@ -1076,6 +1163,12 @@ export default async function handler(req, res) {
                 break;
             case 'changes_since':
                 await handleChangesSince(req, res, session);
+                break;
+            case 'chat_history':
+                await handleChatHistory(req, res, session);
+                break;
+            case 'refresh_owner_member_token':
+                await handleRefreshOwnerMemberToken(req, res, session);
                 break;
             case 'migrate':
                 await handleMigrate(req, res, session);
