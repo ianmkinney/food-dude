@@ -228,7 +228,7 @@ export default function SousScreen() {
             rows.map((row: { id: number; role: string; text: string; created_at?: number }) => ({
                 id: String(row.id),
                 role: row.role === 'user' ? 'user' : 'sous',
-                text: row.text,
+                text: row.role === 'assistant' || row.role === 'sous' ? toDisplayText(row.text) : row.text,
                 createdAt: Number(row.created_at) || Date.now(),
             }))
         );

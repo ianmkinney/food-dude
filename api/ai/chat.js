@@ -26,6 +26,7 @@ import {
 } from '../_lib/openRouterModels.js';
 import { buildOpenRouterMessages, bodyHasImages } from '../_lib/chatOpenRouterMessages.js';
 import { fetchOpenRouterStats } from '../_lib/openRouterStats.js';
+import { ampiChatResponseFormat } from '../_lib/ampiResponseSchema.js';
 
 const DAILY_CREDIT_MSG = 'Daily AI limit reached. Try again tomorrow or ask Ian to raise your OpenRouter credit limit.';
 
@@ -146,7 +147,7 @@ const isModelRejected = (error) =>
     (error.status === 400 || error.status === 404) &&
     /model/i.test(error.message);
 
-async function openRouterStream({ apiKey, model, messages, maxTokens }) {
+async function openRouterStream({ apiKey, model, messages, maxTokens, responseFormat }) {
     let response;
     try {
         response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -162,6 +163,7 @@ async function openRouterStream({ apiKey, model, messages, maxTokens }) {
                 messages,
                 max_tokens: maxTokens,
                 stream: true,
+                ...(responseFormat ? { response_format: responseFormat } : null),
             }),
         });
     } catch (error) {
@@ -174,11 +176,14 @@ async function openRouterStream({ apiKey, model, messages, maxTokens }) {
     return response;
 }
 
-async function openRouterWithFallback({ apiKey, models, messages, maxTokens }) {
+async function openRouterWithFallback({ apiKey, models, messages, maxTokens, responseFormat }) {
     let lastError;
     for (const model of models) {
         try {
-            return { upstream: await openRouterStream({ apiKey, model, messages, maxTokens }), model };
+            return {
+                upstream: await openRouterStream({ apiKey, model, messages, maxTokens, responseFormat }),
+                model,
+            };
         } catch (error) {
             lastError = error;
             if (!isModelRejected(error)) throw error;
@@ -354,9 +359,17 @@ export default async function handler(req, res) {
 
     const streamRequested = !isTest && req.body?.stream !== false;
     const startedAt = Date.now();
+    const chatStructured =
+        !isTest && (req.body?.feature === 'chat' || req.body?.feature === 'partyChat') ? ampiChatResponseFormat() : null;
 
     try {
-        const { upstream, model } = await openRouterWithFallback({ apiKey, models, messages, maxTokens });
+        const { upstream, model } = await openRouterWithFallback({
+            apiKey,
+            models,
+            messages,
+            maxTokens,
+            responseFormat: chatStructured,
+        });
 
         if (!streamRequested) {
             const reader = upstream.body.getReader();

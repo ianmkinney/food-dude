@@ -1,6 +1,7 @@
 import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION, ASSISTANT_TAGLINE } from '../config/assistant';
 import { groceryOperations, pantryOperations, recipeOperations, userOperations } from '../database/operations';
-import { generateMultimodal, generateText, peekMultimodalVisionNote, stripCodeFences } from '../services/aiClient';
+import { generateMultimodal, generateText, peekMultimodalVisionNote } from '../services/aiClient';
+import { parseAmpiResponse } from './parseAmpiResponse';
 import type { PendingAttachment } from './chatAttachments';
 import { prepareAttachmentPayload } from './chatAttachments';
 import { isMutatingAction, summarizeActions } from './confirmActions';
@@ -121,24 +122,6 @@ Rules:
 ${context}`;
 }
 
-function parseResponse(text: string): { reply: string; actions: ToolCall[] } {
-    const cleaned = stripCodeFences(text).trim();
-    const start = cleaned.indexOf('{');
-    const end = cleaned.lastIndexOf('}');
-    if (start !== -1 && end > start) {
-        try {
-            const parsed = JSON.parse(cleaned.slice(start, end + 1)) as { reply?: unknown; actions?: unknown };
-            const actions = Array.isArray(parsed.actions)
-                ? (parsed.actions as ToolCall[]).filter((a) => a && typeof a.tool === 'string')
-                : [];
-            return { reply: typeof parsed.reply === 'string' ? parsed.reply : '', actions };
-        } catch {
-            // fall through: treat as plain text
-        }
-    }
-    return { reply: cleaned, actions: [] };
-}
-
 const MAX_HISTORY = 12;
 
 function recipeSaveIntent(message: string, hasAttachments: boolean): boolean {
@@ -207,7 +190,10 @@ export async function askSous(
         persisted.history.length >= history.length
             ? persisted.history.map((t) => ({
                   role: t.role === 'assistant' ? 'sous' : t.role === 'sous' ? 'sous' : 'user',
-                  text: t.text,
+                  text:
+                      t.role === 'assistant' || t.role === 'sous'
+                          ? parseAmpiResponse(t.text).reply || t.text
+                          : t.text,
                   images: t.images,
               }))
             : history;
@@ -233,7 +219,7 @@ export async function askSous(
               { feature: 'chat' }
           );
     const visionNote = peekMultimodalVisionNote();
-    const { reply, actions } = parseResponse(raw);
+    const { reply, actions } = parseAmpiResponse(raw);
 
     const mutating = actions.filter(isMutatingAction);
     const immediate = actions.filter((a) => !isMutatingAction(a));

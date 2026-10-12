@@ -2,8 +2,10 @@ import { checkMinuteRateLimit } from './store.js';
 
 export const ELEVENLABS_TTS_MAX_CHARS = 1000;
 export const ELEVENLABS_REQUESTS_PER_MINUTE = 20;
-export const ELEVENLABS_DEFAULT_MODEL = 'eleven_flash_v2_5';
+export const ELEVENLABS_V4_MODEL = 'eleven_v4';
+export const ELEVENLABS_V4_TURBO_MODEL = 'eleven_v4_turbo';
 export const ELEVENLABS_EXPRESSIVE_MODEL = 'eleven_v3';
+export const ELEVENLABS_DEFAULT_MODEL = 'eleven_flash_v2_5';
 const OUTPUT_FORMAT = 'mp3_44100_128';
 
 const VOICE_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -49,9 +51,9 @@ export function validateTtsText(text) {
     return trimmed;
 }
 
-// Eleven v3 audio tags such as [warmly] or [laughs]: one to four words in
-// brackets, not a Markdown link. Same rule as src/chat/messageText.ts.
-const AUDIO_TAG = /\[(?:[a-z][a-z'-]*)(?: [a-z][a-z'-]*){0,3}\](?!\()/gi;
+const AUDIO_TAG =
+    /\[(?:[a-z][a-z'-]*(?:,\s*[a-z][a-z'-]*){0,3}|long pause|pause)\](?!\()/gi;
+const SSML_TAG = /<\/?(?:speak|break|emphasis|prosody|voice|say-as|sub|phoneme|audio|mark)[^>]*>/gi;
 
 export function hasAudioTags(text) {
     AUDIO_TAG.lastIndex = 0;
@@ -61,6 +63,8 @@ export function hasAudioTags(text) {
 export function stripAudioTags(text) {
     return text
         .replace(AUDIO_TAG, '')
+        .replace(SSML_TAG, '')
+        .replace(/<break[^>]*\/?>/gi, '')
         .replace(/[ \t]{2,}/g, ' ')
         .replace(/[ \t]+([,.!?;:])/g, '$1')
         .trim();
@@ -134,7 +138,16 @@ export async function fetchElevenLabsVoices() {
     return sanitizeVoices(data);
 }
 
-export async function fetchElevenLabsTts({ voiceId, text, modelId = ELEVENLABS_DEFAULT_MODEL }) {
+export function defaultVoiceSettings() {
+    return {
+        stability: 0.38,
+        similarity_boost: 0.72,
+        style: 0.45,
+        use_speaker_boost: true,
+    };
+}
+
+export async function fetchElevenLabsTts({ voiceId, text, modelId = ELEVENLABS_V4_MODEL, voiceSettings }) {
     const apiKey = getElevenLabsApiKey();
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=${OUTPUT_FORMAT}`;
     let response;
@@ -147,8 +160,9 @@ export async function fetchElevenLabsTts({ voiceId, text, modelId = ELEVENLABS_D
                 accept: 'audio/mpeg',
             },
             body: JSON.stringify({
-                text,
+                text: String(text).replace(SSML_TAG, '').replace(/<break[^>]*\/?>/gi, ''),
                 model_id: modelId,
+                voice_settings: voiceSettings || defaultVoiceSettings(),
             }),
         });
     } catch (error) {
@@ -165,8 +179,6 @@ export async function fetchElevenLabsTts({ voiceId, text, modelId = ELEVENLABS_D
     return buffer;
 }
 
-// Only allowlisted owner accounts reach these handlers, so ElevenLabs' own
-// error text (never the key) is passed back to make Account → Voice test useful.
 function reject(res, status, error, detail) {
     console.warn(`[ai/chat] elevenlabs ${status} ${error}${detail ? `: ${detail}` : ''}`);
     res.status(status).json({
@@ -176,23 +188,46 @@ function reject(res, status, error, detail) {
     });
 }
 
+const MODEL_CHAIN_TAGGED = [
+    ELEVENLABS_V4_MODEL,
+    ELEVENLABS_V4_TURBO_MODEL,
+    ELEVENLABS_EXPRESSIVE_MODEL,
+    ELEVENLABS_DEFAULT_MODEL,
+];
+const MODEL_CHAIN_PLAIN = [ELEVENLABS_V4_MODEL, ELEVENLABS_DEFAULT_MODEL, ELEVENLABS_EXPRESSIVE_MODEL];
+
 /**
- * Text with audio tags goes to eleven_v3; if v3 rejects it, the same text
- * without tags goes to the fast model so the reply is still spoken.
+ * Prefer eleven_v4 (turbo for retry), then v3 for tagged text, then flash.
  */
 export async function synthesizeWithFallback({ voiceId, text }) {
-    if (hasAudioTags(text)) {
+    const trimmed = validateTtsText(text);
+    const tagged = hasAudioTags(trimmed);
+    const chain = tagged ? MODEL_CHAIN_TAGGED : MODEL_CHAIN_PLAIN;
+    let lastError;
+    for (const modelId of chain) {
         try {
-            const audio = await fetchElevenLabsTts({ voiceId, text, modelId: ELEVENLABS_EXPRESSIVE_MODEL });
-            return { audio, model: ELEVENLABS_EXPRESSIVE_MODEL };
+            const audio = await fetchElevenLabsTts({ voiceId, text: trimmed, modelId });
+            return { audio, model: modelId };
         } catch (error) {
-            console.warn('[ai/chat] elevenlabs v3 failed, retrying without tags:', error?.message || error);
+            lastError = error;
+            const status = error?.status;
+            if (status === 400 || status === 404) continue;
         }
-        const plain = stripAudioTags(text);
-        if (!plain) throw new Error('Missing text');
-        return { audio: await fetchElevenLabsTts({ voiceId, text: plain }), model: ELEVENLABS_DEFAULT_MODEL };
     }
-    return { audio: await fetchElevenLabsTts({ voiceId, text }), model: ELEVENLABS_DEFAULT_MODEL };
+    const plain = stripAudioTags(trimmed);
+    if (plain && plain !== trimmed) {
+        try {
+            const audio = await fetchElevenLabsTts({
+                voiceId,
+                text: plain,
+                modelId: ELEVENLABS_DEFAULT_MODEL,
+            });
+            return { audio, model: ELEVENLABS_DEFAULT_MODEL };
+        } catch (error) {
+            lastError = error;
+        }
+    }
+    throw lastError || new Error('ElevenLabs TTS failed');
 }
 
 /**

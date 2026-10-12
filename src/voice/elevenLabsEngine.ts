@@ -1,10 +1,13 @@
-import { hasAudioTags, stripAudioTags, toElevenLabsText } from '../chat/messageText';
+import { toElevenLabsText } from '../chat/messageText';
 import { deviceSpeechEngine, describeVoiceError, type SpeakOptions, type SpeechEngine } from './speech';
 import { getElevenLabsConfig } from './elevenLabsSettings';
 import { readAudioResponse, speakInChunks, stopElevenLabsPlayback, type SynthesizedAudio } from './elevenLabsPlayback';
-
-const EXPRESSIVE_MODEL = 'eleven_v3';
-const FAST_MODEL = 'eleven_flash_v2_5';
+import {
+    buildElevenLabsTtsBodyForUser,
+    prepareElevenLabsSpeechText,
+    pickElevenLabsModelChain,
+    ELEVEN_FLASH,
+} from './elevenLabsTtsRequest';
 
 async function upstreamError(res: Response): Promise<Error> {
     const body = await res.text().catch(() => '');
@@ -15,22 +18,40 @@ async function upstreamError(res: Response): Promise<Error> {
     } catch {
         // not JSON
     }
-    return new Error(`ElevenLabs said ${res.status}: ${String(detail).replace(/\s+/g, ' ').slice(0, 200) || res.statusText}`);
+    return new Error(
+        `ElevenLabs said ${res.status}: ${String(detail).replace(/\s+/g, ' ').slice(0, 200) || res.statusText}`
+    );
 }
 
-/** Audio tags need eleven_v3; if v3 fails, the same line without tags on the fast model. */
-async function synthesize(apiKey: string, voiceId: string, chunk: string): Promise<SynthesizedAudio> {
-    const request = (text: string, modelId: string) =>
-        fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`, {
+async function synthesize(apiKey: string, voiceId: string, displayChunk: string): Promise<SynthesizedAudio> {
+    const spoken = await prepareElevenLabsSpeechText(displayChunk);
+    const models = pickElevenLabsModelChain(spoken);
+    let lastRes: Response | null = null;
+    for (const modelId of models) {
+        const body = await buildElevenLabsTtsBodyForUser(spoken, modelId);
+        const res = await fetch(
+            `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
+            {
+                method: 'POST',
+                headers: { 'xi-api-key': apiKey, 'content-type': 'application/json', accept: 'audio/mpeg' },
+                body: JSON.stringify(body),
+            }
+        );
+        if (res.ok) return readAudioResponse(res);
+        lastRes = res;
+        if (res.status === 400 || res.status === 404) continue;
+        break;
+    }
+    if (lastRes) throw await upstreamError(lastRes);
+    const fallbackBody = await buildElevenLabsTtsBodyForUser(spoken, ELEVEN_FLASH);
+    const res = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
+        {
             method: 'POST',
             headers: { 'xi-api-key': apiKey, 'content-type': 'application/json', accept: 'audio/mpeg' },
-            body: JSON.stringify({ text, model_id: modelId }),
-        });
-    if (hasAudioTags(chunk)) {
-        const expressive = await request(chunk, EXPRESSIVE_MODEL).catch(() => null);
-        if (expressive?.ok) return readAudioResponse(expressive);
-    }
-    const res = await request(stripAudioTags(chunk), FAST_MODEL);
+            body: JSON.stringify(fallbackBody),
+        }
+    );
     if (!res.ok) throw await upstreamError(res);
     return readAudioResponse(res);
 }

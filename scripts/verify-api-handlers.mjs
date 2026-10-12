@@ -68,6 +68,8 @@ const modules = [
     '_lib/syncStore.js',
     '_lib/authTestMode.js',
     '_lib/partyMembers.js',
+    '_lib/ampiResponseSchema.js',
+    '_lib/ampiResponseParse.js',
     'p.js',
     'p-og.js',
 ];
@@ -166,12 +168,12 @@ console.log('ok elevenlabs key resolution');
     process.env.ELEVENLABS_API_KEY = 'xi-test-key';
     const realFetch = globalThis.fetch;
     const calls = [];
-    let failV3 = false;
+    let failV4 = false;
     let failAll = false;
     globalThis.fetch = async (url, init) => {
         const body = JSON.parse(init.body);
         calls.push({ url: String(url), model: body.model_id, text: body.text });
-        if (failAll || (failV3 && body.model_id === 'eleven_v3')) {
+        if (failAll || (failV4 && body.model_id === 'eleven_v4')) {
             return new Response(JSON.stringify({ detail: { status: 'quota_exceeded', message: 'Quota exceeded.' } }), { status: 401 });
         }
         return new Response(new Uint8Array([0xff, 0xfb, 0x90, 0x00]), { status: 200, headers: { 'content-type': 'audio/mpeg' } });
@@ -200,18 +202,21 @@ console.log('ok elevenlabs key resolution');
     };
     try {
         let res = await run('[excited] Dinner is ready!', 'verify-tts-1');
-        if (res.statusCode !== 200 || res.headers['x-elevenlabs-model'] !== 'eleven_v3' || calls.at(-1).text !== '[excited] Dinner is ready!') {
-            throw new Error(`tagged text should use eleven_v3 with tags: ${JSON.stringify({ status: res.statusCode, calls })}`);
+        if (res.statusCode !== 200 || res.headers['x-elevenlabs-model'] !== 'eleven_v4' || calls.at(-1).text !== '[excited] Dinner is ready!') {
+            throw new Error(`tagged text should use eleven_v4 with tags: ${JSON.stringify({ status: res.statusCode, calls })}`);
         }
         if (res.headers['content-type'] !== 'audio/mpeg' || !res.body?.length) throw new Error('tts should return audio/mpeg bytes');
-        failV3 = true;
+        failV4 = true;
         res = await run('[excited] Dinner is ready!', 'verify-tts-2');
         const last = calls.at(-1);
-        if (res.statusCode !== 200 || res.headers['x-elevenlabs-model'] !== 'eleven_flash_v2_5' || last.text !== 'Dinner is ready!') {
-            throw new Error(`v3 failure should fall back to flash without tags: ${JSON.stringify(last)}`);
+        if (res.statusCode !== 200 || last.model === 'eleven_v4') {
+            throw new Error(`v4 failure should fall back to another model: ${JSON.stringify(last)}`);
         }
+        failV4 = false;
         res = await run('Plain text.', 'verify-tts-3');
-        if (calls.at(-1).model !== 'eleven_flash_v2_5') throw new Error('untagged text should use flash');
+        if (res.statusCode !== 200 || res.headers['x-elevenlabs-model'] !== 'eleven_v4') {
+            throw new Error(`untagged text should use eleven_v4: ${JSON.stringify({ status: res.statusCode, model: res.headers['x-elevenlabs-model'] })}`);
+        }
         failAll = true;
         res = await run('Plain text.', 'verify-tts-4');
         if (res.statusCode !== 502 || !/Quota exceeded/.test(res.body?.detail || '')) {
