@@ -1,6 +1,16 @@
 {
   "releases": [
     {
+      "version": "1.0.2",
+      "date": "2026-10-12",
+      "body": "Mobile layout polish for pantry lists.\n\n- Move floating add (and grocery AI/add) buttons to the bottom-left, above the tab bar, with extra list padding so row actions stay tappable on iPhone Safari"
+    },
+    {
+      "version": "1.0.1",
+      "date": "2026-10-12",
+      "body": "Release at git tag `v1.0.1` (commit `f65512d`).\n\n- In-app version footer, build metadata, and bundled release notes (#74)\n- Party and recipe cover images: square thumbs, EXIF-aware crop, cache-busted URLs (#75)"
+    },
+    {
       "version": "1.0.0",
       "date": "2026-10-12",
       "body": "First tagged stable web release: party group chat, demo data tools, and AI model reliability.\n\n- Party group chat with @Ampi, attachments, and polling (#71, #72)\n- Fill or remove demo data from Account (#70)\n- Auto-generate recipe images after save (#67)\n- Safer Ampi recipe saves and corrupted-recipe repair (#68)\n- Owner OpenRouter model picker filters chat-only models and retries bad requests (#73)"

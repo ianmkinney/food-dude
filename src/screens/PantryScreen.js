@@ -25,6 +25,7 @@ import PantryExpandableItemCard from '../components/PantryExpandableItemCard';
 import PantryBulkEstimateModal from '../components/PantryBulkEstimateModal';
 import { expirationBadge, sortPantryItemsByExpiration } from '../utils/pantryExpiration';
 import { estimatePantryBulkFromPhoto } from '../services/pantryVisionEstimate';
+import { useFloatingActionLayout } from '../layout/floatingActionLayout';
 
 const PantryScreen = () => {
     const navigation = useNavigation();
@@ -39,6 +40,8 @@ const PantryScreen = () => {
     const [bulkEstimates, setBulkEstimates] = useState([]);
     const [bulkModalOpen, setBulkModalOpen] = useState(false);
     const [expandedItemId, setExpandedItemId] = useState(null);
+    const { containerStyle: fabContainerStyle, listPaddingBottom: fabListPadding } =
+        useFloatingActionLayout(1);
 
     const handleToggleExpand = useCallback((id) => {
         setExpandedItemId((prev) => (prev === id ? null : id));
@@ -176,7 +179,10 @@ const PantryScreen = () => {
                     keyExtractor={(item) => item.id.toString()}
                     numColumns={isDesktop ? 2 : 1}
                     columnWrapperStyle={isDesktop ? desktopListStyles.columnWrapper : undefined}
-                    contentContainerStyle={styles.listContent}
+                    contentContainerStyle={[
+                        styles.listContent,
+                        !isDesktop && { paddingBottom: fabListPadding },
+                    ]}
                     ListEmptyComponent={renderEmptyState}
                     refreshing={false}
                     onRefresh={loadPantryItems}
@@ -185,15 +191,16 @@ const PantryScreen = () => {
             )}
 
             {!isDesktop ? (
-                <FloatingActionButton
-                    theme={theme}
-                    style={styles.fab}
-                    accessibilityLabel="Add pantry item"
-                    onPress={() => navigation.navigate('AddPantryItem')}
-                    morphTo="af-sheet"
-                >
-                    <Ionicons name="add" size={28} color="#FFFFFF" />
-                </FloatingActionButton>
+                <View style={fabContainerStyle} pointerEvents="box-none">
+                    <FloatingActionButton
+                        theme={theme}
+                        accessibilityLabel="Add pantry item"
+                        onPress={() => navigation.navigate('AddPantryItem')}
+                        morphTo="af-sheet"
+                    >
+                        <Ionicons name="add" size={28} color="#FFFFFF" />
+                    </FloatingActionButton>
+                </View>
             ) : null}
             <PantryBulkEstimateModal
                 visible={bulkModalOpen}
@@ -231,11 +238,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         flex: 1,
-    },
-    fab: {
-        position: 'absolute',
-        right: 20,
-        bottom: 20,
     },
 });
 

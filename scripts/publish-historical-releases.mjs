@@ -25,6 +25,7 @@ const RELEASE_COMMITS = [
     { version: '0.12.0', sha: '074b8cc2570a28ceaa1a1fcfdfacfd38bbd2044b' },
     { version: '0.13.0', sha: '8fb321dd019deeba59c7e6818281f65107fc81f0' },
     { version: '1.0.0', sha: '2b315ef6804d66999ae983971c1ecf11498a934f' },
+    { version: '1.0.1', sha: 'f65512d262a267bcbd7ae4f59d087ce5b0ea1486' },
 ];
 
 function notesForVersion(version) {

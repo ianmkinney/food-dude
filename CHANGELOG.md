@@ -2,6 +2,19 @@
 
 All notable user-facing changes to AmpliFood are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-10-12
+
+Mobile layout polish for pantry lists.
+
+- Move floating add (and grocery AI/add) buttons to the bottom-left, above the tab bar, with extra list padding so row actions stay tappable on iPhone Safari
+
+## [1.0.1] - 2026-10-12
+
+Release at git tag `v1.0.1` (commit `f65512d`).
+
+- In-app version footer, build metadata, and bundled release notes (#74)
+- Party and recipe cover images: square thumbs, EXIF-aware crop, cache-busted URLs (#75)
+
 ## [1.0.0] - 2026-10-12
 
 First tagged stable web release: party group chat, demo data tools, and AI model reliability.
