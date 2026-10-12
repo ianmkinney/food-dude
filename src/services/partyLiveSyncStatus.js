@@ -125,11 +125,18 @@ export async function runRenamePartyJob(localPartyId, { livePartyId, name }) {
 }
 
 export async function runUploadImageJob(localPartyId, { livePartyId, imageBase64, thumbImageBase64 }) {
+    let uploadResult = null;
     await runPartyLiveJob(localPartyId, {
         run: async () => {
-            await uploadLivePartyImage({ livePartyId, imageBase64, thumbImageBase64 });
+            uploadResult = await uploadLivePartyImage({ livePartyId, imageBase64, thumbImageBase64 });
+            if (uploadResult?.version != null) {
+                await partyOperations.setLiveSyncFields(localPartyId, {
+                    liveVersion: uploadResult.version,
+                });
+            }
         },
     });
+    return uploadResult;
 }
 
 if (typeof window !== 'undefined') {

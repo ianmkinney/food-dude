@@ -52,11 +52,16 @@ async function durableRateLimit(res, sql, rateKey, maxPerMinute) {
     return true;
 }
 
-function applyBinaryImageHeaders(res, contentType) {
+function applyBinaryImageHeaders(res, contentType, cacheKey = '') {
     res.setHeader('Content-Type', contentType || 'application/octet-stream');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Security-Policy', "default-src 'none'");
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    if (cacheKey) {
+        res.setHeader('ETag', `"party-img-${cacheKey}"`);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+        res.setHeader('Cache-Control', 'public, max-age=300, must-revalidate');
+    }
 }
 
 async function requireUserSession(req, res) {
@@ -686,9 +691,11 @@ async function handleUploadImage(req, res, session) {
         thumbParsed?.contentType ?? null
     );
     await sql`UPDATE parties SET version = version + 1, updated_at = now() WHERE id = ${partyId}::uuid`;
-    const rows = await sql`SELECT image_url, image_thumb_url FROM parties WHERE id = ${partyId}::uuid LIMIT 1`;
+    const rows = await sql`
+        SELECT image_url, image_thumb_url, version FROM parties WHERE id = ${partyId}::uuid LIMIT 1`;
     res.status(200).json({
         ok: true,
+        version: Number(rows[0]?.version ?? 0),
         imageUrl: rows[0]?.image_url || null,
         thumbUrl: rows[0]?.image_thumb_url || null,
     });
@@ -920,15 +927,18 @@ async function handlePartyImage(req, res) {
     }
     const sql = await getPartySql();
     const variant = String(req.query?.variant || 'full').toLowerCase() === 'thumb' ? 'thumb' : 'full';
+    const versionParam = String(req.query?.v || '').trim();
     const rows = await sql`
         SELECT image_url, image_bytea, image_content_type,
-               image_thumb_url, image_thumb_bytea, image_thumb_content_type
+               image_thumb_url, image_thumb_bytea, image_thumb_content_type,
+               version
         FROM parties WHERE id = ${partyId}::uuid LIMIT 1`;
     const row = rows[0];
     if (!row) {
         partyReject(res, 404, 'not_found');
         return;
     }
+    const cacheKey = versionParam || String(row.version ?? '');
     const url = variant === 'thumb' ? row.image_thumb_url || row.image_url : row.image_url;
     const bytea = variant === 'thumb' ? row.image_thumb_bytea || row.image_bytea : row.image_bytea;
     const contentType =
@@ -936,11 +946,12 @@ async function handlePartyImage(req, res) {
             ? row.image_thumb_content_type || row.image_content_type
             : row.image_content_type;
     if (url) {
+        res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
         res.redirect(302, url);
         return;
     }
     if (bytea) {
-        applyBinaryImageHeaders(res, contentType || 'application/octet-stream');
+        applyBinaryImageHeaders(res, contentType || 'application/octet-stream', cacheKey);
         res.status(200).send(Buffer.from(bytea));
         return;
     }

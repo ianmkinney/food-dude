@@ -124,8 +124,40 @@ export async function prepareImageForAi(asset) {
  * with the tab, so on web they are re-encoded into a (downscaled) data URI
  * before being stored. Native file URIs are returned unchanged.
  */
+function looksLikeHeic(uri) {
+    return typeof uri === 'string' && /\.hei[cf]|heic|heif/i.test(uri);
+}
+
+/**
+ * Recipe hero slot: EXIF-aware 4:3 cover crop, persisted as a data URI on web.
+ */
+export async function toPersistentRecipeImageUri(uri) {
+    if (!uri || typeof uri !== 'string') return uri;
+    const { encodeCoverJpegDataUri } = await import('../utils/coverImageEncode');
+    const encoded = await encodeCoverJpegDataUri(uri, { width: 1200, height: 900, quality: 0.82 });
+    if (encoded) return encoded;
+    return toPersistentImageUri(uri);
+}
+
+/**
+ * A URI that still points at the image after a reload. Browser blob: URLs die
+ * with the tab, so on web they are re-encoded before being stored. HEIC/HEIF
+ * from the iOS picker are normalized to JPEG with correct orientation.
+ */
 export async function toPersistentImageUri(uri) {
-    if (Platform.OS !== 'web' || typeof uri !== 'string' || !uri.startsWith('blob:')) {
+    if (!uri || typeof uri !== 'string') return uri;
+    const needsRecipeStylePersist =
+        Platform.OS === 'web' && (uri.startsWith('blob:') || (!uri.startsWith('data:') && uri.startsWith('http')));
+    if (looksLikeHeic(uri) || needsRecipeStylePersist) {
+        const { encodeCoverJpegDataUri } = await import('../utils/coverImageEncode');
+        const encoded = await encodeCoverJpegDataUri(uri, { width: 1200, height: 900, quality: 0.82 });
+        if (encoded) return encoded;
+    }
+    if (Platform.OS !== 'web' || !uri.startsWith('blob:')) {
+        if (looksLikeHeic(uri)) {
+            const { base64, mimeType } = await reencode(uri, FALLBACK_IMAGE_MIME_TYPE);
+            return `data:${mimeType};base64,${base64}`;
+        }
         return uri;
     }
     const { base64, mimeType } = await reencode(uri, FALLBACK_IMAGE_MIME_TYPE);

@@ -478,7 +478,9 @@ const RecipeDetailScreen = ({ route, navigation }) => {
             if (!result.success || !result.imageUri) {
                 throw new Error(result.error || 'The image model returned no photo.');
             }
-            if (editedRef.current?.image_uri) {
+            const existingUri =
+                editedRef.current?.image_uri ?? editedRecipe?.image_uri ?? recipe?.image_uri;
+            if (existingUri) {
                 setImageCandidate(result.imageUri);
             } else {
                 setGeneratingImageStatus('Saving...');
@@ -605,10 +607,14 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                                             <Text style={[styles.compareLabel, { color: theme.colors.text.secondary }]}>{option.label}</Text>
                                             {option.ai && <AiBadge />}
                                         </View>
-                                        <Image
-                                            source={{ uri: option.uri }}
+                                        <CoverImage
+                                            uri={option.uri}
                                             style={[styles.compareImage, { backgroundColor: theme.primary[100] }]}
-                                            accessibilityLabel={option.key === 'current' ? 'Current recipe photo' : 'New AI-generated photo'}
+                                            accessibilityLabel={
+                                                option.key === 'current'
+                                                    ? 'Current recipe photo'
+                                                    : 'New AI-generated photo'
+                                            }
                                         />
                                     </View>
                                 ))}

@@ -95,6 +95,8 @@ const PartyScreen = ({ navigation }) => {
     const [renameValue, setRenameValue] = useState('');
     const [partySection, setPartySection] = useState('meals');
     const [chatMessages, setChatMessages] = useState([]);
+    /** Bumps party image URLs immediately after upload (before poll returns new live_version). */
+    const [partyImageEpoch, setPartyImageEpoch] = useState(0);
     const { isDesktop } = useLayoutMode();
 
     useFocusEffect(
@@ -276,7 +278,11 @@ const PartyScreen = ({ navigation }) => {
 
     const partyCoverUri = (party, variant = 'thumb') => {
         if (!party?.live_party_id) return null;
-        const q = `action=image&partyId=${encodeURIComponent(party.live_party_id)}&variant=${variant}`;
+        const version = Number(party.live_version ?? party.liveVersion ?? 0);
+        const epoch =
+            party?.id && selectedParty?.id === party.id ? partyImageEpoch : 0;
+        const v = version + epoch;
+        const q = `action=image&partyId=${encodeURIComponent(party.live_party_id)}&variant=${variant}&v=${v}`;
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
             return `${window.location.origin}/api/party?${q}`;
         }
@@ -746,11 +752,17 @@ const PartyScreen = ({ navigation }) => {
         try {
             const images = await pickPartyCoverImages();
             if (!images?.full) return;
-            await runUploadImageJob(selectedParty.id, {
+            const uploadResult = await runUploadImageJob(selectedParty.id, {
                 livePartyId: selectedParty.live_party_id,
                 imageBase64: images.full,
                 thumbImageBase64: images.thumb,
             });
+            if (uploadResult?.version != null) {
+                setSelectedParty((prev) =>
+                    prev ? { ...prev, live_version: uploadResult.version } : prev
+                );
+            }
+            setPartyImageEpoch((n) => n + 1);
             await refreshParty();
         } catch (error) {
             Alert.alert('Error', error?.message || 'Could not update photo');
