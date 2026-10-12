@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 21;
+export const CURRENT_SCHEMA_VERSION = 22;
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
@@ -503,6 +503,22 @@ export const MIGRATIONS = [
         up: async (db) => {
             const { repairCorruptedRecipesInDb } = await import('../recipes/repairCorruptedRecipes.js');
             await repairCorruptedRecipesInDb(db);
+        },
+    },
+    {
+        version: 22,
+        name: 'demo_data_columns',
+        up: async (db) => {
+            for (const table of [
+                'recipes',
+                'meal_plans',
+                'pantry_items',
+                'grocery_items',
+                'chat_messages',
+                'parties',
+            ]) {
+                await addColumnIfMissing(db, table, 'demo', 'INTEGER', '0');
+            }
         },
     },
     {

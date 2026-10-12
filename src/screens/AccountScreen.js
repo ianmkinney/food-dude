@@ -25,6 +25,7 @@ import DataSharingSettings from '../components/DataSharingSettings';
 import AccountGoogleSection from '../components/AccountGoogleSection';
 import CloudBackupSettings from '../components/CloudBackupSettings';
 import CloudSyncSettings from '../components/CloudSyncSettings';
+import DemoDataSettings from '../components/DemoDataSettings';
 import SyncDiagnosticsPanel from '../components/SyncDiagnosticsPanel';
 import { runFullSync } from '../sync/engine';
 import { isGoogleSignInConfigured } from '../platform/ownerSignInConfig';
@@ -384,6 +385,7 @@ const AccountScreen = ({ navigation, route }) => {
                         <CloudSyncSettings theme={theme} />
                         <SyncDiagnosticsPanel theme={theme} />
                         <CloudBackupSettings theme={theme} />
+                        <DemoDataSettings theme={theme} />
                     </ElevatedCard>
                 </View>
             ) : null}
