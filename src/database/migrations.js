@@ -10,7 +10,7 @@
 import { createTablesSQL } from './schema';
 import { PLANET_IDS, PLANETS } from '../galaxy/planets';
 
-export const CURRENT_SCHEMA_VERSION = 20;
+export const CURRENT_SCHEMA_VERSION = 21;
 
 // The cockpit itself: tables that belong to no single world.
 const SHELL_OWNER = 'shell';
@@ -495,6 +495,14 @@ export const MIGRATIONS = [
                 `UPDATE pantry_items SET freshness_pct = 100 WHERE freshness_pct IS NULL;
                  UPDATE pantry_items SET amount_pct = 100 WHERE amount_pct IS NULL;`
             );
+        },
+    },
+    {
+        version: 21,
+        name: 'repair_corrupted_ampi_recipes',
+        up: async (db) => {
+            const { repairCorruptedRecipesInDb } = await import('../recipes/repairCorruptedRecipes.js');
+            await repairCorruptedRecipesInDb(db);
         },
     },
     {

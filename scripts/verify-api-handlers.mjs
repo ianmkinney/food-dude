@@ -70,6 +70,7 @@ const modules = [
     '_lib/partyMembers.js',
     '_lib/ampiResponseSchema.js',
     '_lib/ampiResponseParse.js',
+    '_lib/recipeNormalize.js',
     'p.js',
     'p-og.js',
 ];

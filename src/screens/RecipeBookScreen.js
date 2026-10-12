@@ -27,6 +27,12 @@ import { desktopPageStyles, desktopRecipeStyles } from '../components/layout/des
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 import RecipeBookDesktopGrid from './RecipeBookDesktopGrid';
 
+const safeRecipeText = (value) => {
+    if (value == null) return '';
+    if (typeof value === 'string' || typeof value === 'number') return String(value);
+    return '';
+};
+
 const RecipeCard = ({ item, index, theme, navigation, layout = 'horizontal', enhancing = false }) => {
     const thumbRef = useRef(null);
     const cooked = item.is_cooked === 1 || item.is_cooked === true;
@@ -67,13 +73,13 @@ const RecipeCard = ({ item, index, theme, navigation, layout = 'horizontal', enh
                 <View style={[styles.recipeInfo, vertical && styles.recipeInfoVertical]}>
                     <View style={styles.recipeTitleRow}>
                         <Text style={[styles.recipeTitle, { color: theme.colors.text.primary }]} numberOfLines={2}>
-                            {item.title}
+                            {safeRecipeText(item.title) || 'Untitled recipe'}
                         </Text>
                         {cooked && <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />}
                     </View>
-                    {!!item.description && (
+                    {!!safeRecipeText(item.description) && (
                         <Text style={[styles.recipeDescription, { color: theme.colors.text.secondary }]} numberOfLines={2}>
-                            {item.description}
+                            {safeRecipeText(item.description)}
                         </Text>
                     )}
                     <View style={styles.recipeMeta}>

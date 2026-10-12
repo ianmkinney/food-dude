@@ -14,6 +14,7 @@ import { ATTACHMENT_SOURCE_LABEL } from './attachmentLimits';
 import type { ChatRecipeAction } from '../chat/chatRecipes';
 import { ensureRecipeNutritionAsync, nutritionFieldsFromCreateArgs } from '../utils/ensureRecipeNutrition';
 import { hasAnyNutrition } from '../utils/recipeNutrition';
+import { coerceRecipeTemplateFromToolArgs, templateToRecipeOperationsPayload } from '../recipes/normalizeRecipe';
 
 // What Sous can actually do in the app. The model asks for these by name in its
 // JSON reply (see agent.ts); each one runs against the local database and
@@ -233,30 +234,27 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
             const cover = await attachmentCover(options);
             const fromFile = Boolean(cover);
             const nutrition = nutritionFieldsFromCreateArgs(a) as Record<string, number | undefined>;
+            const template = coerceRecipeTemplateFromToolArgs({
+                ...a,
+                servings: nutrition.servings ?? a.servings,
+                calories: nutrition.calories,
+                protein: nutrition.protein,
+                carbohydrates: nutrition.carbohydrates,
+                carbs: nutrition.carbohydrates,
+                fat: nutrition.fat,
+                fiber: nutrition.fiber,
+                sugar: nutrition.sugar,
+                sodium: nutrition.sodium,
+                source: 'Ampi',
+                ai_generated: true,
+            });
+            const payload = templateToRecipeOperationsPayload(template);
             const id = Number(
                 await recipeOperations.create({
-                    title: a.title,
-                    description: a.description || null,
-                    servings: nutrition.servings ?? a.servings ?? null,
-                    prepTime: a.prep_time || null,
-                    cookTime: a.cook_time || null,
-                    totalTime: a.prep_time && a.cook_time ? a.prep_time + a.cook_time : null,
+                    ...payload,
                     sourcePlatform: 'Ampi',
                     imageUri: cover,
-                    calories: nutrition.calories ?? null,
-                    protein: nutrition.protein ?? null,
-                    carbohydrates: nutrition.carbohydrates ?? null,
-                    fat: nutrition.fat ?? null,
-                    fiber: nutrition.fiber ?? null,
-                    sugar: nutrition.sugar ?? null,
-                    sodium: nutrition.sodium ?? null,
                     nutritionAiEstimate: 1,
-                    ingredients: (a.ingredients || []).map((ing) => ({
-                        ingredient: ing.ingredient,
-                        quantity: asText(ing.quantity),
-                        unit: ing.unit || null,
-                    })),
-                    instructions: a.instructions || [],
                 })
             );
             await recipeOperations.setProvenance(id, { isAiGenerated: true, imageSource: cover ? (fromFile ? 'user' : 'ai') : null });
@@ -266,11 +264,13 @@ async function run(call: ToolCall, options: RunOptions = {}): Promise<SousCard> 
             return {
                 type: 'recipe',
                 title: 'Saved to your recipe book',
-                recipe: { id, title: a.title, is_ai_generated: 1, image_uri: cover },
+                recipe: { id, title: template.title, is_ai_generated: 1, image_uri: cover },
                 aiGenerated: true,
                 fromUserFile: fromFile,
                 sourceLabel: fromFile ? ATTACHMENT_SOURCE_LABEL : undefined,
-                ingredients: (a.ingredients || []).map((ing) => [ing.quantity, ing.unit, ing.ingredient].filter(Boolean).join(' ')),
+                ingredients: template.ingredients.map((ing) =>
+                    [ing.quantity, ing.unit, ing.name].filter(Boolean).join(' ')
+                ),
                 savedAs: 'created',
             };
         }

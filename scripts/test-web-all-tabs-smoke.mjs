@@ -97,10 +97,26 @@ async function openDesktopNav(page, name) {
     await page.waitForTimeout(900);
 }
 
-async function visitMobileTabs(page, prefix, appUrl) {
+async function openCorruptRecipeDetail(page, prefix, appUrl) {
+    const id = await page.evaluate(() => globalThis.__TEST_CORRUPT_RECIPE_ID__);
+    if (!id) {
+        check(`${prefix}: corrupt recipe fixture id`, false, 'missing __TEST_CORRUPT_RECIPE_ID__');
+        return;
+    }
+    await page.goto(new URL(`recipe/${id}`, appUrl).href, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1600);
+    await assertHealthy(page, `${prefix} corrupt RecipeDetail`);
+    await page.goto(appUrl, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(800);
+}
+
+async function visitMobileTabs(page, prefix, appUrl, { corruptDetail = false } = {}) {
     for (const tab of ['Ampi', 'Recipes', 'Planner', 'Pantry', 'Grocery']) {
         await openMobileTab(page, tab);
         await assertHealthy(page, `${prefix} mobile ${tab}`);
+        if (corruptDetail && tab === 'Recipes') {
+            await openCorruptRecipeDetail(page, `${prefix} mobile`, appUrl);
+        }
     }
     await clickTopLabel(page, 'Open party');
     await page.waitForTimeout(900);
@@ -110,10 +126,13 @@ async function visitMobileTabs(page, prefix, appUrl) {
     await assertHealthy(page, `${prefix} mobile Account`);
 }
 
-async function visitDesktopTabs(page, prefix, appUrl) {
+async function visitDesktopTabs(page, prefix, appUrl, { corruptDetail = false } = {}) {
     for (const tab of ['Ampi', 'Recipes', 'Planner', 'Pantry', 'Grocery']) {
         await openDesktopNav(page, tab);
         await assertHealthy(page, `${prefix} desktop ${tab}`);
+        if (corruptDetail && tab === 'Recipes') {
+            await openCorruptRecipeDetail(page, `${prefix} desktop`, appUrl);
+        }
     }
     await page.goto(new URL('party', appUrl).href, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1200);
@@ -134,6 +153,7 @@ async function runScenario({ browserType, browserName, viewport, seeded, appUrl,
     if (seeded) {
         await context.addInitScript(() => {
             globalThis.__DESKTOP_SCREENSHOT_SEED__ = true;
+            globalThis.__CORRUPT_RECIPE_DETAIL_TEST__ = true;
         });
     }
     const page = await context.newPage();
@@ -155,7 +175,7 @@ async function runScenario({ browserType, browserName, viewport, seeded, appUrl,
     await onboard(page, appUrl);
     await page.waitForTimeout(seeded ? 4500 : 2000);
 
-    await visitTabs(page, tag, appUrl);
+    await visitTabs(page, tag, appUrl, { corruptDetail: seeded });
 
     check(`${tag}: no page errors`, pageErrors.length === 0, pageErrors.slice(0, 2).join(' | '));
     check(`${tag}: no console errors`, consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '));

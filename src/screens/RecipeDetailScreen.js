@@ -40,8 +40,17 @@ import { SkeletonBlock } from '../components/Skeleton';
 import { useViewTransitionTarget } from '../motion/viewTransition';
 import useReducedMotion from '../hooks/useReducedMotion';
 import { goBackOr } from '../navigation/goBackOr';
+import SectionErrorBoundary from '../components/SectionErrorBoundary';
 
 // Below this width the current/new photo comparison stacks vertically.
+const safeText = (value) => {
+    if (value == null) return '';
+    if (typeof value === 'string' || typeof value === 'number') return String(value);
+    return '';
+};
+const safeIngredients = (list) => (Array.isArray(list) ? list : []);
+const safeInstructions = (list) =>
+    (Array.isArray(list) ? list : []).map((step) => safeText(step)).filter(Boolean);
 const COMPARE_STACK_WIDTH = 520;
 
 const RecipeDetailScreen = ({ route, navigation }) => {
@@ -501,6 +510,9 @@ const RecipeDetailScreen = ({ route, navigation }) => {
         setImageNotice(null);
     };
 
+    const viewIngredients = safeIngredients(isEditing ? editedRecipe?.ingredients : recipe?.ingredients);
+    const viewInstructions = safeInstructions(isEditing ? editedRecipe?.instructions : recipe?.instructions);
+
     if (loading || !recipe) {
         return (
             <View style={[styles.skeleton, { backgroundColor: theme.colors.background }]} accessibilityRole="progressbar" accessibilityLabel="Loading recipe">
@@ -668,7 +680,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                     ) : (
                         <>
                             <Text style={[styles.title, { color: theme.colors.text.primary }]}>
-                                {recipe.title}
+                                {safeText(recipe.title) || 'Untitled recipe'}
                             </Text>
                             {recipe.is_ai_generated ? (
                                 <SourceLabel source={{ kind: 'ai' }} style={{ marginTop: 6 }} />
@@ -695,9 +707,9 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                                     <AllergyNotice allergies={allergies.list} />
                                 </View>
                             )}
-                            {recipe.description && (
+                            {safeText(recipe.description) && (
                                 <Text style={[styles.description, { color: theme.colors.text.secondary }]}>
-                                    {recipe.description}
+                                    {safeText(recipe.description)}
                                 </Text>
                             )}
                         </>
@@ -833,6 +845,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                     )}
 
                     {/* Nutritional Information */}
+                    <SectionErrorBoundary label="nutrition" isDark={isDark}>
                     {(recipe.calories != null || recipe.protein != null || recipe.carbohydrates != null || recipe.fat != null || recipe.fiber != null || recipe.sugar != null || recipe.sodium != null) ? (
                         <>
                             <View style={styles.sectionHeader}>
@@ -935,11 +948,15 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                             </View>
                         )
                     )}
+                    </SectionErrorBoundary>
 
                     {/* Ingredients */}
+                    <SectionErrorBoundary label="ingredients" isDark={isDark}>
                     <AllergenWarning
                         matches={findAllergenMatches(
-                            (isEditing ? editedRecipe.ingredients : recipe.ingredients || []).map((i) => [i.quantity, i.unit, i.ingredient].filter(Boolean).join(' ')),
+                            viewIngredients.map((i) =>
+                                [safeText(i?.quantity), safeText(i?.unit), safeText(i?.ingredient)].filter(Boolean).join(' ')
+                            ),
                             allergies.raw
                         )}
                         style={{ marginTop: 16 }}
@@ -956,25 +973,25 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                         )}
                     </View>
                     <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-                        {(isEditing ? editedRecipe.ingredients : recipe.ingredients).map((item, index) => (
-                            <View key={index} style={[styles.ingredientRow, { borderBottomColor: theme.colors.border, borderBottomWidth: index === (isEditing ? editedRecipe.ingredients : recipe.ingredients).length - 1 ? 0 : 1 }]}>
+                        {viewIngredients.map((item, index) => (
+                            <View key={index} style={[styles.ingredientRow, { borderBottomColor: theme.colors.border, borderBottomWidth: index === viewIngredients.length - 1 ? 0 : 1 }]}>
                                 {isEditing ? (
                                     <View style={styles.editIngredientRow}>
                                         <TextInput accessibilityLabel="Qty"
                                             style={[styles.editIngQty, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
-                                            value={item.quantity}
+                                            value={safeText(item?.quantity)}
                                             onChangeText={(text) => updateIngredient(index, 'quantity', text)}
                                             placeholder="Qty"
                                         />
                                         <TextInput accessibilityLabel="Unit"
                                             style={[styles.editIngUnit, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
-                                            value={item.unit}
+                                            value={safeText(item?.unit)}
                                             onChangeText={(text) => updateIngredient(index, 'unit', text)}
                                             placeholder="Unit"
                                         />
                                         <TextInput accessibilityLabel="Ingredient"
                                             style={[styles.editIngName, { color: theme.colors.text.primary, borderColor: theme.colors.border }]}
-                                            value={item.ingredient}
+                                            value={safeText(item?.ingredient)}
                                             onChangeText={(text) => updateIngredient(index, 'ingredient', text)}
                                             placeholder="Ingredient"
                                         />
@@ -987,12 +1004,13 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                                     </View>
                                 ) : (
                                     <Text style={[styles.ingredientText, { color: theme.colors.text.primary }]}>
-                                        • {item.quantity} {item.unit} {item.ingredient}
+                                        • {[safeText(item?.quantity), safeText(item?.unit), safeText(item?.ingredient)].filter(Boolean).join(' ')}
                                     </Text>
                                 )}
                             </View>
                         ))}
                     </View>
+                    </SectionErrorBoundary>
 
                     {/* Instructions */}
                     <View style={styles.sectionHeader}>
@@ -1029,9 +1047,10 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                             )}
                         </TouchableOpacity>
                     )}
+                    <SectionErrorBoundary label="instructions" isDark={isDark}>
                     <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-                        {(isEditing ? editedRecipe.instructions : recipe.instructions).map((step, index) => (
-                            <View key={index} style={[styles.instructionRow, { borderBottomColor: theme.colors.border, borderBottomWidth: index === (isEditing ? editedRecipe.instructions : recipe.instructions).length - 1 ? 0 : 1 }]}>
+                        {viewInstructions.map((step, index) => (
+                            <View key={index} style={[styles.instructionRow, { borderBottomColor: theme.colors.border, borderBottomWidth: index === viewInstructions.length - 1 ? 0 : 1 }]}>
                                 <View style={[styles.stepNumber, { backgroundColor: theme.primary[100] }]}>
                                     <Text style={[styles.stepNumberText, { color: theme.primary[700] }]}>{index + 1}</Text>
                                 </View>
@@ -1059,6 +1078,7 @@ const RecipeDetailScreen = ({ route, navigation }) => {
                             </View>
                         ))}
                     </View>
+                    </SectionErrorBoundary>
 
                     {/* Delete Button (Only in Edit Mode or always visible at bottom) */}
                     <TouchableOpacity
