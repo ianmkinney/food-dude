@@ -1,5 +1,8 @@
 import { checkMinuteRateLimit } from './store.js';
-import { applyPronunciationLocators } from './elevenLabsPronunciation.js';
+import {
+    buildElevenLabsTtsBody,
+    isPronunciationDictionaryNotFoundError,
+} from './elevenLabsPronunciation.js';
 
 export const ELEVENLABS_TTS_MAX_CHARS = 1000;
 export const ELEVENLABS_REQUESTS_PER_MINUTE = 20;
@@ -151,35 +154,49 @@ export function defaultVoiceSettings() {
 export async function fetchElevenLabsTts({ voiceId, text, modelId = ELEVENLABS_V4_MODEL, voiceSettings }) {
     const apiKey = getElevenLabsApiKey();
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=${OUTPUT_FORMAT}`;
-    let response;
-    try {
-        response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'xi-api-key': apiKey,
-                'content-type': 'application/json',
-                accept: 'audio/mpeg',
-            },
-            body: JSON.stringify(
-                applyPronunciationLocators({
-                    text: String(text).replace(SSML_TAG, '').replace(/<break[^>]*\/?>/gi, ''),
-                    model_id: modelId,
-                    voice_settings: voiceSettings || defaultVoiceSettings(),
-                })
-            ),
-        });
-    } catch (error) {
-        throw new Error(`Couldn't reach ElevenLabs: ${error?.message || 'network error'}`);
+    const basePayload = {
+        text: String(text).replace(SSML_TAG, '').replace(/<break[^>]*\/?>/gi, ''),
+        model_id: modelId,
+        voice_settings: voiceSettings || defaultVoiceSettings(),
+    };
+
+    let includeLocators = true;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        let response;
+        try {
+            response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'xi-api-key': apiKey,
+                    'content-type': 'application/json',
+                    accept: 'audio/mpeg',
+                },
+                body: JSON.stringify(
+                    buildElevenLabsTtsBody(basePayload, { includeLocators }),
+                ),
+            });
+        } catch (error) {
+            throw new Error(`Couldn't reach ElevenLabs: ${error?.message || 'network error'}`);
+        }
+        if (!response.ok) {
+            const bodyText = await response.text().catch(() => '');
+            const message = upstreamMessage(response.status, bodyText);
+            if (
+                includeLocators &&
+                isPronunciationDictionaryNotFoundError(response.status, message)
+            ) {
+                includeLocators = false;
+                continue;
+            }
+            throw new ElevenLabsUpstreamError(response.status, message);
+        }
+        const buffer = Buffer.from(await response.arrayBuffer());
+        if (!buffer.length) {
+            throw new Error('Empty audio response');
+        }
+        return buffer;
     }
-    if (!response.ok) {
-        const bodyText = await response.text().catch(() => '');
-        throw new ElevenLabsUpstreamError(response.status, upstreamMessage(response.status, bodyText));
-    }
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (!buffer.length) {
-        throw new Error('Empty audio response');
-    }
-    return buffer;
+    throw new ElevenLabsUpstreamError(404, 'Pronunciation dictionary not found');
 }
 
 function reject(res, status, error, detail) {
