@@ -37,6 +37,8 @@
     "test:party-live-sync": "node scripts/test-party-live-sync.mjs",
     "test:party-chat-api": "node scripts/test-party-chat-api.mjs",
     "test:party-chat-playwright": "node scripts/test-party-chat-playwright.mjs",
+    "test:party-image-mobile": "node scripts/test-party-image-mobile.mjs",
+    "test:cover-crop": "node scripts/test-cover-crop.mjs",
     "test:desktop-sidebar": "node scripts/test-desktop-sidebar-active.mjs",
     "test:cross-tab-sync": "node scripts/test-cross-tab-cloud-sync.mjs",
     "test:ampi-vision": "node scripts/test-ampi-vision.mjs",

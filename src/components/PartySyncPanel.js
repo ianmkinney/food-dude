@@ -279,11 +279,17 @@ export default function PartySyncPanel({
         try {
             const images = await pickPartyCoverImages();
             if (!images?.full) return;
-            await uploadLivePartyImage({
+            const data = await uploadLivePartyImage({
                 livePartyId: selectedParty.live_party_id,
                 imageBase64: images.full,
                 thumbImageBase64: images.thumb,
             });
+            if (data?.version != null) {
+                await partyOperations.setLiveSyncFields(selectedParty.id, {
+                    liveVersion: data.version,
+                });
+            }
+            onPartyUpdated?.();
             Alert.alert('Uploaded', 'Party cover photo updated.');
         } catch (error) {
             Alert.alert('Upload failed', error?.message || 'Could not upload photo.');

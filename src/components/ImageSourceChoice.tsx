@@ -2,7 +2,7 @@ import React from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { toPersistentImageUri } from '../services/mediaPrep';
+import { toPersistentRecipeImageUri } from '../services/mediaPrep';
 
 // Every recipe/image slot offers a real photo as readily as an AI one. A photo
 // from the user is never labelled AI; a generated one always is.
@@ -20,13 +20,23 @@ async function fromCamera(): Promise<string | null> {
         Alert.alert('Camera is off', 'Allow the camera in Settings to take a photo, or choose one from your library.');
         return null;
     }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.8 });
+    const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 1,
+        exif: true,
+    });
     return result.canceled ? null : result.assets[0].uri;
 }
 
 async function fromLibrary(): Promise<string | null> {
     // The system photo picker shares only the photo the user picks; no library permission.
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 1,
+        exif: true,
+    });
     return result.canceled ? null : result.assets[0].uri;
 }
 
@@ -34,7 +44,7 @@ export default function ImageSourceChoice({ onPhoto, onGenerate, generating = fa
     const pick = async (source: 'camera' | 'library') => {
         try {
             const uri = source === 'camera' ? await fromCamera() : await fromLibrary();
-            if (uri) onPhoto(await toPersistentImageUri(uri));
+            if (uri) onPhoto(await toPersistentRecipeImageUri(uri));
         } catch (error) {
             Alert.alert('Photo', (error as Error)?.message || "Couldn't get that photo.");
         }
