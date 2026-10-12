@@ -12,6 +12,7 @@ import {
     TextInput,
     View,
     useWindowDimensions,
+    Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -69,6 +70,12 @@ import DesktopChatSidePanel from '../components/layout/DesktopChatSidePanel';
 import { desktopAmpiStyles } from '../components/layout/desktopTheme';
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 import ClearChatPill from './ClearChatPill';
+import { SkeletonBlock } from '../components/Skeleton';
+import {
+    beginAutoRecipeImagesForMessage,
+    retryAutoRecipeImage,
+    type RecipeCard,
+} from './autoRecipeImage';
 
 type Message = {
     id: string;
@@ -289,6 +296,10 @@ export default function SousScreen() {
         }
     }, []);
 
+    const scheduleAutoRecipeImages = useCallback((messageId: string, cards?: SousCard[]) => {
+        beginAutoRecipeImagesForMessage(messageId, cards, setMessages);
+    }, []);
+
     const pickVideo = useCallback(async () => {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) {
@@ -357,6 +368,7 @@ export default function SousScreen() {
                         importAssist: split.importAssist,
                     };
                     setMessages((prev) => [...prev, reply]);
+                    scheduleAutoRecipeImages(reply.id, reply.cards);
                     await persistAmpiExchange(userMessage.text, reply.text, {
                         recipes: recipeEventsFromCards(split.cards || rawCards),
                     });
@@ -412,6 +424,7 @@ export default function SousScreen() {
                         cards: [card],
                     };
                     setMessages((prev) => [...prev, reply]);
+                    scheduleAutoRecipeImages(reply.id, reply.cards);
                     await persistAmpiExchange(userMessage.text, reply.text, {
                         recipes: recipeEventsFromCards([card]),
                     });
@@ -435,6 +448,7 @@ export default function SousScreen() {
                         : undefined,
                 };
                 setMessages((prev) => [...prev, reply]);
+                scheduleAutoRecipeImages(reply.id, reply.cards);
                 await persistAmpiExchange(
                     userMessage.text,
                     result.reply,
@@ -459,7 +473,7 @@ export default function SousScreen() {
                 setThinking(false);
             }
         },
-        [messages, thinking, autoSpeak, speak, attachedVideo, pendingAttachments, composerFocused, scrollToLatest]
+        [messages, thinking, autoSpeak, speak, attachedVideo, pendingAttachments, composerFocused, scrollToLatest, scheduleAutoRecipeImages]
     );
 
     const confirmActions = useCallback(async (messageId: string) => {
@@ -473,6 +487,7 @@ export default function SousScreen() {
                     m.id === messageId ? { ...m, confirmDone: true, cards: [...(m.cards || []), ...cards] } : m
                 )
             );
+            scheduleAutoRecipeImages(messageId, cards);
         } catch (error) {
             setMessages((prev) => [
                 ...prev,
@@ -481,7 +496,7 @@ export default function SousScreen() {
         } finally {
             setThinking(false);
         }
-    }, [messages]);
+    }, [messages, scheduleAutoRecipeImages]);
 
     const mic = useSpeechInput((finalText) => send(finalText));
     const micTarget = useTourTarget('sous-composer');
@@ -542,7 +557,7 @@ export default function SousScreen() {
 
     const display = { fontFamily: theme.typography.fonts.display };
 
-    const renderCard = (card: SousCard, index: number) => {
+    const renderCard = (card: SousCard, index: number, messageId: string) => {
         const cardStyle = [styles.card, { backgroundColor: c.surface, borderColor: c.border }];
         const open = (name: string, params?: object) => () => navigation.navigate(name, params);
         switch (card.type) {
@@ -560,33 +575,83 @@ export default function SousScreen() {
                         ))}
                     </View>
                 );
-            case 'recipe':
+            case 'recipe': {
+                const recipeCard = card as RecipeCard;
+                const imageSlot =
+                    recipeCard.recipe.image_uri ||
+                    recipeCard.autoImage?.status === 'loading' ||
+                    recipeCard.autoImage?.status === 'failed';
                 return (
-                    <Pressable key={index} style={cardStyle} onPress={open('RecipeDetail', { recipeId: card.recipe.id })} accessibilityRole="link">
-                        <Text style={[styles.cardKicker, { color: c.text.tertiary }]}>{card.title}</Text>
-                        {card.sourceLabel ? (
-                            <Text style={[styles.cardKicker, { color: c.text.tertiary, textTransform: 'none' }]}>{card.sourceLabel}</Text>
+                    <Pressable
+                        key={index}
+                        style={cardStyle}
+                        onPress={open('RecipeDetail', { recipeId: recipeCard.recipe.id })}
+                        accessibilityRole="link"
+                    >
+                        <Text style={[styles.cardKicker, { color: c.text.tertiary }]}>{recipeCard.title}</Text>
+                        {recipeCard.sourceLabel ? (
+                            <Text style={[styles.cardKicker, { color: c.text.tertiary, textTransform: 'none' }]}>
+                                {recipeCard.sourceLabel}
+                            </Text>
+                        ) : null}
+                        {imageSlot ? (
+                            <View style={styles.recipeCardImageWrap}>
+                                {recipeCard.recipe.image_uri ? (
+                                    <View>
+                                        <Image
+                                            source={{ uri: recipeCard.recipe.image_uri }}
+                                            style={styles.recipeCardImage}
+                                            resizeMode="cover"
+                                            accessibilityIgnoresInvertColors
+                                            accessibilityLabel={`Photo of ${recipeCard.recipe.title}`}
+                                        />
+                                        {!recipeCard.fromUserFile ? (
+                                            <View style={styles.recipeCardImageBadge}>
+                                                <AiBadge />
+                                            </View>
+                                        ) : null}
+                                    </View>
+                                ) : recipeCard.autoImage?.status === 'loading' ? (
+                                    <SkeletonBlock height={140} radius={12} style={styles.recipeCardImage} />
+                                ) : (
+                                    <Pressable
+                                        style={[styles.recipeCardRetry, { borderColor: c.border }]}
+                                        onPress={(e) => {
+                                            e.stopPropagation?.();
+                                            void retryAutoRecipeImage(messageId, recipeCard, setMessages);
+                                        }}
+                                        accessibilityRole="button"
+                                        accessibilityLabel="Retry generating recipe photo"
+                                    >
+                                        <Ionicons name="refresh" size={18} color={theme.primary[500]} />
+                                        <Text style={[styles.recipeCardRetryText, { color: c.text.secondary }]}>
+                                            {recipeCard.autoImage?.errorMessage || "Couldn't generate photo"} · Retry
+                                        </Text>
+                                    </Pressable>
+                                )}
+                            </View>
                         ) : null}
                         <View style={styles.cardRow}>
                             <Ionicons name="restaurant-outline" size={20} color={theme.primary[500]} />
-                            <Text style={[styles.cardRowText, display, { color: c.text.primary, fontSize: 17 }]} numberOfLines={2}>{card.recipe.title}</Text>
+                            <Text style={[styles.cardRowText, display, { color: c.text.primary, fontSize: 17 }]} numberOfLines={2}>{recipeCard.recipe.title}</Text>
                             <Ionicons name="chevron-forward" size={16} color={c.text.tertiary} />
                         </View>
-                        <AllergenWarning matches={findAllergenMatches(card.ingredients || [], allergies.raw)} />
-                        {(card.aiGenerated || card.fromUserFile) && (
+                        <AllergenWarning matches={findAllergenMatches(recipeCard.ingredients || [], allergies.raw)} />
+                        {(recipeCard.aiGenerated || recipeCard.fromUserFile) && (
                             <View style={styles.cardFooter}>
-                                {card.aiGenerated ? (
+                                {recipeCard.aiGenerated ? (
                                     <>
-                                        <AiDisclaimer kind="recipe" report={{ kind: 'recipe', content: `${card.recipe.title}\n${(card.ingredients || []).join('\n')}` }} />
+                                        <AiDisclaimer kind="recipe" report={{ kind: 'recipe', content: `${recipeCard.recipe.title}\n${(recipeCard.ingredients || []).join('\n')}` }} />
                                         <AllergyNotice allergies={allergies.list} />
                                     </>
-                                ) : card.fromUserFile ? (
+                                ) : recipeCard.fromUserFile ? (
                                     <Text style={[styles.fine, { color: c.text.tertiary }]}>{ATTACHMENT_SOURCE_LABEL}</Text>
                                 ) : null}
                             </View>
                         )}
                     </Pressable>
                 );
+            }
             case 'meal_plan':
                 return (
                     <Pressable key={index} style={cardStyle} onPress={open('Planner')} accessibilityRole="link">
@@ -750,7 +815,7 @@ export default function SousScreen() {
                             </View>
                         )}
                     </View>
-                    {item.cards?.map(renderCard)}
+                    {item.cards?.map((card, cardIndex) => renderCard(card, cardIndex, item.id))}
                     {item.confirm && !item.confirmDone && (
                         <View style={[styles.confirmCard, { backgroundColor: c.surface, borderColor: theme.primary[400] }]}>
                             <Text style={[styles.confirmTitle, { color: c.text.primary }]}>Apply in AmpliFood?</Text>
@@ -1362,6 +1427,21 @@ const styles = StyleSheet.create({
     card: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 8, width: '92%' },
     cardTitle: { fontSize: 14, fontWeight: '800' },
     cardKicker: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+    recipeCardImageWrap: { width: '100%', marginTop: 4 },
+    recipeCardImage: { width: '100%', height: 140, borderRadius: 12 },
+    recipeCardImageBadge: { position: 'absolute', top: 8, left: 8 },
+    recipeCardRetry: {
+        minHeight: 140,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 12,
+        gap: 6,
+        flexDirection: 'row',
+    },
+    recipeCardRetryText: { fontSize: 13, fontWeight: '600', flex: 1 },
     cardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
     cardRowText: { flex: 1, fontSize: 15 },
     cardFooter: { gap: 8 },

@@ -80,6 +80,7 @@ export type SousCard =
           sourceLabel?: string;
           fromUserFile?: boolean;
           savedAs?: ChatRecipeAction;
+          autoImage?: { status: 'loading' | 'failed'; errorMessage?: string };
       }
     | { type: 'meal_plan'; recipeTitle: string; date: string; mealType: MealType }
     | { type: 'pantry'; items: string[] }

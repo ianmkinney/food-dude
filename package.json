@@ -18,6 +18,7 @@
     "test:ampi-json-parse": "node scripts/test-ampi-json-parse.mjs",
     "test:web-back": "node scripts/test-web-back-after-actions.mjs",
     "test:chat-text": "node scripts/test-chat-text.mjs",
+    "test:auto-recipe-image": "node scripts/test-auto-recipe-image.mjs",
     "test:web-chat": "node scripts/test-web-ampi-chat.mjs",
     "test:web-ampi-chat-scroll": "node scripts/test-web-ampi-chat-scroll.mjs",
     "test:recipe-enhance-slow": "node scripts/test-recipe-enhance-slow.mjs",
