@@ -36,7 +36,17 @@ export async function prepareLivePartyPage(page, appUrl, memberToken = 'member-t
                 localStorage.setItem(`amplifood.party.live.chatSince.${liveId}`, '0');
                 localStorage.setItem(
                     'amplifood.owner.session.v1',
-                    JSON.stringify({ token: 't', email: 'alex@example.com', name: 'Alex Cook', savedAt: Date.now() })
+                    JSON.stringify({
+                        token: 't',
+                        email: 'alex@example.com',
+                        name: 'Alex Cook',
+                        platformAiAllowed: true,
+                        savedAt: Date.now(),
+                    })
+                );
+                localStorage.setItem(
+                    'amplifood.dataConsent.v1',
+                    JSON.stringify({ platform: { grantedAt: Date.now() } })
                 );
             } catch {
                 // ignore

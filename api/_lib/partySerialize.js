@@ -39,6 +39,9 @@ export function rowToPartySnapshot(bundle, options = {}) {
             email: isOwner ? m.email : null,
             status: m.status,
             joinedAt: new Date(m.joined_at).getTime(),
+            pantryShareEnabled: Boolean(m.pantry_share_enabled),
+            pantrySnapshot: m.pantry_share_enabled && m.pantry_snapshot ? m.pantry_snapshot : null,
+            pantryUpdatedAt: m.pantry_updated_at ? new Date(m.pantry_updated_at).getTime() : null,
         })),
         meals: (meals || []).map((m) => ({
             id: m.id,

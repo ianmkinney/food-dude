@@ -2,6 +2,20 @@
 
 All notable user-facing changes to AmpliFood are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] - 2026-10-13
+
+Party @Ampi recipe suggestions in group chat.
+
+- Fix empty Ampi bubbles when the model returns tool actions with a blank `reply` (common after the OpenRouter adapter): synthesize reply text, show recipe draft cards, and never post a message with no body
+- Party chat: recipe draft cards with **Save to my recipes** and **Add to party meals**; optional auto-add when the user asks to add to the party menu
+- Richer party context (meals, claims, conversation turns) for @Ampi; failed generations post a visible error instead of silent skip
+- **Ask Ampi** pre-fills `@Ampi give us a delicious meal from our pantries` (edit before send)
+- Opt-in **Share my pantry with this party** (minimal snapshot on Neon); combined pantry context for meal suggestions; recipe cards show who has each ingredient and what is missing
+- Add missing ingredients to your grocery list or register them on the party meal to claim, from the recipe card or a chat command (`add the missing ingredients to my grocery list` / `as party meal items to claim`)
+- Chat claims without waiting on the model: "I'll bring the tortillas" and "@Ampi Katie is bringing cheese" update party meal ingredient claims and Ampi confirms in chat
+- Failed @Ampi replies show a tap-to-retry control; already-saved empty JSON bubbles are repaired on screen from the stored recipe action
+- Privacy policy and in-app data note describe opt-in party pantry snapshots
+
 ## [1.0.2] - 2026-10-12
 
 Mobile layout polish for pantry lists.

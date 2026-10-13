@@ -63,6 +63,9 @@ ALTER TABLE invite_tokens ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 UPDATE invite_tokens SET expires_at = created_at + interval '30 days' WHERE expires_at IS NULL;
 ALTER TABLE party_members ADD COLUMN IF NOT EXISTS google_sub TEXT;
 ALTER TABLE party_members ADD COLUMN IF NOT EXISTS identity_key TEXT;
+ALTER TABLE party_members ADD COLUMN IF NOT EXISTS pantry_share_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE party_members ADD COLUMN IF NOT EXISTS pantry_snapshot JSONB;
+ALTER TABLE party_members ADD COLUMN IF NOT EXISTS pantry_updated_at TIMESTAMPTZ;
 ALTER TABLE party_meals ADD COLUMN IF NOT EXISTS recipe_meta JSONB NOT NULL DEFAULT '{}'::jsonb;
 CREATE TABLE IF NOT EXISTS party_meal_ingredient_claims (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

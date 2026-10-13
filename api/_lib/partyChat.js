@@ -13,15 +13,38 @@ export function sanitizePartyChatBody(raw) {
 
 export function normalizeAttachmentMeta(meta) {
     if (!meta || typeof meta !== 'object') return null;
+    const ampi = meta.ampi && typeof meta.ampi === 'object' ? meta.ampi : null;
     const fileName = String(meta.fileName || meta.name || '').trim().slice(0, 200);
-    if (!fileName) return null;
     const sizeBytes = Number(meta.sizeBytes ?? meta.size ?? 0);
     const mimeType = String(meta.mimeType || meta.type || 'application/octet-stream').slice(0, 120);
-    return {
-        fileName,
+    if (!fileName && !ampi) return null;
+    const out = {
         sizeBytes: Number.isFinite(sizeBytes) ? Math.max(0, Math.min(sizeBytes, 50_000_000)) : 0,
         mimeType,
     };
+    if (fileName) out.fileName = fileName;
+    if (ampi) {
+        out.ampi = {
+            cards: Array.isArray(ampi.cards) ? ampi.cards.slice(0, 6) : [],
+            pendingActions: Array.isArray(ampi.pendingActions) ? ampi.pendingActions.slice(0, 8) : [],
+            failed: Boolean(ampi.failed),
+        };
+    }
+    return out;
+}
+
+export function attachmentHasPayload(attachment) {
+    if (!attachment || typeof attachment !== 'object') return false;
+    if (attachment.fileName) return true;
+    return Array.isArray(attachment.ampi?.cards) && attachment.ampi.cards.length > 0;
+}
+
+/** Reject empty party chat posts. Ampi bubbles must include reply text. */
+export function partyChatPostRejection({ text, isAmpi, attachment }) {
+    const body = String(text || '').trim();
+    if (isAmpi && !body) return 'Ampi replies need text.';
+    if (!body && !attachmentHasPayload(attachment)) return 'Message cannot be empty.';
+    return null;
 }
 
 export function mergePartyChatMessages(existing, incoming) {
@@ -45,7 +68,8 @@ export function mergeServerPartyChatWithLocal(serverMessages, localMessages) {
 }
 
 export function rowToChatMessage(row) {
-    const attachment = row.attachment_meta && typeof row.attachment_meta === 'object' ? row.attachment_meta : null;
+    const attachment =
+        row.attachment_meta && typeof row.attachment_meta === 'object' ? row.attachment_meta : null;
     return {
         id: row.id,
         partyId: row.party_id,

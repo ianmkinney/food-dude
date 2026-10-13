@@ -20,9 +20,11 @@ import { dedupeServerMemberRows, upsertActivePartyMember, isHumanPartyMember } f
 import {
     MAX_CHAT_BATCH,
     normalizeAttachmentMeta,
+    partyChatPostRejection,
     rowToChatMessage,
     sanitizePartyChatBody,
 } from '../_lib/partyChat.js';
+import { normalizePantrySnapshotItems } from '../_lib/partyPantryShare.js';
 
 const MAX_NAME = 200;
 const MAX_DISPLAY = 120;
@@ -346,20 +348,122 @@ async function handleClaimIngredient(req, res, session) {
     }
     if (!(await durableRateLimit(res, sql, `party:claim:${partyId}`, 40))) return;
 
+    const registerOnly = Boolean(body.registerOnly || body.register_only);
+    let claimMemberId = actor.member_id;
+    let claimDisplayName = actor.display_name;
+    const claimedByName = String(body.claimedByMemberName || body.claimed_by_member_name || '').trim();
+    if (registerOnly) {
+        claimMemberId = null;
+        claimDisplayName = null;
+    } else if (claimedByName) {
+        const match = await sql`
+            SELECT member_id, display_name FROM party_members
+            WHERE party_id = ${partyId}::uuid AND status = 'active'
+            AND lower(display_name) = lower(${claimedByName})
+            LIMIT 1`;
+        if (match[0]) {
+            claimMemberId = match[0].member_id;
+            claimDisplayName = match[0].display_name;
+        }
+    }
+
     await sql`
         INSERT INTO party_meal_ingredient_claims (
             party_id, meal_id, recipe_id, ingredient_key, ingredient_name,
             claimed_by_member_id, claimed_by_display_name
         ) VALUES (
             ${partyId}::uuid, ${mealId}::uuid, ${recipeId}, ${ingredientKey}, ${ingredientName},
-            ${actor.member_id}::uuid, ${actor.display_name}
+            ${claimMemberId}::uuid, ${claimDisplayName}
         )
         ON CONFLICT (meal_id, recipe_id, ingredient_key) DO UPDATE SET
-            claimed_by_member_id = EXCLUDED.claimed_by_member_id,
-            claimed_by_display_name = EXCLUDED.claimed_by_display_name,
-            claimed_at = now()`;
+            ingredient_name = EXCLUDED.ingredient_name,
+            claimed_by_member_id = COALESCE(party_meal_ingredient_claims.claimed_by_member_id, EXCLUDED.claimed_by_member_id),
+            claimed_by_display_name = COALESCE(party_meal_ingredient_claims.claimed_by_display_name, EXCLUDED.claimed_by_display_name),
+            claimed_at = CASE
+                WHEN party_meal_ingredient_claims.claimed_by_member_id IS NULL AND EXCLUDED.claimed_by_member_id IS NOT NULL
+                THEN now()
+                ELSE party_meal_ingredient_claims.claimed_at
+            END`;
     await sql`UPDATE parties SET version = version + 1, updated_at = now() WHERE id = ${partyId}::uuid`;
 
+    const bundle = await loadPartyBundle(sql, partyId);
+    const ownerView = await isPartyOwner(sql, partyId, session);
+    res.status(200).json({
+        ok: true,
+        version: bundle.party.version,
+        party: rowToPartySnapshot(bundle, { isOwner: ownerView }),
+    });
+}
+
+async function handleSetPantryShare(req, res, session) {
+    const body = parseBody(req);
+    const partyId = String(body.partyId || '').trim();
+    const enabled = Boolean(body.enabled);
+    if (!partyId) {
+        partyReject(res, 400, 'bad_request');
+        return;
+    }
+    const sql = await getPartySql();
+    const memberToken = memberTokenFromReq(req);
+    const actor = await resolveActingMember(sql, partyId, session, memberToken);
+    if (!actor) {
+        partyReject(res, 403, 'forbidden');
+        return;
+    }
+    if (!(await durableRateLimit(res, sql, `party:pantry:${partyId}`, 30))) return;
+
+    if (enabled) {
+        await sql`
+            UPDATE party_members SET pantry_share_enabled = true
+            WHERE member_id = ${actor.member_id}::uuid`;
+    } else {
+        await sql`
+            UPDATE party_members SET
+                pantry_share_enabled = false,
+                pantry_snapshot = NULL,
+                pantry_updated_at = NULL
+            WHERE member_id = ${actor.member_id}::uuid`;
+    }
+    await sql`UPDATE parties SET version = version + 1, updated_at = now() WHERE id = ${partyId}::uuid`;
+    const bundle = await loadPartyBundle(sql, partyId);
+    const ownerView = await isPartyOwner(sql, partyId, session);
+    res.status(200).json({
+        ok: true,
+        version: bundle.party.version,
+        party: rowToPartySnapshot(bundle, { isOwner: ownerView }),
+    });
+}
+
+async function handleUpdatePantrySnapshot(req, res, session) {
+    const body = parseBody(req);
+    const partyId = String(body.partyId || '').trim();
+    if (!partyId) {
+        partyReject(res, 400, 'bad_request');
+        return;
+    }
+    const items = normalizePantrySnapshotItems(body.items);
+    const sql = await getPartySql();
+    const memberToken = memberTokenFromReq(req);
+    const actor = await resolveActingMember(sql, partyId, session, memberToken);
+    if (!actor) {
+        partyReject(res, 403, 'forbidden');
+        return;
+    }
+    if (!(await durableRateLimit(res, sql, `party:pantry-snap:${partyId}`, 20))) return;
+
+    const rows = await sql`
+        SELECT pantry_share_enabled FROM party_members
+        WHERE member_id = ${actor.member_id}::uuid LIMIT 1`;
+    if (!rows[0]?.pantry_share_enabled) {
+        partyReject(res, 409, 'pantry_share_disabled');
+        return;
+    }
+    await sql`
+        UPDATE party_members SET
+            pantry_snapshot = ${JSON.stringify(items)}::jsonb,
+            pantry_updated_at = now()
+        WHERE member_id = ${actor.member_id}::uuid`;
+    await sql`UPDATE parties SET version = version + 1, updated_at = now() WHERE id = ${partyId}::uuid`;
     const bundle = await loadPartyBundle(sql, partyId);
     const ownerView = await isPartyOwner(sql, partyId, session);
     res.status(200).json({
@@ -548,7 +652,13 @@ async function handleLeave(req, res) {
         return;
     }
     await sql`
-        UPDATE party_members SET status = 'removed', removed_at = now(), member_token_hash = NULL
+        UPDATE party_members SET
+            status = 'removed',
+            removed_at = now(),
+            member_token_hash = NULL,
+            pantry_share_enabled = false,
+            pantry_snapshot = NULL,
+            pantry_updated_at = NULL
         WHERE member_id = ${access.memberId}::uuid`;
     await sql`
         UPDATE parties SET version = version + 1, updated_at = now() WHERE id = ${partyId}::uuid`;
@@ -572,7 +682,8 @@ async function handleRemoveMember(req, res, session) {
 
     const newInviteToken = await withPartyTransaction(async (client) => {
         await client.query(
-            `UPDATE party_members SET status = 'removed', removed_at = now(), member_token_hash = NULL
+            `UPDATE party_members SET status = 'removed', removed_at = now(), member_token_hash = NULL,
+                pantry_share_enabled = false, pantry_snapshot = NULL, pantry_updated_at = NULL
              WHERE party_id = $1::uuid AND member_id = $2::uuid`,
             [partyId, memberId]
         );
@@ -880,8 +991,9 @@ async function handleChatPost(req, res, session) {
     const ampiViaName = isAmpi
         ? String(body.ampiViaName || access.displayName || '').trim().slice(0, MAX_DISPLAY)
         : null;
-    if (!text && !attachment) {
-        partyReject(res, 400, 'bad_request', { message: 'Message cannot be empty.' });
+    const rejection = partyChatPostRejection({ text, isAmpi, attachment });
+    if (rejection) {
+        partyReject(res, 400, 'bad_request', { message: rejection });
         return;
     }
     if (isAmpi && !ampiViaName) {
@@ -1118,6 +1230,8 @@ export default async function handler(req, res) {
         'update_meals',
         'claim_ingredient',
         'unclaim_ingredient',
+        'set_pantry_share',
+        'update_pantry_snapshot',
         'refresh_owner_member_token',
     ].includes(action);
 
@@ -1178,6 +1292,12 @@ export default async function handler(req, res) {
                 break;
             case 'unclaim_ingredient':
                 await handleUnclaimIngredient(req, res, session);
+                break;
+            case 'set_pantry_share':
+                await handleSetPantryShare(req, res, session);
+                break;
+            case 'update_pantry_snapshot':
+                await handleUpdatePantrySnapshot(req, res, session);
                 break;
             case 'chat_post':
                 await handleChatPost(req, res, session);

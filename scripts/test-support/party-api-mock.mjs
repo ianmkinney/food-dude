@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { rowToChatMessage, sanitizePartyChatBody } from '../../api/_lib/partyChat.js';
+import {
+    normalizeAttachmentMeta,
+    partyChatPostRejection,
+    rowToChatMessage,
+    sanitizePartyChatBody,
+} from '../../api/_lib/partyChat.js';
 
 export const LIVE_PARTY_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -115,6 +120,19 @@ export function createSharedPartyMock() {
                     });
                 }
                 const text = sanitizePartyChatBody(body.body);
+                const attachment = normalizeAttachmentMeta(body.attachment);
+                const rejection = partyChatPostRejection({
+                    text,
+                    isAmpi: Boolean(body.isAmpi),
+                    attachment,
+                });
+                if (rejection) {
+                    return route.fulfill({
+                        status: 400,
+                        contentType: 'application/json',
+                        body: JSON.stringify({ error: 'bad_request', message: rejection }),
+                    });
+                }
                 const row = {
                     id: randomUUID(),
                     party_id: LIVE_PARTY_ID,
@@ -124,7 +142,7 @@ export function createSharedPartyMock() {
                         : member.displayName,
                     body: text,
                     created_at: new Date().toISOString(),
-                    attachment_meta: null,
+                    attachment_meta: attachment,
                     is_ampi: Boolean(body.isAmpi),
                 };
                 messages.push(row);
@@ -133,6 +151,38 @@ export function createSharedPartyMock() {
                     status: 200,
                     contentType: 'application/json',
                     body: JSON.stringify({ ok: true, message: rowToChatMessage(row) }),
+                });
+            }
+            if (postAction === 'claim_ingredient') {
+                version += 1;
+                return route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({
+                        ok: true,
+                        version,
+                        party: {
+                            ...snapshot(),
+                            ingredientClaims: [
+                                {
+                                    mealId: body.mealId,
+                                    recipeId: body.recipeId,
+                                    ingredientName: body.ingredientName,
+                                    claimedByDisplayName: body.registerOnly
+                                        ? null
+                                        : body.claimedByMemberName || 'Alex Cook',
+                                },
+                            ],
+                        },
+                    }),
+                });
+            }
+            if (postAction === 'set_pantry_share' || postAction === 'update_pantry_snapshot') {
+                version += 1;
+                return route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({ ok: true, version, party: snapshot() }),
                 });
             }
         }

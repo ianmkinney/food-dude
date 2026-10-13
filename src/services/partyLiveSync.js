@@ -235,6 +235,8 @@ export async function claimLiveIngredient({
     recipeId,
     ingredientName,
     ingredientKey,
+    claimedByMemberName,
+    registerOnly,
 }) {
     const memberToken = await getStoredMemberToken(livePartyId);
     const sessionToken = await getOwnerSessionToken();
@@ -246,6 +248,8 @@ export async function claimLiveIngredient({
             recipeId: String(recipeId),
             ingredientName,
             ingredientKey: ingredientKey || ingredientName,
+            claimedByMemberName: claimedByMemberName || undefined,
+            registerOnly: registerOnly || undefined,
         },
         memberToken,
         sessionToken,
