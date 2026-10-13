@@ -2,6 +2,14 @@
 
 All notable user-facing changes to AmpliFood are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] - 2026-10-13
+
+Party @Ampi recipe suggestions in group chat.
+
+- Fix empty Ampi bubbles when the model returns tool actions with a blank `reply` (common after the OpenRouter adapter): synthesize reply text, show recipe draft cards, and never post a message with no body
+- Party chat: recipe draft cards with **Save to my recipes** and **Add to party meals**; optional auto-add when the user asks to add to the party menu
+- Richer party context (meals, claims, conversation turns) for @Ampi; failed generations post a visible error instead of silent skip
+
 ## [1.0.2] - 2026-10-12
 
 Mobile layout polish for pantry lists.

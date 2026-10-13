@@ -28,7 +28,13 @@ import {
     postPartyChatMessage,
 } from '../../services/partyLiveSync';
 import { toDisplayText } from '../../chat/messageText';
-import { finalizePartyAmpiReplyForPost, messageMentionsAmpi, runPartyAmpiReply } from '../../services/partyAmpiChat';
+import {
+    finalizePartyAmpiReplyForPost,
+    messageMentionsAmpi,
+    PARTY_AMPI_EMPTY_REPLY,
+    runPartyAmpiReply,
+} from '../../services/partyAmpiChat';
+import { PartyAmpiMessageExtras } from './PartyAmpiMessageExtras';
 import { savePartyChatAttachmentLocal, loadPartyChatAttachmentLocal } from '../../party/partyChatLocalFiles';
 import { usePartyChatHistory } from '../../hooks/usePartyChatHistory';
 
@@ -51,7 +57,17 @@ function avatarColor(name, theme) {
     return palette[h];
 }
 
-function PartyChatBubble({ message, theme, position, isOwn, onDelete, canDelete, onRetry }) {
+function PartyChatBubble({
+    message,
+    theme,
+    position,
+    isOwn,
+    onDelete,
+    canDelete,
+    onRetry,
+    onAddRecipeToPartyMeal,
+    onMealsChanged,
+}) {
     const c = theme.colors;
     const isAmpi = message.isAmpi;
     const failed = message.sendState === 'failed';
@@ -143,7 +159,20 @@ function PartyChatBubble({ message, theme, position, isOwn, onDelete, canDelete,
                         </Text>
                     </View>
                 ) : null}
+                {isAmpi ? (
+                    <PartyAmpiMessageExtras
+                        message={message}
+                        theme={theme}
+                        onMealsChanged={onMealsChanged}
+                        onAddRecipeToPartyMeal={onAddRecipeToPartyMeal}
+                    />
+                ) : null}
             </View>
+            {isAmpi && message.attachment?.ampi?.failed ? (
+                <Text style={{ color: c.error, fontSize: 12, marginTop: 4 }}>
+                    Generation failed — send your message again or tap Ask {ASSISTANT_NAME}.
+                </Text>
+            ) : null}
             {canDelete ? (
                 <Pressable onPress={onDelete} accessibilityRole="button" accessibilityLabel="Delete message">
                     <Text style={{ color: c.error, fontSize: 12, marginTop: 2 }}>Delete</Text>
@@ -165,6 +194,8 @@ export default function PartyChatPanel({
     isPartyOwner,
     isDesktop,
     onComposerFocusChange,
+    onAddRecipeToPartyMeal,
+    onMealsChanged,
 }) {
     const c = theme.colors;
     const insets = useSafeAreaInsets();
@@ -332,28 +363,45 @@ export default function PartyChatPanel({
                 });
                 if (askAmpi || messageMentionsAmpi(body)) {
                     try {
+                        const userPrompt = body.replace(MENTION_RE, ASSISTANT_NAME).trim();
                         const reply = await runPartyAmpiReply({
                             messages: mergePartyChatMessages(messages, [msg]),
                             meals,
                             claims: ingredientClaims,
-                            prompt: body.replace(MENTION_RE, ASSISTANT_NAME).trim(),
+                            prompt: userPrompt,
                             images: attachment?.mimeType?.startsWith('image/') && attachment.uri
                                 ? [{ uri: attachment.uri, mimeType: attachment.mimeType }]
                                 : [],
                         });
-                        if (reply) {
-                            const bodyForPost = await finalizePartyAmpiReplyForPost(reply);
-                            if (!bodyForPost) return;
+                        const finalized = await finalizePartyAmpiReplyForPost(reply || '', {
+                            userPrompt,
+                            autoAddToParty: onAddRecipeToPartyMeal
+                                ? (recipeId) => onAddRecipeToPartyMeal(recipeId, { saveOnly: false })
+                                : undefined,
+                        });
+                        const bodyForPost = (finalized.body || '').trim() || PARTY_AMPI_EMPTY_REPLY;
+                        const ampiRes = await postPartyChatMessage({
+                            livePartyId,
+                            body: bodyForPost,
+                            attachment: finalized.attachment,
+                            isAmpi: true,
+                            ampiViaName: myDisplayName || 'You',
+                        });
+                        setMessages((prev) => mergePartyChatMessages(prev, [ampiRes.message]));
+                        onMealsChanged?.();
+                    } catch (e) {
+                        try {
                             const ampiRes = await postPartyChatMessage({
                                 livePartyId,
-                                body: bodyForPost,
+                                body: e?.message || PARTY_AMPI_EMPTY_REPLY,
+                                attachment: { ampi: { cards: [], pendingActions: [], failed: true } },
                                 isAmpi: true,
                                 ampiViaName: myDisplayName || 'You',
                             });
                             setMessages((prev) => mergePartyChatMessages(prev, [ampiRes.message]));
+                        } catch {
+                            Alert.alert(ASSISTANT_NAME, e?.message || 'Could not reach AI.');
                         }
-                    } catch (e) {
-                        Alert.alert(ASSISTANT_NAME, e?.message || 'Could not reach AI.');
                     }
                 }
             } catch {
@@ -362,7 +410,17 @@ export default function PartyChatPanel({
                 setThinking(false);
             }
         },
-        [livePartyId, meals, ingredientClaims, messages, myDisplayName, postUserMessage, setMessages]
+        [
+            livePartyId,
+            meals,
+            ingredientClaims,
+            messages,
+            myDisplayName,
+            postUserMessage,
+            setMessages,
+            onAddRecipeToPartyMeal,
+            onMealsChanged,
+        ]
     );
 
     const releaseComposer = useCallback(() => {
@@ -509,6 +567,8 @@ export default function PartyChatPanel({
                                               }
                                             : undefined
                                     }
+                                    onAddRecipeToPartyMeal={onAddRecipeToPartyMeal}
+                                    onMealsChanged={onMealsChanged}
                                 />
                                 {isOwn && item.attachment?.fileName ? (
                                     <Pressable

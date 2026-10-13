@@ -1065,6 +1065,25 @@ const PartyScreen = ({ navigation }) => {
     );
     const myDisplayName = myPartyMember?.name || currentUser?.name || googleSession?.name || 'You';
 
+    const handlePartyAmpiRecipe = useCallback(
+        async (recipeId, { saveOnly = false } = {}) => {
+            if (!selectedParty?.id || !recipeId) return;
+            if (!saveOnly) {
+                await partyMealOperations.create({
+                    partyId: selectedParty.id,
+                    name: 'From party chat',
+                    description: null,
+                    recipeIds: [recipeId],
+                    createdBy: 'current_user',
+                });
+                await partyOperations.updateSyncFields(selectedParty.id, { updated_at: Date.now() });
+                await loadMeals(selectedParty.id);
+                await refreshParty();
+            }
+        },
+        [selectedParty, loadMeals, refreshParty]
+    );
+
     const chatPanel = selectedParty?.live_party_id ? (
         <PartyChatPanel
             theme={theme}
@@ -1078,6 +1097,8 @@ const PartyScreen = ({ navigation }) => {
             isPartyOwner={isPartyOwner}
             isDesktop={isDesktop}
             onComposerFocusChange={setPartyChatComposerFocused}
+            onAddRecipeToPartyMeal={handlePartyAmpiRecipe}
+            onMealsChanged={() => selectedParty?.id && loadMeals(selectedParty.id)}
         />
     ) : null;
 

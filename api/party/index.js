@@ -19,6 +19,7 @@ import {
 import { dedupeServerMemberRows, upsertActivePartyMember, isHumanPartyMember } from '../_lib/partyMembers.js';
 import {
     MAX_CHAT_BATCH,
+    attachmentHasPayload,
     normalizeAttachmentMeta,
     rowToChatMessage,
     sanitizePartyChatBody,
@@ -880,7 +881,7 @@ async function handleChatPost(req, res, session) {
     const ampiViaName = isAmpi
         ? String(body.ampiViaName || access.displayName || '').trim().slice(0, MAX_DISPLAY)
         : null;
-    if (!text && !attachment) {
+    if (!text && !attachmentHasPayload(attachment)) {
         partyReject(res, 400, 'bad_request', { message: 'Message cannot be empty.' });
         return;
     }

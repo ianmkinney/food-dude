@@ -25,6 +25,12 @@ const legacyStored = formatPartyAmpiReplyBody(
 check('legacy stored message repair', legacyStored.text === 'Saved!');
 check('actions preserved for post hook', legacyStored.actions.length === 1);
 
+const emptyReply = formatPartyAmpiReplyBody(
+    '{"reply":"","actions":[{"tool":"create_recipe","args":{"title":"Mexican Street Corn Salad","ingredients":[{"ingredient":"corn","quantity":"4","unit":"ears"}],"instructions":["Grill corn"]}}]}'
+);
+check('empty reply synthesized from create_recipe', emptyReply.text.includes('Mexican'));
+check('draft card built', emptyReply.cards?.length === 1);
+
 if (failures) {
     console.error(`${failures} check(s) failed`);
     process.exit(1);

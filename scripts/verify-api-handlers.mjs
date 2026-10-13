@@ -81,6 +81,7 @@ const modules = [
     '_lib/recipeTitle.js',
     '_lib/ampiToolNormalize.js',
     '_lib/partyAmpiReply.js',
+    '_lib/partyAmpiTurn.js',
     '_lib/recipeNormalize.js',
     '_lib/partyChat.js',
     'p.js',
