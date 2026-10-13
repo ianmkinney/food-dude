@@ -4,10 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { AiBadge } from '../../ai/AiLabel';
 import { runTools } from '../../sous/tools';
+import { claimLiveIngredient } from '../../services/partyLiveSync';
 
 export function PartyAmpiMessageExtras({
     message,
     theme,
+    livePartyId,
+    defaultLiveMealId,
     onMealsChanged,
     onAddRecipeToPartyMeal,
 }) {
@@ -24,6 +27,43 @@ export function PartyAmpiMessageExtras({
         setBusy(index);
         try {
             await runTools([card.pendingAction]);
+            onMealsChanged?.();
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const addMissingToGrocery = async (card, index) => {
+        const missing = card.missingIngredients || [];
+        if (!missing.length) return;
+        setBusy(index);
+        try {
+            await runTools([
+                {
+                    tool: 'add_to_grocery',
+                    args: { items: missing.map((name) => ({ name })) },
+                },
+            ]);
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const addMissingAsClaims = async (card, index) => {
+        const missing = card.missingIngredients || [];
+        const mealId = card.targetMealId || defaultLiveMealId;
+        if (!missing.length || !livePartyId || !mealId) return;
+        setBusy(index);
+        try {
+            for (const name of missing) {
+                await claimLiveIngredient({
+                    livePartyId,
+                    mealSyncId: mealId,
+                    recipeId: 'party_chat',
+                    ingredientName: name,
+                    registerOnly: true,
+                });
+            }
             onMealsChanged?.();
         } finally {
             setBusy(null);
@@ -65,6 +105,48 @@ export function PartyAmpiMessageExtras({
                             </Text>
                             <AiBadge />
                         </View>
+                        {card.pantryLines?.length ? (
+                            <View style={styles.pantryBlock}>
+                                {card.pantryLines.map((line, li) => (
+                                    <Text
+                                        key={`${line.ingredient}-${li}`}
+                                        style={{ color: c.text.secondary, fontSize: 13, lineHeight: 18 }}
+                                    >
+                                        {line.holders?.length
+                                            ? `• ${line.ingredient}: ${line.holders
+                                                  .map((h) => h.displayName)
+                                                  .join(', ')}`
+                                            : `• ${line.ingredient}: need to buy`}
+                                    </Text>
+                                ))}
+                            </View>
+                        ) : null}
+                        {card.missingIngredients?.length ? (
+                            <View style={styles.actions}>
+                                <Pressable
+                                    style={[styles.btn, { borderColor: c.border }]}
+                                    disabled={loading}
+                                    onPress={() => addMissingToGrocery(card, index)}
+                                    accessibilityRole="button"
+                                >
+                                    <Text style={{ color: c.text.primary, fontWeight: '600' }}>
+                                        Add missing to my grocery list
+                                    </Text>
+                                </Pressable>
+                                {defaultLiveMealId ? (
+                                    <Pressable
+                                        style={[styles.btn, { borderColor: c.border }]}
+                                        disabled={loading}
+                                        onPress={() => addMissingAsClaims(card, index)}
+                                        accessibilityRole="button"
+                                    >
+                                        <Text style={{ color: c.text.primary, fontWeight: '600' }}>
+                                            Add missing as meal items to claim
+                                        </Text>
+                                    </Pressable>
+                                ) : null}
+                            </View>
+                        ) : null}
                         {card.type === 'recipe_saved' ? (
                             <Pressable
                                 onPress={() => navigation.navigate('RecipeDetail', { recipeId: card.recipeId })}
@@ -108,6 +190,7 @@ const styles = StyleSheet.create({
     card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 10, gap: 8 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     cardTitle: { flex: 1, fontSize: 15, fontWeight: '700' },
+    pantryBlock: { gap: 2 },
     actions: { gap: 6 },
     btn: {
         borderWidth: StyleSheet.hairlineWidth,

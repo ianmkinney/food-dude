@@ -5,6 +5,8 @@
  */
 import assert from 'node:assert/strict';
 import { formatPartyAmpiReplyBody } from '../api/_lib/partyAmpiReply.js';
+import { enrichPartyAmpiCardsWithPantry } from '../api/_lib/partyAmpiTurn.js';
+import { normalizePantrySnapshotItems } from '../api/_lib/partyPantryShare.js';
 
 const modelPayload = JSON.stringify({
     reply: '',
@@ -30,5 +32,14 @@ assert.match(parsed.text, /Mexican|Street Corn/i);
 assert.equal(parsed.cards.length, 1);
 assert.equal(parsed.cards[0].title, 'Mexican Street Corn Bowls');
 assert.equal(parsed.cards[0].type, 'recipe_draft');
+
+const enriched = enrichPartyAmpiCardsWithPantry(parsed.cards, [
+    {
+        memberId: 'm1',
+        displayName: 'Host',
+        items: normalizePantrySnapshotItems([{ name: 'corn', quantity: '3', unit: 'cups' }]),
+    },
+]);
+assert.ok(enriched[0].pantryLines?.some((l) => l.holders?.length));
 
 console.log('party ampi mexican e2e contract passed');

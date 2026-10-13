@@ -69,6 +69,9 @@ export const PARTY_CORE_SCHEMA_STATEMENTS = [
     'CREATE INDEX IF NOT EXISTS idx_party_members_party_id ON party_members(party_id)',
     'ALTER TABLE party_members ADD COLUMN IF NOT EXISTS google_sub TEXT',
     'ALTER TABLE party_members ADD COLUMN IF NOT EXISTS identity_key TEXT',
+    'ALTER TABLE party_members ADD COLUMN IF NOT EXISTS pantry_share_enabled BOOLEAN NOT NULL DEFAULT false',
+    'ALTER TABLE party_members ADD COLUMN IF NOT EXISTS pantry_snapshot JSONB',
+    'ALTER TABLE party_members ADD COLUMN IF NOT EXISTS pantry_updated_at TIMESTAMPTZ',
     `CREATE TABLE IF NOT EXISTS party_meals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     party_id UUID NOT NULL REFERENCES parties(id) ON DELETE CASCADE,

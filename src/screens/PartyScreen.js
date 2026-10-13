@@ -52,6 +52,7 @@ import { resolveRecipeContributorName } from '../utils/partyMealMeta';
 import ImageLightbox from '../components/ImageLightbox';
 import { useLayoutMode } from '../layout/useLayoutMode';
 import PartyChatPanel from '../components/party/PartyChatPanel';
+import { pantryContextFromPartySnapshot } from '../services/partyPantryShare';
 import PartyChatCollapsibleHeader from '../components/party/PartyChatCollapsibleHeader';
 import { mergePartyChatMessages } from '../services/partyLiveSync';
 
@@ -97,6 +98,8 @@ const PartyScreen = ({ navigation }) => {
     const [partySection, setPartySection] = useState('meals');
     const [partyChatComposerFocused, setPartyChatComposerFocused] = useState(false);
     const [chatMessages, setChatMessages] = useState([]);
+    const [partyPantryByMember, setPartyPantryByMember] = useState([]);
+    const [myPantryShareEnabled, setMyPantryShareEnabled] = useState(false);
     /** Bumps party image URLs immediately after upload (before poll returns new live_version). */
     const [partyImageEpoch, setPartyImageEpoch] = useState(0);
     const { isDesktop } = useLayoutMode();
@@ -118,6 +121,13 @@ const PartyScreen = ({ navigation }) => {
         }, [])
     );
 
+    const applyPantryFromSnapshot = useCallback((snapshot, syncMemberId) => {
+        setPartyPantryByMember(pantryContextFromPartySnapshot(snapshot));
+        if (!syncMemberId) return;
+        const mine = (snapshot?.members || []).find((m) => m.memberId === syncMemberId);
+        setMyPantryShareEnabled(Boolean(mine?.pantryShareEnabled));
+    }, []);
+
     const onLiveSnapshot = useCallback(
         async (snapshot) => {
             if (!selectedParty?.id) return;
@@ -125,8 +135,16 @@ const PartyScreen = ({ navigation }) => {
             await loadMeals(selectedParty.id);
             await loadPartyMembers(selectedParty.id);
             await refreshParty();
+            const members = await partyMemberOperations.getByPartyId(selectedParty.id);
+            const viewerEmail = (googleSession?.email || currentUser?.email || '').toLowerCase();
+            const self = members.find(
+                (m) =>
+                    (currentUser?.user_id && m.user_id === currentUser.user_id) ||
+                    (viewerEmail && (m.member_email || m.email || '').toLowerCase() === viewerEmail)
+            );
+            applyPantryFromSnapshot(snapshot, self?.sync_member_id);
         },
-        [selectedParty?.id]
+        [selectedParty?.id, applyPantryFromSnapshot, currentUser, googleSession]
     );
 
     const onChatMessages = useCallback((incoming) => {
@@ -1099,6 +1117,9 @@ const PartyScreen = ({ navigation }) => {
             onComposerFocusChange={setPartyChatComposerFocused}
             onAddRecipeToPartyMeal={handlePartyAmpiRecipe}
             onMealsChanged={() => selectedParty?.id && loadMeals(selectedParty.id)}
+            pantryByMember={partyPantryByMember}
+            myPantryShareEnabled={myPantryShareEnabled}
+            onMyPantryShareChange={setMyPantryShareEnabled}
         />
     ) : null;
 

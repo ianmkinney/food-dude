@@ -46,6 +46,8 @@
     "test:party-ampi-reply-parse": "node scripts/test-party-ampi-reply-parse.mjs",
     "test:party-ampi-turn": "node scripts/test-party-ampi-turn.mjs",
     "test:party-ampi-mexican-e2e": "node scripts/test-party-ampi-mexican-e2e.mjs",
+    "test:party-pantry-match": "node scripts/test-party-pantry-match.mjs",
+    "test:party-ampi-prefill": "node scripts/test-party-ampi-prefill.mjs",
     "test:party-chat-history": "node scripts/test-party-chat-history.mjs",
     "test:party-chat-playwright": "node scripts/test-party-chat-playwright.mjs",
     "test:party-chat-safari-keyboard": "node scripts/test-party-chat-safari-keyboard.mjs",

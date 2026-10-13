@@ -6,10 +6,10 @@ import AnimatedPressable from '../AnimatedPressable';
 
 const DISMISS_KEY = 'amplifood.party.privacyChipDismissed';
 const ONE_LINE =
-    'Party chat and plans sync online; attachment files stay only on your device.';
+    'Party chat and plans sync online; pantry sharing is opt-in; attachments stay on your device.';
 
 const DETAIL =
-    'Party chat messages, meals, and members are stored online with the party so everyone can stay in sync. Encrypted backup (when enabled) keeps keys on your device. Chat attachments are never uploaded — other members only see the file name.';
+    'Party chat messages, meals, and members are stored online with the party so everyone can stay in sync. If you turn on “Share my pantry with this party,” a minimal pantry snapshot (item names, amounts, freshness, expiration) is stored with the party until you turn it off or leave. Recipes and full pantry data otherwise stay on your device. Encrypted backup (when enabled) keeps keys on your device. Chat attachments are never uploaded — other members only see the file name.';
 
 export default function PartyPrivacyChip({ theme }) {
     const [dismissed, setDismissed] = useState(false);

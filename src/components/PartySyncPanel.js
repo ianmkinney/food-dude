@@ -329,7 +329,7 @@ export default function PartySyncPanel({
             <View style={[styles.wrap, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
                 <Text style={[styles.note, { color: theme.colors.text.secondary }]}>
                     {isLive
-                        ? 'This party uses live sync: name, photo, member display names, and meals are stored on our server (Neon Postgres) so members see updates within seconds. Recipes and pantry data stay on your device.'
+                        ? 'This party uses live sync: name, photo, member display names, and meals are stored on our server (Neon Postgres) so members see updates within seconds. Pantry snapshots are opt-in per member (minimal fields only). Recipes and full pantry data otherwise stay on your device.'
                         : 'Local parties sync via signed share links and optional email (no server database). Enable live sync to share a /p/… invite link with automatic updates.'}
                 </Text>
                 <Text style={[styles.meta, { color: theme.colors.text.tertiary }]}>

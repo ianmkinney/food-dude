@@ -1,5 +1,6 @@
 import { coerceRecipeTemplateFromToolArgs } from './recipeNormalize.js';
 import { resolveRecipeTitleForSave } from './recipeTitle.js';
+import { enrichRecipeDraftWithPantry } from './partyPantryMatch.js';
 
 const PARTY_RECIPE_TOOLS = new Set(['create_recipe', 'import_recipe']);
 
@@ -62,6 +63,17 @@ export function buildPartyAmpiDraftCards(actions = []) {
         }
     }
     return cards;
+}
+
+/**
+ * @param {object[]} cards
+ * @param {{ memberId: string, displayName: string, items: object[] }[]} pantryByMember
+ */
+export function enrichPartyAmpiCardsWithPantry(cards, pantryByMember) {
+    if (!pantryByMember?.length) return cards || [];
+    return (cards || []).map((card) =>
+        card?.type === 'recipe_draft' ? enrichRecipeDraftWithPantry(card, pantryByMember) : card
+    );
 }
 
 export function partyAmpiShouldAutoAddToMeals(prompt) {

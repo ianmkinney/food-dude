@@ -32,9 +32,18 @@ import {
     finalizePartyAmpiReplyForPost,
     messageMentionsAmpi,
     PARTY_AMPI_EMPTY_REPLY,
+    PARTY_AMPI_PANTRY_PREFILL,
     runPartyAmpiReply,
 } from '../../services/partyAmpiChat';
 import { PartyAmpiMessageExtras } from './PartyAmpiMessageExtras';
+import { PartyPantryShareToggle } from './PartyPantryShareToggle';
+import {
+    getPantrySharePromptSeen,
+    isPartyPantryMealPrompt,
+    pushPartyPantrySnapshot,
+    setPantrySharePromptSeen,
+    setPartyPantryShare,
+} from '../../services/partyPantryShare';
 import { savePartyChatAttachmentLocal, loadPartyChatAttachmentLocal } from '../../party/partyChatLocalFiles';
 import { usePartyChatHistory } from '../../hooks/usePartyChatHistory';
 
@@ -67,6 +76,8 @@ function PartyChatBubble({
     onRetry,
     onAddRecipeToPartyMeal,
     onMealsChanged,
+    livePartyId: bubbleLivePartyId,
+    defaultLiveMealId,
 }) {
     const c = theme.colors;
     const isAmpi = message.isAmpi;
@@ -163,6 +174,8 @@ function PartyChatBubble({
                     <PartyAmpiMessageExtras
                         message={message}
                         theme={theme}
+                        livePartyId={bubbleLivePartyId}
+                        defaultLiveMealId={defaultLiveMealId}
                         onMealsChanged={onMealsChanged}
                         onAddRecipeToPartyMeal={onAddRecipeToPartyMeal}
                     />
@@ -196,9 +209,16 @@ export default function PartyChatPanel({
     onComposerFocusChange,
     onAddRecipeToPartyMeal,
     onMealsChanged,
+    pantryByMember,
+    myPantryShareEnabled,
+    onMyPantryShareChange,
 }) {
     const c = theme.colors;
     const insets = useSafeAreaInsets();
+    const defaultLiveMealId = useMemo(() => {
+        const meal = (meals || []).find((m) => m.sync_meal_id || m.syncMealId);
+        return meal?.sync_meal_id || meal?.syncMealId || null;
+    }, [meals]);
     const [input, setInput] = useState('');
     const [inputHeight, setInputHeight] = useState(INPUT_MIN_HEIGHT);
     const [pendingAttachment, setPendingAttachment] = useState(null);
@@ -350,6 +370,54 @@ export default function PartyChatPanel({
         [livePartyId, myDisplayName, myMemberId, setMessages]
     );
 
+    const ensurePantryPromptForMessage = useCallback(
+        async (body) => {
+            if (!livePartyId || !isPartyPantryMealPrompt(body)) return true;
+            if (myPantryShareEnabled) {
+                try {
+                    await pushPartyPantrySnapshot(livePartyId);
+                } catch {
+                    // Best-effort refresh before Ampi reads pantries.
+                }
+                return true;
+            }
+            const seen = await getPantrySharePromptSeen(livePartyId);
+            if (seen) return true;
+            return new Promise((resolve) => {
+                Alert.alert(
+                    'Share your pantry?',
+                    `To suggest meals from what the group has on hand, you can share a minimal pantry snapshot (item names, amounts, freshness, expiration) with this party. You can turn this off anytime in party chat.`,
+                    [
+                        {
+                            text: 'Not now',
+                            style: 'cancel',
+                            onPress: async () => {
+                                await setPantrySharePromptSeen(livePartyId);
+                                resolve(true);
+                            },
+                        },
+                        {
+                            text: 'Share my pantry',
+                            onPress: async () => {
+                                try {
+                                    await setPartyPantryShare(livePartyId, true);
+                                    onMyPantryShareChange?.(true);
+                                    await setPantrySharePromptSeen(livePartyId);
+                                } catch (e) {
+                                    Alert.alert('Could not share pantry', e?.message || 'Try again.');
+                                    resolve(false);
+                                    return;
+                                }
+                                resolve(true);
+                            },
+                        },
+                    ]
+                );
+            });
+        },
+        [livePartyId, myPantryShareEnabled, onMyPantryShareChange]
+    );
+
     const sendMessage = useCallback(
         async (bodyText, { attachment, askAmpi, retryMessageId } = {}) => {
             if (!livePartyId) return;
@@ -357,6 +425,8 @@ export default function PartyChatPanel({
             if (!body && !attachment) return;
             setThinking(true);
             try {
+                const pantryOk = await ensurePantryPromptForMessage(body);
+                if (!pantryOk) return;
                 const msg = await postUserMessage(body, attachment, {
                     clientId: retryMessageId,
                     skipOptimistic: Boolean(retryMessageId),
@@ -368,13 +438,21 @@ export default function PartyChatPanel({
                             messages: mergePartyChatMessages(messages, [msg]),
                             meals,
                             claims: ingredientClaims,
+                            pantryByMember,
                             prompt: userPrompt,
                             images: attachment?.mimeType?.startsWith('image/') && attachment.uri
                                 ? [{ uri: attachment.uri, mimeType: attachment.mimeType }]
                                 : [],
                         });
+                        const partyContext = {
+                            livePartyId,
+                            pantryByMember,
+                            meals,
+                            myDisplayName,
+                        };
                         const finalized = await finalizePartyAmpiReplyForPost(reply || '', {
                             userPrompt,
+                            partyContext,
                             autoAddToParty: onAddRecipeToPartyMeal
                                 ? (recipeId) => onAddRecipeToPartyMeal(recipeId, { saveOnly: false })
                                 : undefined,
@@ -420,6 +498,8 @@ export default function PartyChatPanel({
             setMessages,
             onAddRecipeToPartyMeal,
             onMealsChanged,
+            pantryByMember,
+            ensurePantryPromptForMessage,
         ]
     );
 
@@ -440,11 +520,11 @@ export default function PartyChatPanel({
     };
 
     const askAmpi = () => {
-        const body = input.trim() || `Hey @${ASSISTANT_NAME}, what should we cook?`;
-        setInput('');
-        setInputHeight(INPUT_MIN_HEIGHT);
-        releaseComposer();
-        void sendMessage(body, { askAmpi: true });
+        setInput(PARTY_AMPI_PANTRY_PREFILL);
+        const lines = PARTY_AMPI_PANTRY_PREFILL.split('\n').length;
+        setInputHeight(Math.min(INPUT_MAX_HEIGHT, INPUT_MIN_HEIGHT + (lines - 1) * INPUT_LINE_HEIGHT));
+        inputRef.current?.focus?.();
+        onComposerFocus();
     };
 
     const canSend = Boolean(input.trim() || pendingAttachment) && !thinking;
@@ -569,6 +649,8 @@ export default function PartyChatPanel({
                                     }
                                     onAddRecipeToPartyMeal={onAddRecipeToPartyMeal}
                                     onMealsChanged={onMealsChanged}
+                                    livePartyId={livePartyId}
+                                    defaultLiveMealId={defaultLiveMealId}
                                 />
                                 {isOwn && item.attachment?.fileName ? (
                                     <Pressable
@@ -587,6 +669,12 @@ export default function PartyChatPanel({
                         </View>
                     );
                 }}
+            />
+            <PartyPantryShareToggle
+                theme={theme}
+                livePartyId={livePartyId}
+                enabled={myPantryShareEnabled}
+                onChanged={onMyPantryShareChange}
             />
             {pendingAttachment ? (
                 <View style={[styles.pending, { borderColor: c.border, backgroundColor: c.surface }]}>
