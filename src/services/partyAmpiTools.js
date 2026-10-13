@@ -16,8 +16,9 @@ export async function runPartyAmpiTool(call, ctx) {
         if (!livePartyId || !mealId || !ingredientName) {
             throw new Error('Missing meal or ingredient for party claim.');
         }
+        const registerOnly = Boolean(args.registerOnly || args.register_only);
         let claimedByMemberName = args.claimedByMemberName || args.claimed_by_member_name;
-        if (!claimedByMemberName && ctx.myDisplayName) {
+        if (!registerOnly && !claimedByMemberName && ctx.myDisplayName) {
             claimedByMemberName = ctx.myDisplayName;
         }
         const data = await claimLiveIngredient({
@@ -26,7 +27,8 @@ export async function runPartyAmpiTool(call, ctx) {
             recipeId,
             ingredientName,
             ingredientKey: args.ingredientKey || ingredientName,
-            claimedByMemberName,
+            claimedByMemberName: registerOnly ? undefined : claimedByMemberName,
+            registerOnly,
         });
         const claim = (data.party?.ingredientClaims || []).find(
             (c) =>

@@ -86,6 +86,7 @@ const modules = [
     '_lib/partyPantryShare.js',
     '_lib/partyPantryMatch.js',
     '_lib/partyPantryPrompt.js',
+    '_lib/partyClaimIntent.js',
     '_lib/recipeNormalize.js',
     '_lib/partyChat.js',
     'p.js',

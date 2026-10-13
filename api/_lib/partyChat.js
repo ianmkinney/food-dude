@@ -39,6 +39,14 @@ export function attachmentHasPayload(attachment) {
     return Array.isArray(attachment.ampi?.cards) && attachment.ampi.cards.length > 0;
 }
 
+/** Reject empty party chat posts. Ampi bubbles must include reply text. */
+export function partyChatPostRejection({ text, isAmpi, attachment }) {
+    const body = String(text || '').trim();
+    if (isAmpi && !body) return 'Ampi replies need text.';
+    if (!body && !attachmentHasPayload(attachment)) return 'Message cannot be empty.';
+    return null;
+}
+
 export function mergePartyChatMessages(existing, incoming) {
     const map = new Map((existing || []).map((m) => [m.id, m]));
     for (const m of incoming || []) {

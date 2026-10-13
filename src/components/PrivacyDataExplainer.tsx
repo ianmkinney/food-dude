@@ -11,7 +11,7 @@ type Props = {
 };
 
 const PARTY_COPY =
-    'When you sign in with Google, AmpliFood can store encrypted copies of your kitchen data (recipes, lists, chat, and memories) so Safari and Chrome stay in sync. Parties and optional manual backups are also stored online. API keys never leave your device.';
+    'When you sign in with Google, AmpliFood can store encrypted copies of your kitchen data (recipes, lists, chat, and memories) so Safari and Chrome stay in sync. Parties and optional manual backups are also stored online. Pantry lists stay on this device unless you turn on “Share my pantry with this party,” which uploads a minimal snapshot (name, amount, freshness, expiration) for that party only and deletes it when you turn it off or leave. API keys never leave your device.';
 
 /** Plain-language explainer: local storage vs what leaves the device for AI/voice. */
 export default function PrivacyDataExplainer({ theme, variant = 'account' }: Props) {

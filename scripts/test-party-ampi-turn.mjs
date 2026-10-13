@@ -5,6 +5,7 @@ import {
     buildPartyAmpiDraftCards,
     partyAmpiShouldAutoAddToMeals,
     partyAmpiAttachmentFromTurn,
+    partyMealRecipeIdLabel,
     attachmentHasPartyPayload,
 } from '../api/_lib/partyAmpiTurn.js';
 
@@ -25,4 +26,8 @@ const cards = buildPartyAmpiDraftCards([
 assert.equal(cards[0].title, 'Enchiladas');
 assert.ok(partyAmpiShouldAutoAddToMeals('add to party meals tonight'));
 assert.ok(attachmentHasPartyPayload(partyAmpiAttachmentFromTurn({ cards, pendingActions: [] })));
+assert.equal(
+    partyMealRecipeIdLabel({ recipe_ids: '["10"]', recipeIds: [10] }),
+    '10'
+);
 console.log('party ampi turn checks passed');

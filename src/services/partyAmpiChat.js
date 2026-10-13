@@ -2,6 +2,7 @@ import { formatPartyAmpiReplyBody } from '../../api/_lib/partyAmpiReply.js';
 import {
     partyAmpiAttachmentFromTurn,
     partyAmpiShouldAutoAddToMeals,
+    partyMealRecipeIdLabel,
     synthesizePartyAmpiReplyText,
 } from '../../api/_lib/partyAmpiTurn.js';
 import { generateMultimodal, generateText } from './aiClient';
@@ -13,6 +14,7 @@ import { runTools } from '../sous/tools';
 import { TOOL_SPEC } from '../sous/tools';
 import { enrichPartyAmpiCardsWithPantry } from '../../api/_lib/partyAmpiTurn.js';
 import { PARTY_AMPI_PANTRY_PREFILL } from '../../api/_lib/partyAmpiPrompt.js';
+import { planPartyChatCommand } from '../../api/_lib/partyClaimIntent.js';
 import { runPartyAmpiTools } from './partyAmpiTools';
 
 export { PARTY_AMPI_PANTRY_PREFILL };
@@ -89,7 +91,7 @@ function formatPantryLines(pantryByMember) {
 function buildPartySystemPrompt({ meals, claims, pantryByMember }) {
     const mealLines = (meals || []).map((meal) => {
         const id = meal.sync_meal_id || meal.syncMealId || meal.liveMealId || meal.id;
-        const recipes = (meal.recipe_ids || meal.recipeIds || []).join(', ');
+        const recipes = partyMealRecipeIdLabel(meal);
         return `- ${meal.name} (mealId: ${id})${recipes ? ` recipes: ${recipes}` : ''}`;
     });
     const claimLines = (claims || []).map(
@@ -122,7 +124,7 @@ function buildPartyContext({ messages, meals, claims, pantryByMember, prompt }) 
         return `${m.senderDisplayName || 'Member'}: ${m.body || ''}${attach}`.trim();
     });
     const mealLines = (meals || []).map((meal) => {
-        const recipes = (meal.recipe_ids || meal.recipeIds || []).join(', ');
+        const recipes = partyMealRecipeIdLabel(meal);
         return `- ${meal.name}${recipes ? ` (recipes: ${recipes})` : ''}`;
     });
     const claimLines = (claims || []).map(
@@ -195,6 +197,37 @@ export async function runPartyAmpiReply(ctx) {
  * @param {{ userPrompt?: string, autoAddToParty?: (recipeId: number) => Promise<void> }} [options]
  * @returns {Promise<{ body: string, attachment: object | null, cards: import('../sous/tools').SousCard[] }>}
  */
+/**
+ * Apply a whole-message claim or missing-ingredient command without calling the model.
+ * @returns {Promise<{ body: string, attachment: object | null } | null>}
+ */
+export async function executePartyChatCommand(text, partyContext = {}) {
+    const plan = planPartyChatCommand(text, {
+        messages: partyContext.messages,
+        meals: partyContext.meals,
+        myDisplayName: partyContext.myDisplayName,
+    });
+    if (!plan) return null;
+    let body = String(plan.body || '').trim() || PARTY_AMPI_EMPTY_REPLY;
+    let failed = false;
+    if (plan.actions?.length && partyContext.livePartyId) {
+        try {
+            const grocery = plan.actions.filter((a) => a.tool === 'add_to_grocery');
+            const claims = plan.actions.filter((a) => a.tool !== 'add_to_grocery');
+            if (grocery.length) await runTools(grocery);
+            if (claims.length) await runPartyAmpiTools(claims, partyContext);
+        } catch (error) {
+            failed = true;
+            body = error?.message || PARTY_AMPI_EMPTY_REPLY;
+        }
+    }
+    const attachment = partyAmpiAttachmentFromTurn({ cards: [], pendingActions: [], failed });
+    return {
+        body,
+        attachment: attachment || (failed ? { ampi: { cards: [], pendingActions: [], failed: true } } : null),
+    };
+}
+
 export async function finalizePartyAmpiReplyForPost(raw, options = {}) {
     const { text, actions, cards: draftCardsRaw } = formatPartyAmpiReplyBody(raw);
     const draftCards = enrichPartyAmpiCardsWithPantry(

@@ -4,6 +4,22 @@ import { enrichRecipeDraftWithPantry } from './partyPantryMatch.js';
 
 const PARTY_RECIPE_TOOLS = new Set(['create_recipe', 'import_recipe']);
 
+/** Local meal rows keep recipe_ids as a JSON string plus a parsed recipeIds array. */
+export function partyMealRecipeIdLabel(meal) {
+    const parsed = meal?.recipeIds;
+    const raw = meal?.recipe_ids;
+    let list = Array.isArray(parsed) ? parsed : Array.isArray(raw) ? raw : null;
+    if (!list && typeof raw === 'string' && raw.trim()) {
+        try {
+            const json = JSON.parse(raw);
+            if (Array.isArray(json)) list = json;
+        } catch {
+            list = null;
+        }
+    }
+    return (list || []).map((id) => String(id)).filter(Boolean).join(', ');
+}
+
 /**
  * @param {string} reply
  * @param {{ tool: string, args?: object }[]} actions

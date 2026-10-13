@@ -100,11 +100,9 @@ export function PartyAmpiMessageExtras({
                     >
                         <View style={styles.cardHeader}>
                             <Ionicons name="restaurant-outline" size={18} color={theme.primary[500]} />
-                            <Text style={[styles.cardTitle, { color: c.text.primary }]} numberOfLines={2}>
-                                {title}
-                            </Text>
-                            <AiBadge />
+                            <Text style={[styles.cardTitle, { color: c.text.primary }]}>{title}</Text>
                         </View>
+                        <AiBadge />
                         {card.pantryLines?.length ? (
                             <View style={styles.pantryBlock}>
                                 {card.pantryLines.map((line, li) => (
@@ -188,7 +186,7 @@ export function PartyAmpiMessageExtras({
 const styles = StyleSheet.create({
     wrap: { marginTop: 8, gap: 8, width: '100%' },
     card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 10, gap: 8 },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
     cardTitle: { flex: 1, fontSize: 15, fontWeight: '700' },
     pantryBlock: { gap: 2 },
     actions: { gap: 6 },
