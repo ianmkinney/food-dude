@@ -1,5 +1,8 @@
 (function () {
-    var STORAGE_KEY = 'amplifood.auth.google.result';
+    var RESULT_KEY = 'amplifood.auth.google.result';
+    var PENDING_KEY = 'amplifood.auth.google.pending';
+    var MODE_KEY = 'amplifood.auth.google.mode';
+    var RETURN_KEY = 'amplifood.auth.google.return';
     var status = document.getElementById('status');
     var params = new URLSearchParams((location.hash || '').replace(/^#/, '') || location.search.slice(1));
     var result = {
@@ -15,17 +18,36 @@
         channel.close();
     } catch (e) {}
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
+        if (window.opener) {
+            window.opener.postMessage({ type: 'google-result', result: result }, location.origin);
+        }
+    } catch (e) {}
+    try {
+        localStorage.setItem(RESULT_KEY, JSON.stringify(result));
     } catch (e) {}
     history.replaceState(null, '', location.pathname);
 
     var mode = null;
+    var returnTo = '/';
     try {
-        mode = sessionStorage.getItem('amplifood.auth.google.mode');
+        mode = sessionStorage.getItem(MODE_KEY);
+    } catch (e) {}
+    try {
+        var storedReturn = sessionStorage.getItem(RETURN_KEY);
+        if (storedReturn) returnTo = storedReturn;
     } catch (e) {}
 
+    var pending = null;
+    try {
+        pending = JSON.parse(localStorage.getItem(PENDING_KEY) || 'null');
+    } catch (e) {}
+    if (pending && pending.state && pending.state === result.state) {
+        if (pending.mode === 'redirect') mode = 'redirect';
+        if (pending.returnTo) returnTo = pending.returnTo;
+    }
+
     if (mode === 'redirect') {
-        location.replace('/account');
+        location.replace(safeReturnPath(returnTo));
         return;
     }
 
@@ -33,6 +55,15 @@
     setTimeout(function () {
         status.innerHTML = result.error
             ? 'Sign-in was cancelled. You can close this window.'
-            : 'Signed in. You can close this window and go back to <a href="/account">AmpliFood</a>.';
+            : 'Signed in. You can close this window and go back to <a href="/">AmpliFood</a>.';
     }, 400);
+
+    function safeReturnPath(value) {
+        if (typeof value !== 'string') return '/';
+        if (value.charAt(0) !== '/' || value.charAt(1) === '/' || value.charAt(1) === '\\') return '/';
+        if (value.indexOf('\\') !== -1 || value.indexOf('://') !== -1) return '/';
+        if (value.indexOf('/auth/') === 0) return '/';
+        if (value.length > 512) return '/';
+        return value;
+    }
 })();

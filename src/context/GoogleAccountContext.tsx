@@ -85,15 +85,21 @@ function GoogleAccountProviderInner({ children }: { children: React.ReactNode })
     }, [applyState]);
 
     useEffect(() => {
-        applyState();
-        return subscribeGoogleAccount(() => {
-            applyState();
+        let cancel = false;
+        // Finish a same-tab Google redirect before the first profile read.
+        // Otherwise that read resolves signed-out and overwrites the session
+        // that lands a moment later.
+        const unsub = subscribeGoogleAccount(() => {
+            if (!cancel) applyState();
         });
+        consumePendingWebGoogleSignIn().finally(() => {
+            if (!cancel) applyState();
+        });
+        return () => {
+            cancel = true;
+            unsub();
+        };
     }, [applyState]);
-
-    useEffect(() => {
-        consumePendingWebGoogleSignIn();
-    }, []);
 
     useEffect(() => subscribeSyncEngineStatus(setSyncStatus), []);
 
@@ -120,6 +126,7 @@ function GoogleAccountProviderInner({ children }: { children: React.ReactNode })
                     throw new Error('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not set in this build.');
                 }
                 const result = await signInWithGoogleWeb(webClientId, usePopup);
+                if (result === 'redirecting') return;
                 if (result === 'popup-fallback') {
                     setUsePopup(true);
                     return;

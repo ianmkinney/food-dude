@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import {
     clearOwnerSession,
     exchangeGoogleIdToken,
@@ -10,7 +10,9 @@ import {
 } from './ownerSession';
 import { getOwnerGoogleClientIds } from './ownerSignInConfig';
 import {
+    shouldUseSameTabGoogleRedirect,
     signInWithGooglePopup,
+    signInWithGoogleRedirect,
     takePendingGoogleSignIn,
     type GoogleSignInPayload,
 } from './googleWebAuth';
@@ -120,8 +122,12 @@ export function promptGoogleIdTokenWeb(clientId: string, nonce: string): Promise
     );
 }
 
-export async function signInWithGoogleWeb(webClientId: string, usePopup: boolean): Promise<'popup-fallback' | 'done'> {
+export async function signInWithGoogleWeb(webClientId: string, usePopup: boolean): Promise<'popup-fallback' | 'done' | 'redirecting'> {
     if (!webClientId) throw new Error('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not set in this build.');
+    if (shouldUseSameTabGoogleRedirect(navigator.userAgent, navigator.maxTouchPoints)) {
+        signInWithGoogleRedirect(webClientId);
+        return 'redirecting';
+    }
     const nonce = randomGoogleNonce();
     if (usePopup) {
         const pending = signInWithGooglePopup(webClientId);
@@ -139,11 +145,21 @@ export async function signInWithGoogleWeb(webClientId: string, usePopup: boolean
     }
 }
 
-export function consumePendingWebGoogleSignIn(): void {
-    if (Platform.OS !== 'web') return;
-    const pending = takePendingGoogleSignIn();
-    if (!pending) return;
-    completeGoogleSignIn(pending.idToken, pending.nonce).catch(() => undefined);
+export function consumePendingWebGoogleSignIn(): Promise<void> {
+    if (Platform.OS !== 'web') return Promise.resolve();
+    let pending: GoogleSignInPayload | null = null;
+    try {
+        pending = takePendingGoogleSignIn();
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        if (message && message !== 'cancelled') Alert.alert('Sign-in failed', message);
+        return Promise.resolve();
+    }
+    if (!pending) return Promise.resolve();
+    return completeGoogleSignIn(pending.idToken, pending.nonce).catch((error) => {
+        const message = error instanceof Error ? error.message : 'Google sign-in failed.';
+        Alert.alert('Sign-in failed', message);
+    });
 }
 
 export function getGoogleClientIdsForAuth() {
