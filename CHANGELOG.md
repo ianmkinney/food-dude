@@ -11,6 +11,7 @@ The add button is back on the bottom-right, and you can park it wherever you lik
 - Hold the + for 3 seconds and the button wiggles. Drag it anywhere above the tab bar, then tap it to leave it there. That spot is remembered on every page, including after you rotate the phone
 - A short tap still adds an item. The tap that unlocks dragging does not
 - Account → Reset button position puts it back on the bottom-right
+- The installed home-screen app has a refresh button in the header, beside the theme and account icons. It checks for a newer copy of the app, then reloads. A normal browser tab still uses the browser's own refresh
 
 ## [1.0.7] - 2026-10-14
 

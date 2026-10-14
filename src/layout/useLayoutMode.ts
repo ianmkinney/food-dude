@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
-import { isStandaloneDisplay, measureLargeViewportHeight, standaloneShellHeight } from './standaloneChrome';
+import {
+    STANDALONE_DISPLAY_MODES,
+    isStandaloneDisplay,
+    measureLargeViewportHeight,
+    standaloneShellHeight,
+} from './standaloneChrome';
 
 export const DESKTOP_MIN_WIDTH = 1024;
 export const TABLET_MIN_WIDTH = 768;
@@ -43,6 +48,26 @@ export function isWebStandalone(): boolean {
             return false;
         }
     });
+}
+
+/** True while this web page is running as an installed home-screen app. */
+export function useInstalledWebApp(): boolean {
+    const [installed, setInstalled] = useState(isWebStandalone);
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+        const update = () => setInstalled(isWebStandalone());
+        update();
+        const queries = STANDALONE_DISPLAY_MODES.map((mode) => {
+            try {
+                return window.matchMedia(`(display-mode: ${mode})`);
+            } catch {
+                return null;
+            }
+        }).filter((query): query is MediaQueryList => query != null);
+        queries.forEach((query) => query.addEventListener?.('change', update));
+        return () => queries.forEach((query) => query.removeEventListener?.('change', update));
+    }, []);
+    return installed;
 }
 
 /** Unlock pinch-zoom and page scroll on laptop layouts only (web). */

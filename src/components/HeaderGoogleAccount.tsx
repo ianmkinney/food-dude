@@ -21,10 +21,13 @@ function initialFor(session: { name?: string; email?: string } | null): string {
 export default function HeaderGoogleAccount({
     tintColor,
     showSignInWhenUnconfigured = false,
+    compact = false,
 }: {
     tintColor?: string;
     /** Desktop shell: show the Sign in pill even when Google client IDs are absent in this build. */
     showSignInWhenUnconfigured?: boolean;
+    /** Installed app: icon only, so the header logo keeps its space. */
+    compact?: boolean;
 }) {
     const navigation = useNavigation();
     const { isDark } = useTheme();
@@ -56,14 +59,19 @@ export default function HeaderGoogleAccount({
                 accessibilityRole="button"
                 accessibilityLabel="Sign in with Google"
                 scaleTo={motion.scale.pressHard}
-                style={[styles.pill, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}
+                style={[
+                    compact ? styles.compactButton : styles.pill,
+                    { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+                ]}
             >
                 <View style={styles.gBadge} accessibilityElementsHidden>
                     <Text style={styles.gText}>G</Text>
                 </View>
-                <Text style={[styles.pillText, { color }]} numberOfLines={1}>
-                    {busy ? '…' : 'Sign in'}
-                </Text>
+                {compact ? null : (
+                    <Text style={[styles.pillText, { color }]} numberOfLines={1}>
+                        {busy ? '…' : 'Sign in'}
+                    </Text>
+                )}
             </AnimatedPressable>
         );
     }
@@ -78,7 +86,7 @@ export default function HeaderGoogleAccount({
                     : 'Open account and sync'
             }
             scaleTo={motion.scale.pressHard}
-            style={[styles.avatarWrap, { borderColor: theme.colors.border }]}
+            style={[compact ? styles.compactAvatar : styles.avatarWrap, { borderColor: theme.colors.border }]}
         >
             {picture ? (
                 <Image source={{ uri: picture }} style={styles.avatar} />
@@ -122,6 +130,20 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 2,
+    },
+    compactButton: {
+        width: 34,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 17,
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    compactAvatar: {
+        width: 34,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     avatar: { width: 32, height: 32, borderRadius: 16 },
     initial: { alignItems: 'center', justifyContent: 'center' },
