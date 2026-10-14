@@ -55,6 +55,7 @@ export function useDesktopViewportUnlock(isDesktop: boolean) {
         const body = document.body;
         const appRoot = document.getElementById('root');
         const meta = document.querySelector('meta[name="viewport"]');
+        let removePin = () => {};
 
         if (isDesktop) {
             root.classList.add('af-layout-wide');
@@ -63,10 +64,13 @@ export function useDesktopViewportUnlock(isDesktop: boolean) {
             body.style.position = 'static';
             body.style.overflow = 'auto';
             body.style.inset = '';
+            body.style.height = '';
+            body.style.maxHeight = '';
             if (appRoot) {
                 appRoot.style.position = 'relative';
                 appRoot.style.inset = '';
                 appRoot.style.height = 'auto';
+                appRoot.style.maxHeight = '';
                 appRoot.style.minHeight = '100vh';
                 appRoot.style.minHeight = '100dvh';
             }
@@ -85,27 +89,49 @@ export function useDesktopViewportUnlock(isDesktop: boolean) {
                 appRoot.style.margin = '0';
             }
             if (standalone) {
-                // Stylesheet owns height (100dvh, then -webkit-fill-available).
-                // An inline 100dvh here is what leaves the gap under the tab bar.
-                body.style.padding = '0';
-                body.style.paddingBottom = '0';
-                body.style.marginBottom = '0';
-                if (appRoot) {
-                    appRoot.style.height = '';
-                    appRoot.style.minHeight = '';
-                    appRoot.style.padding = '0';
-                    appRoot.style.paddingBottom = '0';
-                    appRoot.style.marginBottom = '0';
-                }
+                // visualViewport matches the screen. 100dvh and
+                // -webkit-fill-available do not, on the iOS home-screen app.
+                const pinShell = () => {
+                    const height = Math.round(window.visualViewport?.height || window.innerHeight);
+                    const px = `${height}px`;
+                    body.style.padding = '0';
+                    body.style.paddingBottom = '0';
+                    body.style.marginBottom = '0';
+                    body.style.height = px;
+                    body.style.minHeight = '0';
+                    body.style.maxHeight = px;
+                    if (appRoot) {
+                        appRoot.style.height = px;
+                        appRoot.style.minHeight = '0';
+                        appRoot.style.maxHeight = px;
+                        appRoot.style.padding = '0';
+                        appRoot.style.paddingBottom = '0';
+                        appRoot.style.marginBottom = '0';
+                    }
+                };
+                pinShell();
+                const vv = window.visualViewport;
+                vv?.addEventListener('resize', pinShell);
+                window.addEventListener('orientationchange', pinShell);
+                removePin = () => {
+                    vv?.removeEventListener('resize', pinShell);
+                    window.removeEventListener('orientationchange', pinShell);
+                };
             } else if (appRoot) {
+                body.style.height = '';
+                body.style.maxHeight = '';
                 appRoot.style.height = '100vh';
                 appRoot.style.height = '100dvh';
+                appRoot.style.maxHeight = '';
                 appRoot.style.minHeight = '';
             }
         }
 
         return () => {
+            removePin();
             root.classList.remove('af-layout-wide');
+            body.style.maxHeight = '';
+            if (appRoot) appRoot.style.maxHeight = '';
         };
     }, [isDesktop]);
 }

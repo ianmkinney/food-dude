@@ -15,6 +15,7 @@ import { useTourTarget } from '../onboarding/tourTargets';
 import { useReducedMotion } from '../motion';
 import { useComposerFocused } from '../chat/composerFocus';
 import { isWebStandalone, useLayoutMode } from '../layout/useLayoutMode';
+import { tabBarBottomInset } from '../layout/tabBarInset';
 
 const PILL_WIDTH = 56;
 const touchWeb =
@@ -94,12 +95,12 @@ export default function AppTabBar({ state, descriptors, navigation, icons }) {
             style={[
                 styles.bar,
                 {
-                    // Standalone: the home-indicator inset is padding inside the
-                    // bar. A margin, or padding on html/body, leaves a gap below it.
-                    paddingBottom: standalone
-                        ? 'max(8px, env(safe-area-inset-bottom, 0px))'
-                        : Math.max(insets.bottom, 8),
+                    // One inset, inside the bar, so the background reaches the
+                    // screen edge and the labels sit just above the home indicator.
+                    paddingBottom: tabBarBottomInset(insets.bottom, standalone),
                     marginBottom: 0,
+                    flexGrow: 0,
+                    flexShrink: 0,
                     backgroundColor: theme.colors.surfaceGlass,
                     borderTopColor: theme.colors.borderSoft,
                 },

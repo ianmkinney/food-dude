@@ -10,6 +10,7 @@ import { createServer } from 'node:http';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { webkit } from 'playwright';
+import { tabBarBottomInset } from '../src/layout/tabBarInset.js';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const distDir = join(repoRoot, 'dist');
@@ -182,9 +183,24 @@ async function measure(page) {
             barPad: bar ? pad(bar) : null,
             barMargin: bar ? margin(bar) : null,
             barInlinePad: bar ? bar.style.paddingBottom : null,
+            vvHeight: window.visualViewport?.height ?? window.innerHeight,
+            rootHeight: rootRect.height,
+            rootMinHeight: getComputedStyle(root).minHeight,
+            labelGap: (() => {
+                const label = bar?.querySelector('[role="tab"]');
+                if (!label) return null;
+                return window.innerHeight - label.getBoundingClientRect().bottom;
+            })(),
         };
     });
 }
+
+if (tabBarBottomInset(100, true) !== 34) throw new Error('standalone inset 100 was not capped at 34');
+if (tabBarBottomInset(34, true) !== 34) throw new Error('standalone inset 34 changed');
+if (tabBarBottomInset(0, true) !== 8) throw new Error('standalone inset 0');
+if (tabBarBottomInset(0, false) !== 8) throw new Error('safari inset 0');
+if (tabBarBottomInset(34, false) !== 34) throw new Error('non-standalone inset 34');
+if (tabBarBottomInset(100, false) !== 100) throw new Error('safari must not cap a reported inset');
 
 let failures = 0;
 const check = (label, ok, detail = '') => {
@@ -201,12 +217,13 @@ try {
     const appUrl = `http://127.0.0.1:${server.address().port}/`;
     browser = await webkit.launch({ headless: true });
 
-    async function openPhone(standalone) {
+    async function openPhone(standalone, colorScheme = 'light') {
         const context = await browser.newContext({
             viewport: { width: 390, height: 844 },
             isMobile: true,
             hasTouch: true,
             userAgent: IPHONE_UA,
+            colorScheme,
         });
         await installPage(context, standalone);
         const page = await context.newPage();
@@ -216,16 +233,18 @@ try {
         return { context, page };
     }
 
-    const standalone = await openPhone(true);
+    const standalone = await openPhone(true, 'dark');
     const stand = await measure(standalone.page);
     check('standalone class', stand.standaloneClass, JSON.stringify(stand));
     check('standalone viewport-fit=cover', stand.viewport.includes('viewport-fit=cover'), stand.viewport);
     check('status bar black-translucent', stand.statusBar === 'black-translucent', stand.statusBar);
     check('standalone shell has no bottom padding', stand.htmlPad === '0px' && stand.bodyPad === '0px' && stand.rootPad === '0px', `${stand.htmlPad} ${stand.bodyPad} ${stand.rootPad}`);
     check('standalone shell has no bottom margin', stand.htmlMargin === '0px' && stand.bodyMargin === '0px' && stand.rootMargin === '0px', `${stand.htmlMargin} ${stand.bodyMargin} ${stand.rootMargin}`);
+    check('standalone shell matches the visual viewport', Math.abs(stand.rootHeight - stand.vvHeight) < 2, `root ${stand.rootHeight} vv ${stand.vvHeight}`);
     check('standalone root reaches the bottom', Math.abs(stand.innerHeight - stand.rootBottom) < 2, `root ${stand.rootBottom} viewport ${stand.innerHeight}`);
     check('standalone tab bar is flush', gap(stand) < 2, `bar ${stand.barBottom} viewport ${stand.innerHeight} pad ${stand.barPad}`);
-    check('standalone tab bar padding is inside, not a margin', stand.barMargin === '0px' && /env\(safe-area-inset-bottom/.test(stand.barInlinePad || ''), stand.barInlinePad || '');
+    check('standalone pad is one small inset, not env() twice', stand.barMargin === '0px' && stand.barPad === '8px' && !/env\(/.test(stand.barInlinePad || ''), stand.barInlinePad || '');
+    check('labels sit just above the bottom', stand.labelGap != null && stand.labelGap < 48, `label gap ${stand.labelGap}`);
 
     const grown = await standalone.page.evaluate(() => {
         const bar = document.querySelector('[role="tablist"]');

@@ -2,6 +2,14 @@
 
 All notable user-facing changes to AmpliFood are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.5] - 2026-10-14
+
+Home-screen tab bar.
+
+- The installed app's tab bar labels sit just above the home indicator. The bar background runs to the bottom edge of the screen
+- v1.0.4 sized that screen with `-webkit-fill-available`, which on an iPhone home-screen app is about 100px shorter than the visible screen, and padded the bar with the full safe-area value. That left a tall empty band under the labels
+- Safari tabs and the desktop layout are unchanged
+
 ## [1.0.4] - 2026-10-14
 
 Google sign-in on iPhone Safari.

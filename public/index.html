@@ -63,42 +63,27 @@
         padding: 0;
         display: flex;
       }
-      /* Installed home-screen app. 100dvh can stop above the home indicator;
-         -webkit-fill-available covers that strip. Safe-area padding stays on
-         the tab bar, not on html/body/#root, so nothing sits below the bar. */
+      /* Installed app: do not set height to -webkit-fill-available or min-height
+         100dvh. On the iOS home screen those units are ~100px shorter than the
+         visible screen (they still subtract the Safari toolbar). JS pins the
+         shell to visualViewport. One safe-area pad lives on the tab bar. */
       @media (display-mode: standalone), (display-mode: fullscreen) {
         html,
         body,
         #root {
           height: 100%;
-          height: 100dvh;
-          height: -webkit-fill-available;
-          min-height: 100dvh;
-          min-height: -webkit-fill-available;
+          min-height: 0;
           margin: 0;
           padding: 0;
-          padding-bottom: 0;
-          margin-bottom: 0;
         }
       }
       html.af-standalone,
       html.af-standalone body,
       html.af-standalone #root {
         height: 100%;
-        height: 100dvh;
-        height: -webkit-fill-available;
-        min-height: 100dvh;
-        min-height: -webkit-fill-available;
+        min-height: 0;
         margin: 0;
         padding: 0;
-        padding-bottom: 0;
-        margin-bottom: 0;
-      }
-      html.af-standalone [role='tablist'] {
-        margin: 0;
-        margin-bottom: 0;
-        box-sizing: border-box;
-        padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
       }
       /* While Ampi pins #root to visualViewport (class toggled from useKeyboardViewport.web.ts). */
       html.af-keyboard-open {

@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { isWebStandalone } from '../../layout/useLayoutMode';
+import { tabBarBottomInset } from '../../layout/tabBarInset';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { AiBadge } from '../../ai/AiLabel';
@@ -243,6 +245,7 @@ export default function PartyChatPanel({
 }) {
     const c = theme.colors;
     const insets = useSafeAreaInsets();
+    const bottomInset = tabBarBottomInset(insets.bottom, Platform.OS === 'web' && isWebStandalone());
     const defaultLiveMealId = useMemo(() => {
         const meal = (meals || []).find((m) => m.sync_meal_id || m.syncMealId);
         return meal?.sync_meal_id || meal?.syncMealId || null;
@@ -582,9 +585,9 @@ export default function PartyChatPanel({
         Platform.OS === 'web' && composerFocused
             ? keyboardOpen
                 ? 4
-                : Math.max(insets.bottom, 8)
+                : bottomInset
             : composerFocused && !keyboardOpen
-              ? Math.max(insets.bottom, 8)
+              ? bottomInset
               : 8;
 
     return (
