@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import AnimatedPressable from './AnimatedPressable';
 import { motion } from '../theme';
 import { navigateWithTransition } from '../motion/viewTransition';
@@ -12,6 +12,7 @@ const FloatingActionButton = ({
     style,
     disabled,
     accessibilityLabel,
+    accessibilityHint,
     morphTo,
 }) => {
     // The fill lives on a plain View so the web view transition can name a
@@ -27,6 +28,7 @@ const FloatingActionButton = ({
             scaleTo={motion.scale.press}
             accessibilityRole="button"
             accessibilityLabel={accessibilityLabel}
+            accessibilityHint={accessibilityHint}
             style={[
                 styles.fab,
                 theme.shadows.glow,
@@ -51,6 +53,14 @@ const styles = StyleSheet.create({
         borderRadius: 28,
         alignItems: 'center',
         justifyContent: 'center',
+        ...(Platform.OS === 'web'
+            ? {
+                  touchAction: 'none',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  WebkitTouchCallout: 'none',
+              }
+            : null),
     },
     fill: {
         ...StyleSheet.absoluteFillObject,

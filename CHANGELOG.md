@@ -2,6 +2,17 @@
 
 All notable user-facing changes to AmpliFood are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.8] - 2026-10-14
+
+The add button is back on the bottom-right, and you can park it wherever you like.
+
+- Recipes, Pantry, and Grocery share one + button position. It starts at the bottom-right, just above the tab bar. List rows keep extra space on that side so pantry delete and edit, and grocery row actions, stay tappable
+- Grocery's sparkles button sits with the +, to its left
+- Hold the + for 3 seconds and the button wiggles. Drag it anywhere above the tab bar, then tap it to leave it there. That spot is remembered on every page, including after you rotate the phone
+- A short tap still adds an item. The tap that unlocks dragging does not
+- Account → Reset button position puts it back on the bottom-right
+- The installed home-screen app has a refresh button in the header, beside the theme and account icons. It checks for a newer copy of the app, then reloads. A normal browser tab still uses the browser's own refresh
+
 ## [1.0.7] - 2026-10-14
 
 Ampi stays on cooking, and a request for several recipes comes back as separate cards.

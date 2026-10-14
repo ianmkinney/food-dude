@@ -14,7 +14,7 @@ import { pantryOperations } from '../database/operations';
 import { useQuery } from '../data/queryCache';
 import { pantryQuery } from '../data/queries';
 import AnimatedPressable from '../components/AnimatedPressable';
-import FloatingActionButton from '../components/FloatingActionButton';
+import FabCluster from '../components/FabCluster';
 import EmptyState from '../components/EmptyState';
 import ScreenSkeleton from '../components/Skeleton';
 import { useLayoutMode } from '../layout/useLayoutMode';
@@ -40,8 +40,8 @@ const PantryScreen = () => {
     const [bulkEstimates, setBulkEstimates] = useState([]);
     const [bulkModalOpen, setBulkModalOpen] = useState(false);
     const [expandedItemId, setExpandedItemId] = useState(null);
-    const { containerStyle: fabContainerStyle, listPaddingBottom: fabListPadding } =
-        useFloatingActionLayout(1);
+    const [frame, setFrame] = useState({ width: 0, height: 0 });
+    const { listInset } = useFloatingActionLayout(1, frame);
 
     const handleToggleExpand = useCallback((id) => {
         setExpandedItemId((prev) => (prev === id ? null : id));
@@ -130,7 +130,13 @@ const PantryScreen = () => {
     );
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View
+            style={[styles.container, { backgroundColor: theme.colors.background }]}
+            onLayout={(event) => {
+                const { width, height } = event.nativeEvent.layout;
+                setFrame((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+            }}
+        >
             {isDesktop ? (
                 <DesktopPageHeader
                     title="My Pantry"
@@ -181,7 +187,11 @@ const PantryScreen = () => {
                     columnWrapperStyle={isDesktop ? desktopListStyles.columnWrapper : undefined}
                     contentContainerStyle={[
                         styles.listContent,
-                        !isDesktop && { paddingBottom: fabListPadding },
+                        !isDesktop && {
+                            paddingLeft: listInset.paddingLeft,
+                            paddingRight: listInset.paddingRight,
+                            paddingBottom: listInset.paddingBottom,
+                        },
                     ]}
                     ListEmptyComponent={renderEmptyState}
                     refreshing={false}
@@ -191,16 +201,20 @@ const PantryScreen = () => {
             )}
 
             {!isDesktop ? (
-                <View style={fabContainerStyle} pointerEvents="box-none">
-                    <FloatingActionButton
-                        theme={theme}
-                        accessibilityLabel="Add pantry item"
-                        onPress={() => navigation.navigate('AddPantryItem')}
-                        morphTo="af-sheet"
-                    >
-                        <Ionicons name="add" size={28} color="#FFFFFF" />
-                    </FloatingActionButton>
-                </View>
+                <FabCluster
+                    frame={frame}
+                    actions={[
+                        {
+                            key: 'add',
+                            theme,
+                            accessibilityLabel: 'Add pantry item',
+                            testID: 'fab-add',
+                            morphTo: 'af-sheet',
+                            onPress: () => navigation.navigate('AddPantryItem'),
+                            icon: <Ionicons name="add" size={28} color="#FFFFFF" />,
+                        },
+                    ]}
+                />
             ) : null}
             <PantryBulkEstimateModal
                 visible={bulkModalOpen}
