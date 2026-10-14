@@ -31,6 +31,21 @@ const MOBILE_VIEWPORT =
     'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
 const DESKTOP_VIEWPORT = 'width=device-width, initial-scale=1';
 
+/** iOS home-screen app (`navigator.standalone`) or a browser display-mode standalone/fullscreen. */
+export function isWebStandalone(): boolean {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+    const nav = navigator as Navigator & { standalone?: boolean };
+    if (nav.standalone === true) return true;
+    try {
+        return (
+            window.matchMedia('(display-mode: standalone)').matches ||
+            window.matchMedia('(display-mode: fullscreen)').matches
+        );
+    } catch {
+        return false;
+    }
+}
+
 /** Unlock pinch-zoom and page scroll on laptop layouts only (web). */
 export function useDesktopViewportUnlock(isDesktop: boolean) {
     useEffect(() => {
@@ -43,6 +58,7 @@ export function useDesktopViewportUnlock(isDesktop: boolean) {
 
         if (isDesktop) {
             root.classList.add('af-layout-wide');
+            root.classList.remove('af-standalone');
             meta?.setAttribute('content', DESKTOP_VIEWPORT);
             body.style.position = 'static';
             body.style.overflow = 'auto';
@@ -56,13 +72,32 @@ export function useDesktopViewportUnlock(isDesktop: boolean) {
             }
         } else {
             root.classList.remove('af-layout-wide');
+            const standalone = isWebStandalone();
+            root.classList.toggle('af-standalone', standalone);
             meta?.setAttribute('content', MOBILE_VIEWPORT);
             body.style.position = 'fixed';
             body.style.overflow = 'hidden';
             body.style.inset = '0';
+            body.style.margin = '0';
             if (appRoot) {
                 appRoot.style.position = 'fixed';
                 appRoot.style.inset = '0';
+                appRoot.style.margin = '0';
+            }
+            if (standalone) {
+                // Stylesheet owns height (100dvh, then -webkit-fill-available).
+                // An inline 100dvh here is what leaves the gap under the tab bar.
+                body.style.padding = '0';
+                body.style.paddingBottom = '0';
+                body.style.marginBottom = '0';
+                if (appRoot) {
+                    appRoot.style.height = '';
+                    appRoot.style.minHeight = '';
+                    appRoot.style.padding = '0';
+                    appRoot.style.paddingBottom = '0';
+                    appRoot.style.marginBottom = '0';
+                }
+            } else if (appRoot) {
                 appRoot.style.height = '100vh';
                 appRoot.style.height = '100dvh';
                 appRoot.style.minHeight = '';

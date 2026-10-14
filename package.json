@@ -63,6 +63,7 @@
     "test:grocery-normalize": "node scripts/test-grocery-normalize.mjs",
     "test:recipe-normalize": "node scripts/test-recipe-normalize.mjs",
     "test:web-all-tabs": "node scripts/test-web-all-tabs-smoke.mjs",
+    "test:standalone-tabbar": "node scripts/test-standalone-tabbar.mjs",
     "test:speech-input-session": "node scripts/test-speech-input-session.mjs"
   },
   "dependencies": {

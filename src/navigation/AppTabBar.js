@@ -14,7 +14,7 @@ import { getTheme, motion } from '../theme';
 import { useTourTarget } from '../onboarding/tourTargets';
 import { useReducedMotion } from '../motion';
 import { useComposerFocused } from '../chat/composerFocus';
-import { useLayoutMode } from '../layout/useLayoutMode';
+import { isWebStandalone, useLayoutMode } from '../layout/useLayoutMode';
 
 const PILL_WIDTH = 56;
 const touchWeb =
@@ -80,6 +80,7 @@ export default function AppTabBar({ state, descriptors, navigation, icons }) {
     const pillStyle = useAnimatedStyle(() => ({ transform: [{ translateX: pillX.value }] }));
     const composerFocused = useComposerFocused();
     const { isDesktop } = useLayoutMode();
+    const standalone = Platform.OS === 'web' && isWebStandalone();
 
     if (isDesktop) return null;
 
@@ -93,7 +94,12 @@ export default function AppTabBar({ state, descriptors, navigation, icons }) {
             style={[
                 styles.bar,
                 {
-                    paddingBottom: Math.max(insets.bottom, 8),
+                    // Standalone: the home-indicator inset is padding inside the
+                    // bar. A margin, or padding on html/body, leaves a gap below it.
+                    paddingBottom: standalone
+                        ? 'max(8px, env(safe-area-inset-bottom, 0px))'
+                        : Math.max(insets.bottom, 8),
+                    marginBottom: 0,
                     backgroundColor: theme.colors.surfaceGlass,
                     borderTopColor: theme.colors.borderSoft,
                 },

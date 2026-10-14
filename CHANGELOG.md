@@ -13,6 +13,7 @@ Google sign-in on iPhone Safari.
 - After Google, you land back on the page you started from
 - Desktop popup sign-in waits for the result instead of treating an early focus return as cancel
 - The server accepts the raw sign-in nonce and the SHA-256 digest Google Identity Services may put in the ID token
+- In the installed home-screen app, the tab bar sits flush with the bottom of the screen. The home-indicator inset is padding inside the bar. Safari tabs, desktop, and the Ampi and party composers are unchanged
 
 ## [1.0.3] - 2026-10-13
 
