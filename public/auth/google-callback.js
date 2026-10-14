@@ -9,6 +9,7 @@
         idToken: params.get('id_token'),
         state: params.get('state'),
         error: params.get('error'),
+        errorDescription: params.get('error_description'),
         at: Date.now(),
     };
 
@@ -53,10 +54,26 @@
 
     window.close();
     setTimeout(function () {
-        status.innerHTML = result.error
-            ? 'Sign-in was cancelled. You can close this window.'
-            : 'Signed in. You can close this window and go back to <a href="/">AmpliFood</a>.';
+        var back = document.createElement('a');
+        back.href = homeHref(result);
+        back.textContent = 'Back to AmpliFood';
+        status.textContent = '';
+        if (result.error) {
+            status.appendChild(document.createTextNode((result.errorDescription || result.error) + '. '));
+        } else {
+            status.appendChild(document.createTextNode('Signed in. You can close this window and go back to '));
+        }
+        status.appendChild(back);
+        status.appendChild(document.createTextNode('.'));
     }, 400);
+
+    function homeHref(value) {
+        if (!value.error) return '/';
+        var q = new URLSearchParams();
+        q.set('google_auth_error', value.error);
+        if (value.errorDescription) q.set('google_auth_error_description', value.errorDescription);
+        return '/?' + q.toString();
+    }
 
     function safeReturnPath(value) {
         if (typeof value !== 'string') return '/';

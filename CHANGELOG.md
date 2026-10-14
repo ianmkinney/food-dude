@@ -6,7 +6,9 @@ All notable user-facing changes to AmpliFood are documented here. Versions follo
 
 Google sign-in on iPhone Safari.
 
-- Sign in on iPhone and iPad (Safari, and other iOS browsers) stays in the same tab. The popup path never returned to the app: the first tap only tried One Tap, which those browsers do not show, and the next tap was cancelled when Google severed the popup
+- Sign in on iPhone and iPad, desktop Safari, and the installed home-screen app stays in the same tab. A popup there is blocked or ignored, so the first tap did nothing in a Safari tab; the home-screen app was sent to Google's own error page
+- The redirect URI sent to Google is `https://amplifood.vercel.app/auth/google-callback` (the registered one, no trailing slash). If Google rejects it, or you come back from Google's error page, AmpliFood shows the reason instead of failing quietly
+- If a desktop popup is blocked, sign-in continues in the same tab
 - Account has its own **Sign in with Google** button, using the same sign-in as the header
 - After Google, you land back on the page you started from
 - Desktop popup sign-in waits for the result instead of treating an early focus return as cancel

@@ -6,7 +6,12 @@
 // iPhone Safari cannot use the popup path (see googleWebRedirect.js). That
 // browser stores mode=redirect and navigates the same tab.
 
-import { shouldUseSameTabGoogleRedirect } from './googleWebRedirect.js';
+import {
+    googleRedirectUri,
+    googleSignInErrorMessage,
+    isStandaloneWebApp,
+    shouldUseSameTabGoogleRedirect,
+} from './googleWebRedirect.js';
 
 const RESULT_KEY = 'amplifood.auth.google.result';
 const STATE_KEY = 'amplifood.auth.google.state';
@@ -16,9 +21,22 @@ const RETURN_KEY = 'amplifood.auth.google.return';
 const PENDING_KEY = 'amplifood.auth.google.pending';
 const RESULT_MAX_AGE_MS = 10 * 60 * 1000;
 
-type CallbackResult = { idToken?: string | null; state?: string | null; error?: string | null; at?: number };
+type CallbackResult = {
+    idToken?: string | null;
+    state?: string | null;
+    error?: string | null;
+    errorDescription?: string | null;
+    at?: number;
+};
 type AuthMode = 'popup' | 'redirect';
-type AuthPending = { state: string; nonce: string; mode: AuthMode; returnTo: string; at: number };
+type AuthPending = {
+    state: string;
+    nonce: string;
+    mode: AuthMode;
+    returnTo: string;
+    redirectUri: string;
+    at: number;
+};
 
 const randomString = () => {
     const bytes = new Uint8Array(16);
@@ -26,10 +44,14 @@ const randomString = () => {
     return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 };
 
+function currentRedirectUri() {
+    return googleRedirectUri(window.location.origin);
+}
+
 function buildAuthUrl(clientId: string, state: string, nonce: string) {
     const params = new URLSearchParams({
         client_id: clientId,
-        redirect_uri: `${window.location.origin}/auth/google-callback`,
+        redirect_uri: currentRedirectUri(),
         response_type: 'id_token',
         scope: 'openid email profile',
         nonce,
@@ -50,8 +72,12 @@ function safeReturnPath(): string {
     }
 }
 
-function writeAuthPending(pending: Omit<AuthPending, 'at'>) {
-    const record: AuthPending = { ...pending, at: Date.now() };
+function writeAuthPending(pending: Omit<AuthPending, 'at' | 'redirectUri'> & { redirectUri?: string }) {
+    const record: AuthPending = {
+        ...pending,
+        redirectUri: pending.redirectUri || currentRedirectUri(),
+        at: Date.now(),
+    };
     try {
         sessionStorage.setItem(STATE_KEY, record.state);
         sessionStorage.setItem(NONCE_KEY, record.nonce);
@@ -106,14 +132,51 @@ function clearAuthHandoff() {
 
 export type GoogleSignInPayload = { idToken: string; nonce: string };
 
-export { shouldUseSameTabGoogleRedirect };
+export { shouldUseSameTabGoogleRedirect, googleRedirectUri, PRODUCTION_GOOGLE_REDIRECT_URI } from './googleWebRedirect.js';
 
-function settle(result: CallbackResult, expectedState: string | null, expectedNonce: string | null): GoogleSignInPayload {
+export function shouldRedirectGoogleSignInHere(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    const nav = navigator as Navigator & { standalone?: boolean };
+    let displayMode = '';
+    try {
+        if (window.matchMedia('(display-mode: standalone)').matches) displayMode = 'standalone';
+        else if (window.matchMedia('(display-mode: fullscreen)').matches) displayMode = 'fullscreen';
+    } catch {
+        displayMode = '';
+    }
+    return shouldUseSameTabGoogleRedirect(nav.userAgent, nav.maxTouchPoints || 0, {
+        standalone: isStandaloneWebApp({ navigatorStandalone: nav.standalone === true, displayMode }),
+    });
+}
+
+function settle(
+    result: CallbackResult,
+    expectedState: string | null,
+    expectedNonce: string | null,
+    redirectUri: string | null
+): GoogleSignInPayload {
     if (!expectedState || result.state !== expectedState) throw new Error('Sign-in response did not match this session.');
-    if (result.error) throw new Error(result.error === 'access_denied' ? 'cancelled' : result.error);
+    if (result.error) {
+        throw new Error(googleSignInErrorMessage(result.error, result.errorDescription || '', redirectUri || ''));
+    }
     if (!result.idToken) throw new Error('Google did not return an ID token.');
     if (!expectedNonce) throw new Error('Sign-in response did not match this session.');
     return { idToken: result.idToken, nonce: expectedNonce };
+}
+
+/** Error Google sent back on our own URL (storage handoff missed). Clears the query. */
+export function takeGoogleAuthErrorFromLocation(): string | null {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('google_auth_error');
+    if (!code) return null;
+    const description = params.get('google_auth_error_description') || '';
+    params.delete('google_auth_error');
+    params.delete('google_auth_error_description');
+    const query = params.toString();
+    const next = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
+    window.history.replaceState(null, '', next);
+    return googleSignInErrorMessage(code, description, currentRedirectUri());
 }
 
 /** Same-tab Google redirect. Must run synchronously inside the tap handler. */
@@ -138,7 +201,9 @@ export function signInWithGooglePopup(clientId: string): Promise<GoogleSignInPay
 
     const url = buildAuthUrl(clientId, state, nonce);
     const popup = window.open(url, 'amplifood-google', 'popup,width=480,height=640');
-    if (!popup) {
+    // Safari returns null when the open is not a user gesture. A home-screen
+    // app sometimes returns a window that is already closed. Both continue here.
+    if (!popup || popup.closed) {
         writeAuthPending({ state, nonce, mode: 'redirect', returnTo });
         window.location.assign(url);
         return new Promise(() => {});
@@ -166,7 +231,7 @@ export function signInWithGooglePopup(clientId: string): Promise<GoogleSignInPay
             if (done) return;
             cleanup();
             try {
-                resolve(settle(result, state, nonce));
+                resolve(settle(result, state, nonce, currentRedirectUri()));
             } catch (error) {
                 reject(error);
             }
@@ -241,10 +306,14 @@ export function takePendingGoogleSignIn(): GoogleSignInPayload | null {
     }
     if (mode !== 'redirect') return null;
     const result = readStoredResult();
+    const redirectUri = pending?.redirectUri || currentRedirectUri();
     clearAuthHandoff();
-    if (!result || Date.now() - (result.at ?? 0) > RESULT_MAX_AGE_MS) return null;
+    if (!result) {
+        throw new Error(googleSignInErrorMessage('incomplete', '', redirectUri));
+    }
+    if (Date.now() - (result.at ?? 0) > RESULT_MAX_AGE_MS) return null;
     try {
-        return settle(result, state, nonce);
+        return settle(result, state, nonce, redirectUri);
     } catch (error) {
         if (error instanceof Error && error.message === 'Sign-in response did not match this session.') return null;
         throw error;

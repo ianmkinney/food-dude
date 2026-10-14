@@ -2,7 +2,13 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { googleNonceMatches } from '../api/_lib/googleNonce.js';
-import { shouldUseSameTabGoogleRedirect } from '../src/platform/googleWebRedirect.js';
+import {
+    PRODUCTION_GOOGLE_REDIRECT_URI,
+    googleRedirectUri,
+    googleSignInErrorMessage,
+    isStandaloneWebApp,
+    shouldUseSameTabGoogleRedirect,
+} from '../src/platform/googleWebRedirect.js';
 
 const nonce = 'abc+def/nonce value';
 const digest = createHash('sha256').update(nonce, 'utf8').digest();
@@ -32,6 +38,32 @@ assert.equal(
     ),
     false
 );
+assert.equal(
+    shouldUseSameTabGoogleRedirect(
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
+        0
+    ),
+    true
+);
+assert.equal(
+    shouldUseSameTabGoogleRedirect(
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+        0,
+        { standalone: true }
+    ),
+    true
+);
+assert.equal(isStandaloneWebApp({ navigatorStandalone: true }), true);
+assert.equal(isStandaloneWebApp({ displayMode: 'standalone' }), true);
+assert.equal(isStandaloneWebApp({ displayMode: 'browser' }), false);
+
+assert.equal(googleRedirectUri('https://amplifood.vercel.app'), PRODUCTION_GOOGLE_REDIRECT_URI);
+assert.equal(googleRedirectUri('https://amplifood.vercel.app/'), PRODUCTION_GOOGLE_REDIRECT_URI);
+assert.equal(googleRedirectUri('http://localhost:8080'), 'http://localhost:8080/auth/google-callback');
+assert.match(googleSignInErrorMessage('redirect_uri_mismatch', '', PRODUCTION_GOOGLE_REDIRECT_URI), /amplifood\.vercel\.app\/auth\/google-callback/);
+assert.match(googleSignInErrorMessage('disallowed_useragent', '', ''), /home-screen/);
+assert.equal(googleSignInErrorMessage('access_denied', '', ''), 'cancelled');
+assert.match(googleSignInErrorMessage('incomplete', '', 'https://amplifood.vercel.app/auth/google-callback'), /didn't finish/);
 assert.equal(
     shouldUseSameTabGoogleRedirect(
         'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 CriOS/120.0.0.0 Mobile/15E148 Safari/604.1',
