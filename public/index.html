@@ -63,15 +63,16 @@
         padding: 0;
         display: flex;
       }
-      /* Installed app: do not set height to -webkit-fill-available or min-height
-         100dvh. On the iOS home screen those units are ~100px shorter than the
-         visible screen (they still subtract the Safari toolbar). JS pins the
-         shell to visualViewport. One safe-area pad lives on the tab bar. */
-      @media (display-mode: standalone), (display-mode: fullscreen) {
+      /* Installed app, including Chrome's Add to Home Screen (minimal-ui).
+         100dvh, visualViewport, and -webkit-fill-available are ~100px short:
+         WebKit still subtracts the Safari toolbar. 100lvh is the full screen.
+         JS pins the same height. One safe-area pad lives on the tab bar. */
+      @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
         html,
         body,
         #root {
-          height: 100%;
+          height: 100vh;
+          height: 100lvh;
           min-height: 0;
           margin: 0;
           padding: 0;
@@ -80,8 +81,10 @@
       html.af-standalone,
       html.af-standalone body,
       html.af-standalone #root {
-        height: 100%;
+        height: 100vh;
+        height: 100lvh;
         min-height: 0;
+        max-height: none;
         margin: 0;
         padding: 0;
       }

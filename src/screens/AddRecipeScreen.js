@@ -23,10 +23,12 @@ import { importRecipeFromLink, recipeLinkImportStatus } from '../services/recipe
 import { recipeOperations } from '../database/operations';
 import FunLoader from '../components/FunLoader';
 import RecipeImportReviewForm from '../components/RecipeImportReviewForm';
+import { addRecipeSurfaces } from './addRecipeAppearance';
 
 const AddRecipeScreen = ({ navigation }) => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const surfaces = addRecipeSurfaces(theme);
     const sheetRef = useViewTransitionTarget('af-sheet');
     const [input, setInput] = useState('');
     const [linkUrl, setLinkUrl] = useState('');
@@ -182,25 +184,20 @@ const AddRecipeScreen = ({ navigation }) => {
                         Import from a link, pasted text, or screenshots.
                     </Text>
 
-                    <View
-                        style={[
-                            styles.linkCard,
-                            { backgroundColor: theme.primary[50], borderColor: theme.primary[200] },
-                        ]}
-                    >
+                    <View testID="add-from-link-card" style={[styles.linkCard, surfaces.linkCard]}>
                         <View style={styles.linkHeader}>
-                            <Ionicons name="link" size={22} color={theme.primary[600]} />
-                            <Text style={[styles.linkTitle, { color: theme.primary[800] }]}>Add from link</Text>
+                            <Ionicons name="link" size={22} color={surfaces.linkIcon} />
+                            <Text style={[styles.linkTitle, { color: surfaces.linkTitle }]}>Add from link</Text>
                         </View>
-                        <Text style={[styles.linkHint, { color: theme.colors.text.secondary }]}>
+                        <Text style={[styles.linkHint, { color: surfaces.linkHint }]}>
                             Instagram posts/reels, TikTok (including /t/ short links), or any public recipe site.
                         </Text>
-                        <View style={[styles.linkInputRow, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                        <View style={[styles.linkInputRow, surfaces.inputRow]}>
                             <TextInput
                                 accessibilityLabel="Recipe link URL"
-                                style={[styles.linkInput, { color: theme.colors.text.primary }]}
+                                style={[styles.linkInput, { color: surfaces.inputText }]}
                                 placeholder="https://…"
-                                placeholderTextColor={theme.colors.text.tertiary}
+                                placeholderTextColor={surfaces.inputPlaceholder}
                                 value={linkUrl}
                                 onChangeText={setLinkUrl}
                                 autoCapitalize="none"
@@ -213,8 +210,8 @@ const AddRecipeScreen = ({ navigation }) => {
                                 accessibilityRole="button"
                                 accessibilityLabel="Paste link"
                             >
-                                <Ionicons name="clipboard-outline" size={18} color={theme.primary[600]} />
-                                <Text style={[styles.pasteText, { color: theme.primary[700] }]}>Paste</Text>
+                                <Ionicons name="clipboard-outline" size={18} color={surfaces.linkIcon} />
+                                <Text style={[styles.pasteText, { color: surfaces.paste }]}>Paste</Text>
                             </TouchableOpacity>
                         </View>
                         <TouchableOpacity
@@ -271,26 +268,26 @@ const AddRecipeScreen = ({ navigation }) => {
 
                     <View style={[styles.modeContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
                         <TouchableOpacity
-                            style={[styles.modeButton, mode === 'text' && { backgroundColor: theme.primary[100] }]}
+                            style={[styles.modeButton, mode === 'text' && { backgroundColor: surfaces.modeSelected }]}
                             onPress={() => setMode('text')}
                         >
                             <Text
                                 style={[
                                     styles.modeText,
-                                    { color: mode === 'text' ? theme.primary[600] : theme.colors.text.secondary },
+                                    { color: mode === 'text' ? surfaces.modeSelectedText : theme.colors.text.secondary },
                                 ]}
                             >
                                 Text
                             </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                            style={[styles.modeButton, mode === 'image' && { backgroundColor: theme.primary[100] }]}
+                            style={[styles.modeButton, mode === 'image' && { backgroundColor: surfaces.modeSelected }]}
                             onPress={() => setMode('image')}
                         >
                             <Text
                                 style={[
                                     styles.modeText,
-                                    { color: mode === 'image' ? theme.primary[600] : theme.colors.text.secondary },
+                                    { color: mode === 'image' ? surfaces.modeSelectedText : theme.colors.text.secondary },
                                 ]}
                             >
                                 Image
@@ -301,11 +298,11 @@ const AddRecipeScreen = ({ navigation }) => {
                     {mode === 'image' ? (
                         <View style={styles.imageSection}>
                             <TouchableOpacity
-                                style={[styles.imagePickerButton, { borderColor: theme.primary[500], backgroundColor: theme.primary[50] }]}
+                                style={[styles.imagePickerButton, surfaces.imagePicker]}
                                 onPress={handlePickImages}
                             >
-                                <Ionicons name="images-outline" size={32} color={theme.primary[500]} />
-                                <Text style={[styles.imagePickerText, { color: theme.primary[700] }]}>
+                                <Ionicons name="images-outline" size={32} color={surfaces.linkIcon} />
+                                <Text style={[styles.imagePickerText, { color: surfaces.imagePickerText }]}>
                                     {selectedImages.length > 0 ? `${selectedImages.length} images selected` : 'Select Screenshots'}
                                 </Text>
                             </TouchableOpacity>

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { KEYBOARD_OPEN_GAP, measureLargeViewportHeight, standaloneShellHeight } from '../layout/standaloneChrome';
+import { isWebStandalone } from '../layout/useLayoutMode';
 
 // iOS Safari keeps the layout viewport at full screen height and pans the visual
 // viewport over it when the keyboard opens. Pin #root to visualViewport (top +
@@ -62,9 +64,20 @@ export function useKeyboardViewport(
             frame = requestAnimationFrame(() => {
                 pinScroll();
                 const top = Math.max(0, vv.offsetTop);
-                const height = vv.height;
                 const layoutHeight = window.innerHeight || document.documentElement.clientHeight;
-                const open = layoutHeight - height > KEYBOARD_MIN_PX;
+                const standalone = isWebStandalone();
+                const largeHeight = standalone ? measureLargeViewportHeight(document) : 0;
+                const height = standalone
+                    ? standaloneShellHeight({
+                          viewportHeight: vv.height,
+                          largeHeight,
+                          screenHeight: window.screen?.height || 0,
+                          innerHeight: layoutHeight,
+                      })
+                    : vv.height;
+                const open = standalone
+                    ? Math.max(largeHeight, layoutHeight) - vv.height > KEYBOARD_OPEN_GAP
+                    : layoutHeight - vv.height > KEYBOARD_MIN_PX;
 
                 const bg = pageBackgroundRef.current;
                 if (bg) {

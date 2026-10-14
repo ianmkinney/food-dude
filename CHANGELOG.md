@@ -2,6 +2,16 @@
 
 All notable user-facing changes to AmpliFood are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.6] - 2026-10-14
+
+Home-screen app from Chrome, and dark mode on Add Recipe.
+
+- The tab bar on an iPhone home-screen app sits on the bottom edge, including when the app was added from Chrome. Labels sit just above the home indicator. The bar background runs to the screen edge
+- v1.0.5 pinned that shell to `visualViewport`, which on the installed app is still about 100px short of the screen. The shell now uses the large viewport (`100lvh`), and Chrome's Add to Home Screen counts as installed (`minimal-ui` as well as standalone)
+- Page headers clear the status bar when that webview reports no top safe area
+- On the installed app, the Ampi microphone records until you tap stop, then sends the message. The browser speech recognizer there never returned a transcript and the stop button could not end it. Speech is transcribed on the server, and a failure is shown instead of a silent "Listening…"
+- Add Recipe's "Add from link" card follows dark mode, with readable hint text and a dark input
+
 ## [1.0.5] - 2026-10-14
 
 Home-screen tab bar.

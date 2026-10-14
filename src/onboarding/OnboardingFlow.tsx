@@ -26,7 +26,6 @@ import { findAllergenMatches, parseAllergies } from '../safety/allergens';
 import { ASSISTANT_NAME, ASSISTANT_PRONUNCIATION } from '../config/assistant';
 import { MINIMUM_AGE } from '../config/legal';
 import { useSpeechInput } from '../voice/useSpeechInput';
-import { WEB_SPEECH_NOTICE } from '../voice/webSpeechRecognition';
 import { INTRO_LINES, LINES, type LineId } from './script';
 import { playLine, stopLine } from './onboardingVoice';
 import { isVoiceMuted, setVoiceMuted } from './onboardingStore';
@@ -404,7 +403,7 @@ export default function OnboardingFlow({ startAt = 'intro', onFinish }: { startA
                         </View>
                         {!!mic.error && <Text style={[styles.small, { color: c.error }]}>{mic.error}</Text>}
                         {mic.isWeb && mic.isSupported && !mic.error && (
-                            <Text style={[styles.small, { color: c.text.tertiary }]}>{WEB_SPEECH_NOTICE}</Text>
+                            <Text style={[styles.small, { color: c.text.tertiary }]}>{mic.notice}</Text>
                         )}
                         <View style={styles.row}>
                             <Button label="Continue" primary onPress={saveProfile} />

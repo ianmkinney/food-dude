@@ -1,6 +1,6 @@
 {
   "name": "amplifood",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -64,6 +64,8 @@
     "test:recipe-normalize": "node scripts/test-recipe-normalize.mjs",
     "test:web-all-tabs": "node scripts/test-web-all-tabs-smoke.mjs",
     "test:standalone-tabbar": "node scripts/test-standalone-tabbar.mjs",
+    "test:standalone-chrome": "node scripts/test-standalone-chrome.mjs",
+    "test:speech-capture": "node scripts/test-speech-capture.mjs",
     "test:speech-input-session": "node scripts/test-speech-input-session.mjs"
   },
   "dependencies": {
