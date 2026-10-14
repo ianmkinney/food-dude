@@ -2,6 +2,13 @@
 
 All notable user-facing changes to AmpliFood are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.7] - 2026-10-14
+
+Ampi stays on cooking, and a request for several recipes comes back as separate cards.
+
+- A cooking reply such as "Looks good, 2 different ones now" no longer gets the crisis hotline message. That script was written into Ampi's instructions, so smaller models copied it onto ordinary chat. It is used only when the message is clearly about self-harm, suicide, a medical emergency, or a severe allergic reaction happening now
+- "Make me 3 dinner recipes" or "give us 2 meals" writes every requested recipe in the same reply, one card each, using the pantry and sensible defaults instead of asking a follow-up question
+
 ## [1.0.6] - 2026-10-14
 
 Home-screen app from Chrome, and dark mode on Add Recipe.

@@ -66,7 +66,8 @@ export const AMPI_OPENAI_TOOLS = [
         type: 'function',
         function: {
             name: 'create_recipe',
-            description: 'Save a new recipe to the recipe book.',
+            description:
+                'Save one new recipe, filled field by field (title, ingredients, instructions, servings, times, per-serving nutrition). If the user asked for more than one recipe or meal, call this tool once per dish in the same turn. N requested recipes means N create_recipe calls, not one combined recipe and not a clarifying question.',
             parameters: {
                 type: 'object',
                 additionalProperties: true,
@@ -213,11 +214,17 @@ export const AMPI_OPENAI_TOOLS = [
     },
 ];
 
+export const AMPI_MULTI_RECIPE_RULE = `When the user asks for more than one recipe or meal (for example "make me 3 dinner recipes", "give us 2 meals", or "2 different ones"), act immediately in this same response: emit one create_recipe action per dish. N requested recipes means N create_recipe actions in the actions array, each filled field by field (title, description, servings, prep time, cook time, per-serving nutrition, ingredients, instructions) using pantry context and sensible defaults. Do not ask a clarifying question when the request is actionable. Ask only if it is truly impossible.`;
+
+export const AMPI_NO_CRISIS_SCRIPT_RULE = `Ordinary cooking chat, acknowledgements, short replies, counts, and kitchen words (knife, cut, kill the heat, dying to try, two) are not emergencies. Never refuse them and never answer them with a hotline or crisis script.`;
+
 export const AMPI_JSON_TURN_INSTRUCTION = `Respond with a single JSON object only (no markdown fences), shape:
 {"reply": string, "actions": [{"tool": string, "args": object}]}
 Use tool names exactly: ${AMPI_TOOL_NAMES.join(', ')}.
 For update_recipe always include recipe_id as a number when you know it (from the recipe list, e.g. 10 not "?").
-Put user-facing text in reply; put app mutations in actions.`;
+Put user-facing text in reply; put app mutations in actions.
+${AMPI_MULTI_RECIPE_RULE}
+${AMPI_NO_CRISIS_SCRIPT_RULE}`;
 
 export function ampiStructuredResponseFormat() {
     return ampiChatResponseFormat();

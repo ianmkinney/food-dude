@@ -91,6 +91,7 @@ const modules = [
     '_lib/partyPantryPrompt.js',
     '_lib/partyClaimIntent.js',
     '_lib/recipeNormalize.js',
+    '_lib/recipeRequestCount.js',
     '_lib/partyChat.js',
     'p.js',
     'p-og.js',

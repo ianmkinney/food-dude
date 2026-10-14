@@ -9,6 +9,8 @@ export const AMPI_CHAT_JSON_SCHEMA = {
             reply: { type: 'string', description: 'Short user-facing reply (Markdown-light).' },
             actions: {
                 type: 'array',
+                description:
+                    'App actions for this turn. When the user asked for N recipes or meals, include N separate create_recipe items in this array.',
                 items: {
                     type: 'object',
                     additionalProperties: false,

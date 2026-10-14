@@ -1,4 +1,8 @@
+import { AMPI_MULTI_RECIPE_RULE, AMPI_NO_CRISIS_SCRIPT_RULE } from '../../api/_lib/ampiActionSchema.js';
 import { formatPartyAmpiReplyBody } from '../../api/_lib/partyAmpiReply.js';
+import { partyModelEchoesCrisis, sanitizePartyAmpiModelRaw } from '../safety/partyAmpiSafety.js';
+import { recipeCountRetryNote, requestedNewRecipeCount } from '../../api/_lib/recipeRequestCount.js';
+import { CRISIS_ECHO_RETRY_NOTE, CRISIS_REPLY, isCrisisMessage, replacementForCrisisEcho } from '../safety/crisisIntent.js';
 import {
     partyAmpiAttachmentFromTurn,
     partyAmpiShouldAutoAddToMeals,
@@ -100,7 +104,9 @@ function buildPartySystemPrompt({ meals, claims, pantryByMember }) {
     );
     const pantryLines = formatPantryLines(pantryByMember);
     return `You are ${ASSISTANT_NAME}, helping a party plan food together in group chat.
-Use the recent conversation. When the host asks for a cuisine or meal idea, call create_recipe with a complete recipe (title, ingredients, instructions, servings).
+Use the recent conversation. When the host asks for a cuisine or meal idea, call create_recipe with a complete recipe (title, ingredients, instructions, servings), filled field by field.
+${AMPI_MULTI_RECIPE_RULE}
+${AMPI_NO_CRISIS_SCRIPT_RULE}
 When members share pantries, suggest meals that use combined ingredients and call out missing items.
 When someone volunteers to bring an ingredient or @mentions who brings what, use claim_party_ingredient and confirm in reply.
 Always include a short reply string AND actions in your JSON response. Never leave reply empty when you propose a recipe.
@@ -150,6 +156,32 @@ Reply briefly for the whole group.`;
  * Run Ampi for a party @mention using the CALLING user's AI credentials only.
  * @param {{ messages, meals, claims, prompt, images?: Array }} ctx
  */
+async function callPartyModel({ system, turns, userPrompt, images, extraNote, ctx }) {
+    const noted = extraNote ? `${system}\n\n${extraNote}` : system;
+    if (images.length) {
+        const text = await generateMultimodal({
+            system: noted,
+            turns: [...turns, { role: 'user', text: userPrompt, images }],
+            feature: 'partyChat',
+            prompt: userPrompt,
+            images,
+        });
+        return String(text || '').trim();
+    }
+    if (turns.length) {
+        const text = await generateMultimodal({
+            system: noted,
+            turns: [...turns, { role: 'user', text: userPrompt }],
+            feature: 'partyChat',
+            prompt: userPrompt,
+        });
+        return String(text || '').trim();
+    }
+    const base = buildPartyContext({ ...ctx, prompt: userPrompt });
+    const text = await generateText(extraNote ? `${base}\n\n${extraNote}` : base, { feature: 'partyChat' });
+    return String(text || '').trim();
+}
+
 export async function runPartyAmpiReply(ctx) {
     const canUse = await callerHasPartyAmpiAccess();
     if (!canUse) {
@@ -158,6 +190,9 @@ export async function runPartyAmpiReply(ctx) {
         );
     }
     const userPrompt = String(ctx.prompt || '').replace(MENTION, ASSISTANT_NAME).trim();
+    if (isCrisisMessage(userPrompt)) {
+        return JSON.stringify({ reply: CRISIS_REPLY, actions: [] });
+    }
     const system = buildPartySystemPrompt({
         meals: ctx.meals,
         claims: ctx.claims,
@@ -165,30 +200,28 @@ export async function runPartyAmpiReply(ctx) {
     });
     const turns = mapMessagesToTurns(ctx.messages);
     const images = ctx.images || [];
+    const call = (extraNote) => callPartyModel({ system, turns, userPrompt, images, extraNote, ctx });
 
-    if (images.length) {
-        const text = await generateMultimodal({
-            system,
-            turns: [...turns, { role: 'user', text: userPrompt, images }],
-            feature: 'partyChat',
-            prompt: userPrompt,
-            images,
-        });
-        return String(text || '').trim();
+    let raw = await call();
+    if (partyModelEchoesCrisis(userPrompt, raw)) {
+        raw = await call(CRISIS_ECHO_RETRY_NOTE);
+        if (partyModelEchoesCrisis(userPrompt, raw)) {
+            const { actions } = formatPartyAmpiReplyBody(raw);
+            raw = JSON.stringify({ reply: replacementForCrisisEcho(actions), actions: actions || [] });
+        }
     }
-
-    if (turns.length) {
-        const text = await generateMultimodal({
-            system,
-            turns: [...turns, { role: 'user', text: userPrompt }],
-            feature: 'partyChat',
-            prompt: userPrompt,
-        });
-        return String(text || '').trim();
+    const wanted = requestedNewRecipeCount(userPrompt);
+    const { actions } = formatPartyAmpiReplyBody(raw);
+    const created = (actions || []).filter((action) => action.tool === 'create_recipe');
+    if (wanted != null && wanted >= 2 && created.length < wanted) {
+        const retry = await call(recipeCountRetryNote(wanted, created.length));
+        if (!partyModelEchoesCrisis(userPrompt, retry)) {
+            const again = formatPartyAmpiReplyBody(retry);
+            const againCreated = (again.actions || []).filter((action) => action.tool === 'create_recipe');
+            if (againCreated.length >= created.length) raw = retry;
+        }
     }
-
-    const text = await generateText(buildPartyContext({ ...ctx, prompt: userPrompt }), { feature: 'partyChat' });
-    return String(text || '').trim();
+    return raw;
 }
 
 /**
@@ -229,7 +262,8 @@ export async function executePartyChatCommand(text, partyContext = {}) {
 }
 
 export async function finalizePartyAmpiReplyForPost(raw, options = {}) {
-    const { text, actions, cards: draftCardsRaw } = formatPartyAmpiReplyBody(raw);
+    const safeRaw = sanitizePartyAmpiModelRaw(raw, options.userPrompt);
+    const { text, actions, cards: draftCardsRaw } = formatPartyAmpiReplyBody(safeRaw);
     const draftCards = enrichPartyAmpiCardsWithPantry(
         draftCardsRaw,
         options.partyContext?.pantryByMember

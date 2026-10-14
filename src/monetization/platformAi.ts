@@ -71,10 +71,12 @@ export const stubPlatformAi: PlatformAiClient = {
 
 import { livePlatformAi } from './livePlatformAi';
 
-/** Owner OpenRouter proxy when signed in; purchase verification still stubbed. */
+/** Owner OpenRouter proxy when signed in; purchase verification still stubbed.
+ * Wrappers avoid reading livePlatformAi during module init (the two files import each other).
+ */
 export const platformAi: PlatformAiClient = {
     ...stubPlatformAi,
-    generateText: livePlatformAi.generateText,
-    generateMultimodal: livePlatformAi.generateMultimodal,
-    generateImage: livePlatformAi.generateImage,
+    generateText: (request) => livePlatformAi.generateText(request),
+    generateMultimodal: (request) => livePlatformAi.generateMultimodal(request),
+    generateImage: (request) => livePlatformAi.generateImage(request),
 };
