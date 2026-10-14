@@ -10,6 +10,7 @@ import { createServer } from 'node:http';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { webkit } from 'playwright';
+import { standaloneTopInset } from '../src/layout/standaloneChrome.js';
 import { tabBarBottomInset } from '../src/layout/tabBarInset.js';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -118,7 +119,7 @@ function serveDist() {
     return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
 }
 
-async function installPage(context, standalone) {
+async function installPage(context, mode) {
     await context.addInitScript((flag) => {
         localStorage.setItem('amplifood.onboarding.v1', JSON.stringify({ completedAt: Date.now() }));
         localStorage.setItem('amplifood.legal.accepted', JSON.stringify({ version: '2026-10-09', acceptedAt: Date.now() }));
@@ -132,15 +133,21 @@ async function installPage(context, standalone) {
         };
         window.Worker.prototype = OriginalWorker.prototype;
         if (!flag) return;
-        try {
-            Object.defineProperty(navigator, 'standalone', { configurable: true, get: () => true });
-        } catch {
-            navigator.standalone = true;
+        const minimal = flag === 'minimal-ui';
+        if (!minimal) {
+            try {
+                Object.defineProperty(navigator, 'standalone', { configurable: true, get: () => true });
+            } catch {
+                navigator.standalone = true;
+            }
         }
         const orig = window.matchMedia.bind(window);
         window.matchMedia = (query) => {
             const text = String(query);
-            if (text.includes('display-mode: standalone') || text.includes('display-mode: fullscreen')) {
+            const hit = minimal
+                ? text.includes('display-mode: minimal-ui')
+                : text.includes('display-mode: standalone') || text.includes('display-mode: fullscreen');
+            if (hit) {
                 return {
                     matches: true,
                     media: text,
@@ -154,7 +161,25 @@ async function installPage(context, standalone) {
             }
             return orig(query);
         };
-    }, standalone);
+        // Chrome's home-screen webview reports a visual viewport ~100px short of the screen.
+        const realVV = window.visualViewport;
+        const fake = {
+            get height() { return Math.max(0, (window.innerHeight || 0) - 100); },
+            get width() { return window.innerWidth; },
+            offsetTop: 0,
+            offsetLeft: 0,
+            pageTop: 0,
+            pageLeft: 0,
+            scale: 1,
+            addEventListener(type, fn) { realVV?.addEventListener?.(type, fn); },
+            removeEventListener(type, fn) { realVV?.removeEventListener?.(type, fn); },
+        };
+        try {
+            Object.defineProperty(window, 'visualViewport', { configurable: true, get: () => fake });
+        } catch {
+            // keep the real viewport
+        }
+    }, mode);
 }
 
 async function measure(page) {
@@ -240,7 +265,11 @@ try {
     check('status bar black-translucent', stand.statusBar === 'black-translucent', stand.statusBar);
     check('standalone shell has no bottom padding', stand.htmlPad === '0px' && stand.bodyPad === '0px' && stand.rootPad === '0px', `${stand.htmlPad} ${stand.bodyPad} ${stand.rootPad}`);
     check('standalone shell has no bottom margin', stand.htmlMargin === '0px' && stand.bodyMargin === '0px' && stand.rootMargin === '0px', `${stand.htmlMargin} ${stand.bodyMargin} ${stand.rootMargin}`);
-    check('standalone shell matches the visual viewport', Math.abs(stand.rootHeight - stand.vvHeight) < 2, `root ${stand.rootHeight} vv ${stand.vvHeight}`);
+    check(
+        'standalone shell fills the screen when visualViewport is short',
+        stand.vvHeight <= stand.innerHeight - 80 && Math.abs(stand.rootHeight - stand.innerHeight) < 2,
+        `root ${stand.rootHeight} vv ${stand.vvHeight} inner ${stand.innerHeight}`
+    );
     check('standalone root reaches the bottom', Math.abs(stand.innerHeight - stand.rootBottom) < 2, `root ${stand.rootBottom} viewport ${stand.innerHeight}`);
     check('standalone tab bar is flush', gap(stand) < 2, `bar ${stand.barBottom} viewport ${stand.innerHeight} pad ${stand.barPad}`);
     check('standalone pad is one small inset, not env() twice', stand.barMargin === '0px' && stand.barPad === '8px' && !/env\(/.test(stand.barInlinePad || ''), stand.barInlinePad || '');
@@ -263,7 +292,33 @@ try {
     const shot = join(shotDir, 'standalone-tab-bar.png');
     await standalone.page.screenshot({ path: shot, fullPage: false });
     check('screenshot', existsSync(shot), shot);
+
+    await standalone.page.getByRole('tab', { name: 'Recipes' }).click();
+    await standalone.page.getByRole('button', { name: 'Add recipe' }).click();
+    await standalone.page.getByText('Add from link').waitFor({ timeout: 20_000 });
+    const header = await standalone.page.evaluate(() => {
+        const back = document.querySelector('[aria-label="Go back"]');
+        const card = document.querySelector('[data-testid="add-from-link-card"]');
+        return {
+            backTop: back ? back.getBoundingClientRect().top : -1,
+            screenHeight: window.screen.height,
+            cardBg: card ? getComputedStyle(card).backgroundColor : '',
+        };
+    });
+    const minTop = standaloneTopInset(0, header.screenHeight);
+    check('add recipe header clears the status bar', header.backTop >= minTop - 2, `top ${header.backTop} min ${minTop}`);
+    check('dark add-from-link card is not cream', header.cardBg !== 'rgb(255, 244, 234)' && header.cardBg !== '', header.cardBg);
+    const recipeShot = join(shotDir, 'add-recipe-dark.png');
+    await standalone.page.screenshot({ path: recipeShot, fullPage: false });
+    check('add recipe screenshot', existsSync(recipeShot), recipeShot);
     await standalone.context.close();
+
+    const minimal = await openPhone('minimal-ui', 'dark');
+    const mini = await measure(minimal.page);
+    check('chrome minimal-ui is standalone', mini.standaloneClass, JSON.stringify({ cls: mini.standaloneClass, vv: mini.vvHeight, root: mini.rootHeight }));
+    check('minimal-ui shell fills the screen', mini.vvHeight <= mini.innerHeight - 80 && Math.abs(mini.rootHeight - mini.innerHeight) < 2, `root ${mini.rootHeight} vv ${mini.vvHeight}`);
+    check('minimal-ui tab bar is flush', gap(mini) < 2, `bar ${mini.barBottom} viewport ${mini.innerHeight}`);
+    await minimal.context.close();
 
     const safari = await openPhone(false);
     const tab = await measure(safari.page);
@@ -277,6 +332,7 @@ try {
     const desktop = await desktopContext.newPage();
     await desktop.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await desktop.getByRole('link', { name: 'Recipes' }).waitFor({ timeout: 45_000 });
+    await desktop.waitForFunction(() => document.documentElement.classList.contains('af-layout-wide'), { timeout: 10_000 });
     const desk = await measure(desktop);
     check('desktop has no bottom tab bar', desk.barBottom == null && desk.wide, JSON.stringify({ wide: desk.wide, bar: desk.barBottom }));
     await desktopContext.close();

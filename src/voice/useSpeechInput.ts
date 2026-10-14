@@ -11,11 +11,23 @@ import {
     MAX_SPEECH_INPUT_MS,
     shouldRestartRecognitionAfterEnd,
 } from './speechInputSession';
-import { getWebRecognitionCtor, readTranscriptParts, type WebRecognition } from './webSpeechRecognition';
+import { isWebStandalone } from '../layout/useLayoutMode';
+import {
+    captureEngine,
+    isIosWeb,
+    microphoneErrorMessage,
+    pickRecorderMime,
+    SERVER_SPEECH_NOTICE,
+    tearDownCapture,
+} from './speechCapture';
+import { transcribeRecordedAudio } from './serverTranscribe';
+import { getWebRecognitionCtor, readTranscriptParts, WEB_SPEECH_NOTICE, type WebRecognition } from './webSpeechRecognition';
 
 // Tap-to-talk for Ampi: listens until the user taps stop (or the safety cap).
-// Web uses the browser Web Speech API (see WEB_SPEECH_NOTICE). iOS Safari may
-// end recognition after a pause; we restart and append until the user stops.
+// A Safari tab uses the browser Web Speech API. An installed iOS app records
+// and sends the clip to the server, because webkitSpeechRecognition there
+// stays on "Listening" and its stop() can throw. iOS Safari may end a browser
+// recognition session after a pause; we restart and append until the user stops.
 
 export const ANDROID_MIC_RATIONALE = `Talk instead of type? ${ASSISTANT_NAME} listens until you tap stop. You can always type instead.`;
 const RATIONALE_SEEN_KEY = 'amplifood.mic.rationaleSeen';
@@ -48,6 +60,10 @@ export type SpeechInput = {
     recordingElapsedSec: number;
     recordingElapsedLabel: string;
     error: string | null;
+    /** Non-error status, such as waiting on server transcription. */
+    status: string | null;
+    /** Where the audio goes, shown while listening. */
+    notice: string;
     isSupported: boolean;
     /** True when recognition runs in the browser and may leave the device. */
     isWeb: boolean;
@@ -110,20 +126,43 @@ function useRecordingElapsed(active: boolean): number {
     return elapsedSec;
 }
 
+function webCapturePlan() {
+    const standaloneIos =
+        typeof navigator !== 'undefined' && isWebStandalone() && isIosWeb(navigator.userAgent || '');
+    const hasWebSpeech = !!getWebRecognitionCtor();
+    const hasRecorder =
+        typeof MediaRecorder !== 'undefined' && typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+    return {
+        standaloneIos,
+        hasWebSpeech,
+        engine: captureEngine({ standaloneIos, hasWebSpeech, hasRecorder }),
+    };
+}
+
 function useWebSpeechInput(onFinal: (text: string) => void): SpeechInput {
     const Ctor = getWebRecognitionCtor();
-    const supported = !!Ctor;
+    const plan = webCapturePlan();
+    const supported = plan.engine !== 'none' || plan.hasWebSpeech;
+    const notice = plan.engine === 'server' ? SERVER_SPEECH_NOTICE : WEB_SPEECH_NOTICE;
     const [state, setState] = useState<SpeechInputState>(supported ? 'idle' : 'unavailable');
     const [transcript, setTranscript] = useState('');
     const [interimTranscript, setInterimTranscript] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [status, setStatus] = useState<string | null>(null);
     const onFinalRef = useRef(onFinal);
     onFinalRef.current = onFinal;
     const recRef = useRef<WebRecognition | null>(null);
+    const recorderRef = useRef<MediaRecorder | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const chunksRef = useRef<Blob[]>([]);
     const accumulatedRef = useRef('');
     const sessionTextRef = useRef('');
     const userStoppedRef = useRef(false);
+    const stoppingRef = useRef(false);
+    const listeningRef = useRef(false);
+    const engineRef = useRef<'server' | 'web' | 'none'>('none');
     const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const stopRef = useRef<() => void>(() => {});
     const recordingElapsedSec = useRecordingElapsed(state === 'listening');
 
     const clearSafetyTimer = () => {
@@ -145,20 +184,86 @@ function useWebSpeechInput(onFinal: (text: string) => void): SpeechInput {
         setInterimTranscript(sessionTextRef.current.trim());
     }, []);
 
-    const deliverIfNeeded = useCallback(() => {
+    const releaseCapture = useCallback(async () => {
+        const rec = recRef.current;
+        const recorder = recorderRef.current;
+        const stream = streamRef.current;
+        const hadRecorder = !!recorder;
+        const mime = recorder?.mimeType || 'audio/mp4';
+        recRef.current = null;
+        recorderRef.current = null;
+        if (recorder && recorder.state !== 'inactive') {
+            await new Promise<void>((resolve) => {
+                let settled = false;
+                const done = () => {
+                    if (settled) return;
+                    settled = true;
+                    resolve();
+                };
+                recorder.addEventListener('stop', done, { once: true });
+                tearDownCapture({ recognition: rec, recorder, stream });
+                setTimeout(done, 1500);
+            });
+        } else {
+            tearDownCapture({ recognition: rec, recorder, stream });
+        }
+        streamRef.current = null;
+        const chunks = chunksRef.current.slice();
+        chunksRef.current = [];
+        return { chunks, mime, hadRecorder };
+    }, []);
+
+    const finish = useCallback(async () => {
+        if (stoppingRef.current) return;
+        if (!listeningRef.current && !recRef.current && !recorderRef.current && !streamRef.current) return;
+        stoppingRef.current = true;
+        userStoppedRef.current = true;
+        listeningRef.current = false;
+        clearSafetyTimer();
+        const engine = engineRef.current;
         const text = finalizeTranscript(accumulatedRef.current, sessionTextRef.current).trim();
-        resetSessionRefs();
+        accumulatedRef.current = '';
+        sessionTextRef.current = '';
+        const { chunks, mime, hadRecorder } = await releaseCapture();
         setTranscript('');
         setInterimTranscript('');
         setState('idle');
-        if (text) onFinalRef.current(text);
-    }, []);
+        if (engine === 'server') {
+            const blob = new Blob(chunks, { type: mime });
+            if (!blob.size) {
+                setStatus(null);
+                if (hadRecorder) {
+                    setError(`Didn't catch any speech. Try again, or type your message to ${ASSISTANT_NAME}.`);
+                }
+                stoppingRef.current = false;
+                return;
+            }
+            setStatus('Turning speech into text…');
+            try {
+                const heard = await transcribeRecordedAudio(blob, ASSISTANT_NAME);
+                setStatus(null);
+                if (heard) onFinalRef.current(heard);
+                else setError(`Didn't catch any speech. Try again, or type your message to ${ASSISTANT_NAME}.`);
+            } catch (e) {
+                setStatus(null);
+                setError((e as Error)?.message || "Couldn't turn speech into text.");
+            }
+        } else if (text) {
+            onFinalRef.current(text);
+        }
+        stoppingRef.current = false;
+    }, [releaseCapture]);
 
     useEffect(
         () => () => {
             clearSafetyTimer();
             userStoppedRef.current = true;
-            recRef.current?.abort();
+            listeningRef.current = false;
+            tearDownCapture({
+                recognition: recRef.current,
+                recorder: recorderRef.current,
+                stream: streamRef.current,
+            });
         },
         []
     );
@@ -178,8 +283,13 @@ function useWebSpeechInput(onFinal: (text: string) => void): SpeechInput {
                 const msg = errorText(event.error, event.message);
                 if (msg) setError(msg);
                 userStoppedRef.current = true;
+                listeningRef.current = false;
                 clearSafetyTimer();
+                const heard = finalizeTranscript(accumulatedRef.current, sessionTextRef.current).trim();
+                tearDownCapture({ recognition: recRef.current, stream: streamRef.current });
+                recRef.current = null;
                 setState('idle');
+                if (heard) onFinalRef.current(heard);
             };
             rec.onend = () => {
                 if (userStoppedRef.current) {
@@ -201,6 +311,7 @@ function useWebSpeechInput(onFinal: (text: string) => void): SpeechInput {
                     next.start();
                 } catch (e) {
                     setError((e as Error)?.message || 'Could not restart the microphone.');
+                    listeningRef.current = false;
                     setState('idle');
                 }
             };
@@ -214,49 +325,96 @@ function useWebSpeechInput(onFinal: (text: string) => void): SpeechInput {
         attachRecognition(rec);
         recRef.current = rec;
         rec.start();
+        listeningRef.current = true;
         setState('listening');
     }, [Ctor, attachRecognition]);
 
-    const start = useCallback(async () => {
-        if (!Ctor) {
-            setError("This browser doesn't offer speech recognition. Type your message instead.");
+    const armSafetyTimer = useCallback(() => {
+        clearSafetyTimer();
+        safetyTimerRef.current = setTimeout(() => {
+            stopRef.current();
+        }, MAX_SPEECH_INPUT_MS);
+    }, []);
+
+    const startServerCapture = useCallback(async () => {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (userStoppedRef.current) {
+            tearDownCapture({ stream });
+            listeningRef.current = false;
+            setState('idle');
             return;
         }
-        recRef.current?.abort();
+        streamRef.current = stream;
+        const mime = pickRecorderMime((type) => MediaRecorder.isTypeSupported(type));
+        const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        chunksRef.current = [];
+        recorder.ondataavailable = (event) => {
+            if (event.data?.size) chunksRef.current.push(event.data);
+        };
+        recorder.onerror = () => {
+            setError(`Recording failed. Type your message to ${ASSISTANT_NAME} instead.`);
+            userStoppedRef.current = true;
+            listeningRef.current = false;
+            tearDownCapture({ recorder, stream });
+            recorderRef.current = null;
+            streamRef.current = null;
+            setState('idle');
+        };
+        recorderRef.current = recorder;
+        recorder.start();
+        listeningRef.current = true;
+        setState('listening');
+        armSafetyTimer();
+    }, [armSafetyTimer]);
+
+    const start = useCallback(async () => {
+        if (stoppingRef.current) return;
+        const nextPlan = webCapturePlan();
+        if (nextPlan.engine === 'none') {
+            setState('idle');
+            setError(
+                nextPlan.standaloneIos
+                    ? `This installed app can't use the browser's speech recognizer. Type your message to ${ASSISTANT_NAME} instead.`
+                    : "This browser doesn't offer speech recognition. Type your message instead."
+            );
+            return;
+        }
+        userStoppedRef.current = true;
+        await releaseCapture();
         clearSafetyTimer();
         setError(null);
+        setStatus(null);
         resetSessionRefs();
         setTranscript('');
         setInterimTranscript('');
+        engineRef.current = nextPlan.engine;
+        stoppingRef.current = false;
+        listeningRef.current = true;
+        setState('listening');
+        armSafetyTimer();
         try {
-            startRecognition();
-            safetyTimerRef.current = setTimeout(() => {
-                userStoppedRef.current = true;
-                recRef.current?.stop();
-                deliverIfNeeded();
-            }, MAX_SPEECH_INPUT_MS);
+            if (nextPlan.engine === 'server') {
+                await startServerCapture();
+            } else {
+                startRecognition();
+            }
         } catch (e) {
-            setError((e as Error)?.message || 'Could not start the microphone.');
+            listeningRef.current = false;
+            clearSafetyTimer();
+            await releaseCapture();
+            setError(microphoneErrorMessage(e, ASSISTANT_NAME));
             setState('idle');
         }
-    }, [Ctor, deliverIfNeeded, startRecognition]);
+    }, [armSafetyTimer, releaseCapture, startRecognition, startServerCapture]);
 
     const stop = useCallback(() => {
-        if (state !== 'listening') return;
-        userStoppedRef.current = true;
-        clearSafetyTimer();
-        const text = finalizeTranscript(accumulatedRef.current, sessionTextRef.current).trim();
-        accumulatedRef.current = '';
-        sessionTextRef.current = '';
-        setTranscript('');
-        setInterimTranscript('');
-        recRef.current?.stop();
-        setState('idle');
-        if (text) onFinalRef.current(text);
-    }, [state]);
+        void finish();
+    }, [finish]);
+
+    stopRef.current = stop;
 
     const toggle = useCallback(() => {
-        if (state === 'listening') stop();
+        if (listeningRef.current || state === 'listening') stop();
         else void start();
     }, [state, start, stop]);
 
@@ -267,6 +425,8 @@ function useWebSpeechInput(onFinal: (text: string) => void): SpeechInput {
         recordingElapsedSec,
         recordingElapsedLabel: formatRecordingElapsed(recordingElapsedSec),
         error,
+        status,
+        notice,
         isSupported: supported,
         isWeb: true,
         start,
@@ -404,7 +564,11 @@ function useNativeSpeechInput(onFinal: (text: string) => void): SpeechInput {
         sessionTextRef.current = '';
         setTranscript('');
         setInterimTranscript('');
-        mod.stop();
+        try {
+            mod.stop();
+        } catch {
+            // Recognition never started, or already ended. The timer still has to stop.
+        }
         setState('idle');
         if (text) onFinalRef.current(text);
     }, [mod, state]);
@@ -433,6 +597,8 @@ function useNativeSpeechInput(onFinal: (text: string) => void): SpeechInput {
         recordingElapsedSec,
         recordingElapsedLabel: formatRecordingElapsed(recordingElapsedSec),
         error,
+        status: null,
+        notice: 'Speech is turned into text on this device.',
         isSupported: supported,
         isWeb: false,
         start,

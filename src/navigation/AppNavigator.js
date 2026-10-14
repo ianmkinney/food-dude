@@ -2,7 +2,8 @@ import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { Easing, StyleSheet, TouchableOpacity } from 'react-native';
+import { Easing, Platform, StyleSheet, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { getTheme, motion } from '../theme';
 import { useTheme } from '../context/ThemeContext';
@@ -31,7 +32,15 @@ const PartyScreen = lazyScreen(() => import('../screens/PartyScreen'));
 const AccountScreen = lazyScreen(() => import('../screens/AccountScreen'));
 const PaywallScreen = lazyScreen(() => import('../screens/PaywallScreen'));
 import HeaderTitle, { HeaderAccountActions, HeaderPartyButton } from '../components/HeaderTitle';
-import { useLayoutMode } from '../layout/useLayoutMode';
+import { isWebStandalone, useLayoutMode } from '../layout/useLayoutMode';
+import { standaloneTopInset } from '../layout/standaloneChrome';
+
+/** Chrome's iOS home-screen webview reports a 0 top inset while the header draws under the clock. */
+function useStandaloneHeaderStatusBarHeight() {
+    const insets = useSafeAreaInsets();
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !isWebStandalone()) return undefined;
+    return standaloneTopInset(insets.top, window.screen?.height || 0);
+}
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -87,6 +96,7 @@ const TabNavigator = () => {
     const theme = getTheme(isDark);
     const reduceMotion = useReducedMotion();
     const { isDesktop } = useLayoutMode();
+    const headerStatusBarHeight = useStandaloneHeaderStatusBarHeight();
     usePrefetchTabs();
 
     return (
@@ -94,6 +104,7 @@ const TabNavigator = () => {
             tabBar={renderTabBar}
             screenOptions={({ route }) => ({
                 headerShown: !isDesktop,
+                ...(headerStatusBarHeight != null ? { headerStatusBarHeight } : {}),
                 headerTitle: () => <HeaderTitle />,
                 headerTitleAlign: 'center',
                 headerLeft: (props) => <HeaderPartyButton {...props} />,
@@ -152,6 +163,7 @@ const AppNavigator = () => {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
     const { isDesktop } = useLayoutMode();
+    const headerStatusBarHeight = useStandaloneHeaderStatusBarHeight();
 
     useEffect(() => {
         if (hasShareIntent) {
@@ -176,6 +188,7 @@ const AppNavigator = () => {
     return (
         <Stack.Navigator
             screenOptions={{
+                ...(headerStatusBarHeight != null ? { headerStatusBarHeight } : {}),
                 headerShadowVisible: false,
                 contentStyle: { backgroundColor: theme.colors.background },
                 headerStyle: {

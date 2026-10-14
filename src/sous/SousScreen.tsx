@@ -40,7 +40,6 @@ import { useTourTarget } from '../onboarding/tourTargets';
 import { getSpeechEngine, primeSpeechOnWeb, shouldSpeak, type SpeechEngine } from '../voice/speech';
 import { getVoiceSettings, hasSeenWebSpeechNotice, markWebSpeechNoticeSeen, setAutoSpeak, setVoiceMuted } from '../voice/voiceSettings';
 import { useSpeechInput } from '../voice/useSpeechInput';
-import { WEB_SPEECH_NOTICE } from '../voice/webSpeechRecognition';
 import * as ImagePicker from 'expo-image-picker';
 import { recipeOperations } from '../database/operations';
 import { ensureRecipeNutritionAsync } from '../utils/ensureRecipeNutrition';
@@ -1054,13 +1053,17 @@ export default function SousScreen() {
             {!!voiceNote && !listening && !mic.error && (
                 <Text style={[styles.micStatus, { color: c.text.secondary }]}>{voiceNote}</Text>
             )}
-            {(mic.error || listening) && (
-                <Text style={[styles.micStatus, { color: mic.error ? c.error : theme.colors.error }]}>
+            {(mic.error || mic.status || listening) && (
+                <Text
+                    style={[
+                        styles.micStatus,
+                        { color: mic.error ? c.error : listening ? theme.colors.error : c.text.secondary },
+                    ]}
+                >
                     {mic.error ||
+                        mic.status ||
                         (listening
-                            ? `Recording ${mic.recordingElapsedLabel} — tap the red stop button when you're done.${
-                                  mic.isWeb ? ` ${WEB_SPEECH_NOTICE}` : ' Speech is turned into text on this device.'
-                              }`
+                            ? `Recording ${mic.recordingElapsedLabel} — tap the red stop button when you're done. ${mic.notice}`
                             : '')}
                 </Text>
             )}
@@ -1104,7 +1107,7 @@ export default function SousScreen() {
                             accessibilityLiveRegion="polite"
                             accessibilityHint="Tap to dismiss"
                         >
-                            <Text style={[styles.micTipText, { color: c.text.primary }]}>{WEB_SPEECH_NOTICE}</Text>
+                            <Text style={[styles.micTipText, { color: c.text.primary }]}>{mic.notice}</Text>
                             <View style={[styles.micTipArrow, { backgroundColor: c.surfaceElevated, borderColor: c.border }]} />
                         </Pressable>
                     </Enter>
@@ -1233,7 +1236,7 @@ export default function SousScreen() {
                                 }
                                 accessibilityHint={
                                     mic.isWeb
-                                        ? 'Tap stop when finished. Your browser turns speech into text and may send the audio to Apple or Google'
+                                        ? `Tap stop when finished. ${mic.notice}`
                                         : 'Tap stop when finished. Speech is turned into text on this device'
                                 }
                             >

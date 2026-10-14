@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
+import { isStandaloneDisplay, measureLargeViewportHeight, standaloneShellHeight } from './standaloneChrome';
 
 export const DESKTOP_MIN_WIDTH = 1024;
 export const TABLET_MIN_WIDTH = 768;
@@ -31,19 +32,17 @@ const MOBILE_VIEWPORT =
     'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
 const DESKTOP_VIEWPORT = 'width=device-width, initial-scale=1';
 
-/** iOS home-screen app (`navigator.standalone`) or a browser display-mode standalone/fullscreen. */
+/** Home-screen app: navigator.standalone, or display-mode standalone / fullscreen / minimal-ui. */
 export function isWebStandalone(): boolean {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
     const nav = navigator as Navigator & { standalone?: boolean };
-    if (nav.standalone === true) return true;
-    try {
-        return (
-            window.matchMedia('(display-mode: standalone)').matches ||
-            window.matchMedia('(display-mode: fullscreen)').matches
-        );
-    } catch {
-        return false;
-    }
+    return isStandaloneDisplay(nav.standalone === true, (mode) => {
+        try {
+            return window.matchMedia(`(display-mode: ${mode})`).matches;
+        } catch {
+            return false;
+        }
+    });
 }
 
 /** Unlock pinch-zoom and page scroll on laptop layouts only (web). */
@@ -64,6 +63,8 @@ export function useDesktopViewportUnlock(isDesktop: boolean) {
             body.style.position = 'static';
             body.style.overflow = 'auto';
             body.style.inset = '';
+            root.style.height = '';
+            root.style.maxHeight = '';
             body.style.height = '';
             body.style.maxHeight = '';
             if (appRoot) {
@@ -89,11 +90,22 @@ export function useDesktopViewportUnlock(isDesktop: boolean) {
                 appRoot.style.margin = '0';
             }
             if (standalone) {
-                // visualViewport matches the screen. 100dvh and
-                // -webkit-fill-available do not, on the iOS home-screen app.
+                // visualViewport and 100dvh are ~100px short here (WebKit still
+                // subtracts the Safari toolbar). Pin to 100lvh / screen height.
                 const pinShell = () => {
-                    const height = Math.round(window.visualViewport?.height || window.innerHeight);
+                    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+                    const height = standaloneShellHeight({
+                        viewportHeight,
+                        largeHeight: measureLargeViewportHeight(document),
+                        screenHeight: window.screen?.height || 0,
+                        innerHeight: window.innerHeight,
+                    });
                     const px = `${height}px`;
+                    root.style.height = px;
+                    root.style.minHeight = '0';
+                    root.style.maxHeight = px;
+                    body.style.top = '0';
+                    body.style.bottom = 'auto';
                     body.style.padding = '0';
                     body.style.paddingBottom = '0';
                     body.style.marginBottom = '0';
@@ -101,6 +113,8 @@ export function useDesktopViewportUnlock(isDesktop: boolean) {
                     body.style.minHeight = '0';
                     body.style.maxHeight = px;
                     if (appRoot) {
+                        appRoot.style.top = '0';
+                        appRoot.style.bottom = 'auto';
                         appRoot.style.height = px;
                         appRoot.style.minHeight = '0';
                         appRoot.style.maxHeight = px;
@@ -116,10 +130,16 @@ export function useDesktopViewportUnlock(isDesktop: boolean) {
                 removePin = () => {
                     vv?.removeEventListener('resize', pinShell);
                     window.removeEventListener('orientationchange', pinShell);
+                    root.style.height = '';
+                    root.style.maxHeight = '';
                 };
             } else if (appRoot) {
+                root.style.height = '';
+                root.style.maxHeight = '';
                 body.style.height = '';
                 body.style.maxHeight = '';
+                body.style.bottom = '';
+                appRoot.style.bottom = '';
                 appRoot.style.height = '100vh';
                 appRoot.style.height = '100dvh';
                 appRoot.style.maxHeight = '';
