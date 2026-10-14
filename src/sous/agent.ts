@@ -14,9 +14,20 @@ import {
     recipeEventsFromCards,
     recordChatRecipes,
 } from '../chat/chatRecipes';
+import { AMPI_MULTI_RECIPE_RULE, AMPI_NO_CRISIS_SCRIPT_RULE } from '../../api/_lib/ampiActionSchema.js';
 import { parseRecipeId, normalizeToolCalls } from '../../api/_lib/ampiToolNormalize.js';
+import { recipeCountRetryNote, requestedNewRecipeCount } from '../../api/_lib/recipeRequestCount.js';
 import { TOOL_SPEC, runTools, type SousCard, type ToolCall } from './tools';
 import { getIncludeHealthData } from '../consent/consentStore';
+import {
+    CRISIS_ECHO_RETRY_NOTE,
+    CRISIS_REPLY,
+    isCrisisMessage,
+    replacementForCrisisEcho,
+    unwantedCrisisEcho,
+} from '../safety/crisisIntent.js';
+
+export { CRISIS_REPLY, isCrisisMessage };
 
 // Provider-agnostic tool calling: the assistant answers with one JSON object holding a
 // reply and the app actions to run. The same prompt works on Claude, GPT, Grok
@@ -35,18 +46,6 @@ export type SousResult = {
     /** Images to persist on the user message row for follow-up turns. */
     userChatImages?: { data: string; mimeType: string }[];
 };
-
-export const CRISIS_REPLY =
-    "I'm only a cooking assistant and can't help with this. If you're in crisis or thinking about hurting yourself, call or text 988 (Suicide & Crisis Lifeline, US). If you or someone else is in danger or having a medical emergency or a severe allergic reaction, call 911 now.";
-
-// Checked on the device before anything is sent, so the redirect is fixed and
-// immediate rather than left to the model.
-const CRISIS_PATTERN =
-    /\b(suicid\w*|kill (myself|me)|end (my|it all)|self[- ]?harm|hurt(ing)? myself|cutting myself|overdos\w*|want to die|can'?t breathe|anaphyla\w*|throat (is )?(closing|swelling)|allergic reaction|epipen|being abused|abuse)\b/i;
-
-export function isCrisisMessage(text: string): boolean {
-    return CRISIS_PATTERN.test(text);
-}
 
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -102,7 +101,7 @@ function systemPrompt(context: string): string {
 Be warm, quick and practical. Keep replies short (under 120 words) unless the user asks for a full meal plan, a full recipe, pairings, or a cost breakdown.
 Scope: cooking, food, recipes, groceries, meal planning and how to use AmpliFood. Politely decline anything else and steer back to cooking.
 Don't ask personal or emotional questions the user didn't raise. Never guilt the user, say you miss them, or nudge them to come back or use the app more.
-If the user mentions self-harm, suicide, abuse, a medical emergency or a severe allergic reaction, reply only with: "${CRISIS_REPLY}" and no actions.
+${AMPI_NO_CRISIS_SCRIPT_RULE}
 You can take real actions in the app with these tools:
 ${TOOL_SPEC}
 
@@ -114,8 +113,9 @@ Full meals & pairings:
 Rules:
 - Only call a tool when the user asked for that action or clearly agreed to it. Never invent recipe ids; use ids from the list below or a recipe_title.
 - When you write new recipes the user wants to keep, call create_recipe for each dish (main and sides) instead of pasting full recipes in the reply. Every create_recipe must include per-serving nutrition estimates (calories, protein, carbohydrates, fat, fiber, sugar, sodium) and servings — these are AI estimates stored on the recipe. Then add_to_grocery for missing ingredients and estimate_cost when they want pricing.
+- ${AMPI_MULTI_RECIPE_RULE}
 - Only call create_recipe when the user asks for a new recipe or a new dish you wrote for them. Never use it to rename, tweak or "finalize" a recipe that is already saved; call update_recipe with that recipe's id instead.
-- When the user is refining a recipe you just discussed (follow-up answers, "you choose", "make it spicier", "call it…"), stay on that exact recipe. Never invent a different dish.
+- When the user is refining a recipe you just discussed (follow-up answers, "you choose", "make it spicier", "call it…"), stay on that exact recipe. Never invent a different dish for a tweak. A request for other dishes or a count of recipes ("2 different ones", "make me 3 dinner recipes") is a command to write those new recipes now, not a tweak.
 - When the user asks to add, save, or import a recipe from images, a link, pasted text, or a PDF, you CAN see that content (including photos). Never say you cannot read images or attachments. Infer a sensible recipe title from the dish name in the photo, the page title, or the main ingredients — then call create_recipe or import_recipe immediately with that title. Do not ask what to name it; the user can rename later in the recipe book.
 - When the user sends a recipe link (TikTok, Instagram, or a recipe website) or says to save/import a link, call import_recipe with that url immediately. Do not ask what to name it — use the post or page title. Keep the reply to one short sentence; the app shows the recipe card.
 - If the user asks you to pick a name ("you choose", "you pick", "surprise me"), choose one that matches that recipe's actual ingredients and dish type (a soup stays a soup), then call update_recipe with the new title. If its current title already fits, say so and keep it.
@@ -128,7 +128,7 @@ Rules:
 - Mention allergens when they are obvious (nuts, shellfish, gluten, dairy, eggs). You are not a doctor or dietitian; don't give medical advice.
 - Follow the food-safety rules above: give safe internal temperatures, no canning instructions of your own, no infant or pregnancy feeding guidance, and refuse non-food or unsafe items.
 - Formatting: the app renders light Markdown in "reply" (**bold**, *italics*, short "- " or "1. " lists, links). Keep it light; no tables or HTML.
-- Voice: replies may be read aloud by an expressive voice that understands audio tags in square brackets. Where it feels natural, add at most one or two per reply, right before the words they colour, for example [warmly], [excited], [laughs], [chuckles], [sighs], [whispers], [curious]. Most short replies need none. Never put tags inside tool args, recipe titles, ingredient lists, allergy or food-safety warnings, or the crisis reply. The app hides them on screen.
+- Voice: replies may be read aloud by an expressive voice that understands audio tags in square brackets. Where it feels natural, add at most one or two per reply, right before the words they colour, for example [warmly], [excited], [laughs], [chuckles], [sighs], [whispers], [curious]. Most short replies need none. Never put tags inside tool args, recipe titles, ingredient lists, or allergy or food-safety warnings. The app hides them on screen.
 - Respond with ONLY one JSON object, no markdown fences: {"reply": string, "actions": [{"tool": string, "args": object}]}. Use "actions": [] when no action is needed. Never paste raw tool JSON in the reply; the app renders cards from actions.
 
 ${context}`;
@@ -146,8 +146,11 @@ function recipeSaveIntent(message: string, hasAttachments: boolean): boolean {
 }
 
 function shouldAutoApplyRecipeSave(message: string, attachments: PendingAttachment[], actions: ToolCall[]): boolean {
-    if (!recipeSaveIntent(message, attachments.length > 0)) return false;
-    return actions.some((a) => a.tool === 'create_recipe' || a.tool === 'import_recipe');
+    const writesRecipe = actions.some((a) => a.tool === 'create_recipe' || a.tool === 'import_recipe');
+    if (!writesRecipe) return false;
+    if (recipeSaveIntent(message, attachments.length > 0)) return true;
+    const wanted = requestedNewRecipeCount(message);
+    return wanted != null && wanted >= 2;
 }
 
 function buildApiTurns(
@@ -178,6 +181,35 @@ function buildApiTurns(
         });
     }
     return turns.slice(-MAX_HISTORY);
+}
+
+function replyEchoesCrisis(message: string, raw: string, reply: string): boolean {
+    return unwantedCrisisEcho(message, reply) || unwantedCrisisEcho(message, raw);
+}
+
+async function completeSousModel(
+    system: string,
+    message: string,
+    apiTurns: { role: 'user' | 'assistant'; text: string; images?: { data: string; mimeType: string }[] }[],
+    images: { data: string; mimeType: string }[],
+    anyImages: boolean,
+    extraNote?: string
+): Promise<string> {
+    const noted = extraNote ? `${system}\n\n${extraNote}` : system;
+    if (anyImages) {
+        return generateMultimodal({
+            system: noted,
+            turns: apiTurns,
+            feature: 'chat',
+            prompt: message,
+            images,
+            video: null,
+        });
+    }
+    return generateText(
+        `${noted}\n\nConversation:\n${apiTurns.map((t) => `${t.role === 'user' ? 'User' : ASSISTANT_NAME}: ${t.text}`).join('\n')}`,
+        { feature: 'chat' }
+    );
 }
 
 export async function askSous(
@@ -217,22 +249,35 @@ export async function askSous(
         images.length > 0 || merged.some((t) => t.role === 'user' && (t.images?.length || 0) > 0);
     const apiTurns = buildApiTurns(merged, message, images);
 
-    const raw = anyImages
-        ? await generateMultimodal({
-              system,
-              turns: apiTurns,
-              feature: 'chat',
-              prompt: message,
-              images,
-              video: null,
-          })
-        : await generateText(
-              `${system}\n\nConversation:\n${apiTurns.map((t) => `${t.role === 'user' ? 'User' : ASSISTANT_NAME}: ${t.text}`).join('\n')}`,
-              { feature: 'chat' }
-          );
+    let raw = await completeSousModel(system, message, apiTurns, images, anyImages);
+    let parsed = parseAmpiResponse(raw);
+    if (replyEchoesCrisis(message, raw, parsed.reply)) {
+        raw = await completeSousModel(system, message, apiTurns, images, anyImages, CRISIS_ECHO_RETRY_NOTE);
+        parsed = parseAmpiResponse(raw);
+        if (replyEchoesCrisis(message, raw, parsed.reply)) {
+            parsed = { reply: replacementForCrisisEcho(parsed.actions), actions: parsed.actions, parsed: true };
+        }
+    }
+    const wantedRecipes = requestedNewRecipeCount(message);
+    const created = parsed.actions.filter((action) => action.tool === 'create_recipe');
+    if (wantedRecipes != null && wantedRecipes >= 2 && created.length < wantedRecipes) {
+        raw = await completeSousModel(
+            system,
+            message,
+            apiTurns,
+            images,
+            anyImages,
+            recipeCountRetryNote(wantedRecipes, created.length)
+        );
+        const again = parseAmpiResponse(raw);
+        const againCreated = again.actions.filter((action) => action.tool === 'create_recipe');
+        if (!replyEchoesCrisis(message, raw, again.reply) && againCreated.length >= created.length) {
+            parsed = again;
+        }
+    }
+    const { reply, actions } = parsed;
     const visionNote = peekMultimodalVisionNote();
     const modelFallbackNote = peekModelFallbackNote();
-    const { reply, actions } = parseAmpiResponse(raw);
     const recentRecipeIds = await recentChatRecipeIds(CHAT_THREAD_AMPI).catch(() => []);
     const toolOptions = { userRecipeImageUri, recentRecipeIds, reply };
 

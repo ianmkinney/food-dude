@@ -1,6 +1,6 @@
 {
   "name": "amplifood",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -66,7 +66,10 @@
     "test:standalone-tabbar": "node scripts/test-standalone-tabbar.mjs",
     "test:standalone-chrome": "node scripts/test-standalone-chrome.mjs",
     "test:speech-capture": "node scripts/test-speech-capture.mjs",
-    "test:speech-input-session": "node scripts/test-speech-input-session.mjs"
+    "test:speech-input-session": "node scripts/test-speech-input-session.mjs",
+    "test:crisis-intent": "node scripts/test-crisis-intent.mjs",
+    "test:crisis-echo-turn": "node scripts/test-crisis-echo-turn.mjs",
+    "test:multi-recipe-actions": "node scripts/test-multi-recipe-actions.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/fredoka": "^0.4.1",

@@ -1,6 +1,11 @@
 {
   "releases": [
     {
+      "version": "1.0.7",
+      "date": "2026-10-14",
+      "body": "Ampi stays on cooking, and a request for several recipes comes back as separate cards.\n\n- A cooking reply such as \"Looks good, 2 different ones now\" no longer gets the crisis hotline message. That script was written into Ampi's instructions, so smaller models copied it onto ordinary chat. It is used only when the message is clearly about self-harm, suicide, a medical emergency, or a severe allergic reaction happening now\n- \"Make me 3 dinner recipes\" or \"give us 2 meals\" writes every requested recipe in the same reply, one card each, using the pantry and sensible defaults instead of asking a follow-up question"
+    },
+    {
       "version": "1.0.6",
       "date": "2026-10-14",
       "body": "Home-screen app from Chrome, and dark mode on Add Recipe.\n\n- The tab bar on an iPhone home-screen app sits on the bottom edge, including when the app was added from Chrome. Labels sit just above the home indicator. The bar background runs to the screen edge\n- v1.0.5 pinned that shell to `visualViewport`, which on the installed app is still about 100px short of the screen. The shell now uses the large viewport (`100lvh`), and Chrome's Add to Home Screen counts as installed (`minimal-ui` as well as standalone)\n- Page headers clear the status bar when that webview reports no top safe area\n- On the installed app, the Ampi microphone records until you tap stop, then sends the message. The browser speech recognizer there never returned a transcript and the stop button could not end it. Speech is transcribed on the server, and a failure is shown instead of a silent \"Listening…\"\n- Add Recipe's \"Add from link\" card follows dark mode, with readable hint text and a dark input"

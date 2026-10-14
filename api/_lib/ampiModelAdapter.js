@@ -52,7 +52,7 @@ export function buildAmpiOpenRouterBody({ model, messages, maxTokens, strategy, 
         stream,
     };
     if (strategy === AMPI_STRATEGY.NATIVE_TOOLS) {
-        return { ...base, tools: AMPI_OPENAI_TOOLS, tool_choice: 'auto' };
+        return { ...base, tools: AMPI_OPENAI_TOOLS, tool_choice: 'auto', parallel_tool_calls: true };
     }
     if (strategy === AMPI_STRATEGY.JSON_SCHEMA) {
         return { ...base, response_format: ampiStructuredResponseFormat() };

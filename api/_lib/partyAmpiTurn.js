@@ -30,7 +30,14 @@ export function synthesizePartyAmpiReplyText(reply, actions = []) {
     if (!Array.isArray(actions) || !actions.length) {
         return '';
     }
-    const create = actions.find((a) => a?.tool === 'create_recipe');
+    const creates = actions.filter((a) => a?.tool === 'create_recipe' && a.args);
+    if (creates.length > 1) {
+        const titles = creates
+            .map((a) => resolveRecipeTitleForSave(a.args) || a.args.title)
+            .filter(Boolean);
+        if (titles.length) return `Here are ${titles.length} ideas for the party: ${titles.join(', ')}.`;
+    }
+    const create = creates[0];
     if (create?.args) {
         const title = resolveRecipeTitleForSave(create.args) || create.args.title || 'this dish';
         return `Here's a ${title} idea for the party.`;

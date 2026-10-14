@@ -115,7 +115,7 @@ export type SousCard =
 export const TOOL_SPEC = `
 - find_recipes {"query": string}: search the user's saved recipes.
 - import_recipe {"url"?: string, "text"?: string}: import a recipe from a link, pasted text, or an attached file into the recipe book.
-- create_recipe {"title", "description"?, "servings"?, "prep_time"?, "cook_time"?, "calories"?, "protein"?, "carbohydrates"?, "fat"?, "fiber"?, "sugar"?, "sodium"?, "ingredients": [{"ingredient", "quantity"?, "unit"?}], "instructions": [string]}: save a NEW recipe (from an attachment or your draft). Always include per-serving nutrition estimates (calories, protein, carbohydrates, fat, fiber, sugar, sodium) and servings when saving.
+- create_recipe {"title", "description"?, "servings"?, "prep_time"?, "cook_time"?, "calories"?, "protein"?, "carbohydrates"?, "fat"?, "fiber"?, "sugar"?, "sodium"?, "ingredients": [{"ingredient", "quantity"?, "unit"?}], "instructions": [string]}: save one NEW recipe (from an attachment or your draft). If the user asked for several recipes or meals, emit one create_recipe per dish in the same response (a count of N means N create_recipe actions). Always include per-serving nutrition estimates (calories, protein, carbohydrates, fat, fiber, sugar, sodium) and servings when saving. Fill fields from this template; do not leave a requested recipe out to ask a question.
 - update_recipe {"recipe_id": number (or "#10"), "title"?, "description"?, "servings"?, "prep_time"?, "cook_time"?, "calories"?, "protein"?, "carbohydrates"?, "fat"?, "fiber"?, "sugar"?, "sodium"?, "ingredients"?: [{"ingredient", "quantity"?, "unit"?}], "instructions"?: [string]}: rename or edit a recipe that is already saved. Always set recipe_id to the numeric id from the recipe list (e.g. 10, not "?"). Send only fields that change; ingredients and instructions replace the whole list. Nutrition fields update per-serving estimates on the recipe.
 If the user attached a photo, the app uses it as the recipe image automatically; never put image URLs in tool arguments.
 - add_to_meal_plan {"recipe_id"?: number, "recipe_title"?: string, "date": "YYYY-MM-DD", "meal_type": "breakfast"|"lunch"|"dinner"}: schedule a saved recipe.
@@ -517,7 +517,7 @@ export async function runTools(calls: ToolCall[], options: RunOptions = {}): Pro
         recentRecipeIds: options.recentRecipeIds,
     }) as ToolCall[];
     const cards: SousCard[] = [];
-    for (const call of normalized.slice(0, 5)) {
+    for (const call of normalized.slice(0, 8)) {
         try {
             cards.push(await run(call, options));
         } catch (error) {
