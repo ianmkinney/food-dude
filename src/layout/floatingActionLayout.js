@@ -1,4 +1,7 @@
+import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { isWebStandalone } from './useLayoutMode';
+import { tabBarBottomInset } from './tabBarInset';
 
 export const FAB_SIZE = 56;
 export const FAB_GAP = 12;
@@ -23,7 +26,8 @@ export function getListPaddingBottomForFAB(insetsBottom = 0, fabCount = 1) {
  */
 export function useFloatingActionLayout(fabCount = 1) {
     const insets = useSafeAreaInsets();
-    const bottom = getFloatingActionBottom(insets.bottom);
+    const inset = tabBarBottomInset(insets.bottom, Platform.OS === 'web' && isWebStandalone());
+    const bottom = getFloatingActionBottom(inset);
     const containerStyle = {
         position: 'absolute',
         left: FAB_MARGIN_X,
@@ -33,6 +37,6 @@ export function useFloatingActionLayout(fabCount = 1) {
         alignItems: 'center',
         zIndex: 10,
     };
-    const listPaddingBottom = getListPaddingBottomForFAB(insets.bottom, fabCount);
+    const listPaddingBottom = getListPaddingBottomForFAB(inset, fabCount);
     return { containerStyle, listPaddingBottom, bottom };
 }

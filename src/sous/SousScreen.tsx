@@ -17,6 +17,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { isWebStandalone } from '../layout/useLayoutMode';
+import { tabBarBottomInset } from '../layout/tabBarInset';
 import { getTheme, motion } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import GuitarMark from '../brand/GuitarMark';
@@ -143,6 +145,7 @@ export default function SousScreen() {
     const { height: windowHeight } = useWindowDimensions();
     const { isDesktop } = useLayoutMode();
     const insets = useSafeAreaInsets();
+    const bottomInset = tabBarBottomInset(insets.bottom, Platform.OS === 'web' && isWebStandalone());
     const theme = getTheme(isDark, undefined, undefined);
     const navigation = useNavigation() as unknown as Nav;
     useOnboardingTour();
@@ -1085,9 +1088,9 @@ export default function SousScreen() {
                             Platform.OS === 'web' && composerFocused
                                 ? keyboardOpen
                                     ? 4
-                                    : Math.max(insets.bottom, 8)
+                                    : bottomInset
                                 : composerFocused && !keyboardOpen
-                                  ? Math.max(insets.bottom, 8)
+                                  ? bottomInset
                                   : 8,
                     },
                 ]}
