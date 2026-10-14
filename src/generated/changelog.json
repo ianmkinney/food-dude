@@ -1,6 +1,11 @@
 {
   "releases": [
     {
+      "version": "1.0.8",
+      "date": "2026-10-14",
+      "body": "The add button is back on the bottom-right, and you can park it wherever you like.\n\n- Recipes, Pantry, and Grocery share one + button position. It starts at the bottom-right, just above the tab bar. List rows keep extra space on that side so pantry delete and edit, and grocery row actions, stay tappable\n- Grocery's sparkles button sits with the +, to its left\n- Hold the + for 3 seconds and the button wiggles. Drag it anywhere above the tab bar, then tap it to leave it there. That spot is remembered on every page, including after you rotate the phone\n- A short tap still adds an item. The tap that unlocks dragging does not\n- Account → Reset button position puts it back on the bottom-right"
+    },
+    {
       "version": "1.0.7",
       "date": "2026-10-14",
       "body": "Ampi stays on cooking, and a request for several recipes comes back as separate cards.\n\n- A cooking reply such as \"Looks good, 2 different ones now\" no longer gets the crisis hotline message. That script was written into Ampi's instructions, so smaller models copied it onto ordinary chat. It is used only when the message is clearly about self-harm, suicide, a medical emergency, or a severe allergic reaction happening now\n- \"Make me 3 dinner recipes\" or \"give us 2 meals\" writes every requested recipe in the same reply, one card each, using the pantry and sensible defaults instead of asking a follow-up question"

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 390px Pantry with expanded item — floating add button on the bottom-left.
+ * 390px Pantry with expanded item — floating add button on the bottom-right.
  * Run: npm run build:web && node scripts/capture-pantry-fab-left-screenshot.mjs
  */
 import { spawn } from 'node:child_process';
@@ -62,10 +62,10 @@ async function main() {
         const path = join(outDir, 'pantry-expanded-fab-left-390.png');
         await page.screenshot({ path, fullPage: false });
         console.log('Wrote', path);
-        const addFab = page.getByRole('button', { name: 'Add pantry item' });
+        const addFab = page.locator('[aria-label="Add pantry item"]').last();
         const box = await addFab.boundingBox();
-        if (!box || box.x > 120) {
-            throw new Error(`Expected add FAB on the left; got x=${box?.x}`);
+        if (!box || box.x < 200) {
+            throw new Error(`Expected add FAB on the right; got x=${box?.x}`);
         }
     } finally {
         await browser.close();

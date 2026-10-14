@@ -18,7 +18,7 @@ import { recipeOperations } from '../database/operations';
 import { useActiveEnhanceRecipeIds } from '../hooks/useRecipeEnhanceStatus';
 import ElevatedCard from '../components/ElevatedCard';
 import AnimatedPressable from '../components/AnimatedPressable';
-import FloatingActionButton from '../components/FloatingActionButton';
+import FabCluster from '../components/FabCluster';
 import EmptyState from '../components/EmptyState';
 import { navigateWithTransition } from '../motion/viewTransition';
 import { ASSISTANT_NAME } from '../config/assistant';
@@ -127,8 +127,8 @@ const RecipeBookScreen = ({ navigation }) => {
     const [filter, setFilter] = useState('all'); // 'all', 'cooked', 'uncooked'
     const enhancingIds = useActiveEnhanceRecipeIds();
     const [lightboxUri, setLightboxUri] = useState(null);
-    const { containerStyle: fabContainerStyle, listPaddingBottom: fabListPadding } =
-        useFloatingActionLayout(1);
+    const [frame, setFrame] = useState({ width: 0, height: 0 });
+    const { listInset } = useFloatingActionLayout(1, frame);
 
     // Header customization removed as per user request
     const loadRecipes = useCallback(async () => {
@@ -243,7 +243,13 @@ const RecipeBookScreen = ({ navigation }) => {
     const recipeCountLabel = loading ? 'Loading…' : `${recipes.length} saved`;
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View
+            style={[styles.container, { backgroundColor: theme.colors.background }]}
+            onLayout={(event) => {
+                const { width, height } = event.nativeEvent.layout;
+                setFrame((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+            }}
+        >
             <ImageLightbox visible={!!lightboxUri} uri={lightboxUri} onClose={() => setLightboxUri(null)} isDark={isDark} />
             {isDesktop ? (
                 <DesktopPageHeader title="Recipe Book" subtitle={recipeCountLabel}>
@@ -402,7 +408,14 @@ const RecipeBookScreen = ({ navigation }) => {
                     initialNumToRender={8}
                     maxToRenderPerBatch={6}
                     windowSize={7}
-                    contentContainerStyle={[styles.listContent, { paddingBottom: fabListPadding }]}
+                    contentContainerStyle={[
+                        styles.listContent,
+                        {
+                            paddingLeft: listInset.paddingLeft,
+                            paddingRight: listInset.paddingRight,
+                            paddingBottom: listInset.paddingBottom,
+                        },
+                    ]}
                     ListEmptyComponent={!loading && renderEmptyState()}
                     refreshing={loading}
                     onRefresh={loadRecipes}
@@ -410,16 +423,20 @@ const RecipeBookScreen = ({ navigation }) => {
             )}
 
             {!isDesktop ? (
-                <View style={fabContainerStyle} pointerEvents="box-none">
-                    <FloatingActionButton
-                        theme={theme}
-                        accessibilityLabel="Add recipe"
-                        onPress={() => navigation.navigate('AddRecipe')}
-                        morphTo="af-sheet"
-                    >
-                        <Ionicons name="add" size={28} color="#FFFFFF" />
-                    </FloatingActionButton>
-                </View>
+                <FabCluster
+                    frame={frame}
+                    actions={[
+                        {
+                            key: 'add',
+                            theme,
+                            accessibilityLabel: 'Add recipe',
+                            testID: 'fab-add',
+                            morphTo: 'af-sheet',
+                            onPress: () => navigation.navigate('AddRecipe'),
+                            icon: <Ionicons name="add" size={28} color="#FFFFFF" />,
+                        },
+                    ]}
+                />
             ) : null}
         </View>
     );

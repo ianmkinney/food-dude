@@ -1,42 +1,50 @@
-import { Platform } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { isWebStandalone } from './useLayoutMode';
-import { tabBarBottomInset } from './tabBarInset';
+import {
+    fabDragBounds,
+    listClearance,
+    readFabPosition,
+    subscribeFabPlacement,
+} from './fabPlacement';
 
-export const FAB_SIZE = 56;
-export const FAB_GAP = 12;
-export const FAB_MARGIN_X = 20;
-/** Matches AppTabBar: paddingTop 6 + minHeight 52. */
-export const TAB_BAR_MAIN_HEIGHT = 58;
-export const FAB_ABOVE_TAB_MARGIN = 12;
+export {
+    FAB_ABOVE_TAB_MARGIN,
+    FAB_GAP,
+    FAB_LONG_PRESS_MS,
+    FAB_MARGIN_X,
+    FAB_SIZE,
+} from './fabPlacement';
 
-export function getFloatingActionBottom(insetsBottom = 0) {
-    return Math.max(insetsBottom, 8) + TAB_BAR_MAIN_HEIGHT + FAB_ABOVE_TAB_MARGIN;
-}
-
-export function getListPaddingBottomForFAB(insetsBottom = 0, fabCount = 1) {
-    const stack =
-        fabCount > 1 ? FAB_SIZE * fabCount + FAB_GAP * (fabCount - 1) : FAB_SIZE;
-    return getFloatingActionBottom(insetsBottom) + stack + 24;
+export function useFabPosition() {
+    const [pos, setPos] = useState(readFabPosition);
+    useEffect(() => subscribeFabPlacement(setPos), []);
+    useFocusEffect(
+        useCallback(() => {
+            setPos(readFabPosition());
+        }, [])
+    );
+    return pos;
 }
 
 /**
- * Mobile floating actions: bottom-left, above the tab bar.
- * @param {number} fabCount 1 or 2 stacked horizontally in the container
+ * Shared placement plus list insets so a right-side (or dragged) FAB
+ * does not cover pantry delete/edit or grocery swipe actions.
+ * @param {number} fabCount
+ * @param {{ width?: number, height?: number }} frame screen box below the header
  */
-export function useFloatingActionLayout(fabCount = 1) {
+export function useFloatingActionLayout(fabCount = 1, frame = { width: 0, height: 0 }) {
+    const norm = useFabPosition();
     const insets = useSafeAreaInsets();
-    const inset = tabBarBottomInset(insets.bottom, Platform.OS === 'web' && isWebStandalone());
-    const bottom = getFloatingActionBottom(inset);
-    const containerStyle = {
-        position: 'absolute',
-        left: FAB_MARGIN_X,
-        bottom,
-        flexDirection: 'row',
-        gap: FAB_GAP,
-        alignItems: 'center',
-        zIndex: 10,
-    };
-    const listPaddingBottom = getListPaddingBottomForFAB(inset, fabCount);
-    return { containerStyle, listPaddingBottom, bottom };
+    const listInset = useMemo(() => {
+        const bounds = fabDragBounds({
+            width: frame.width || 390,
+            height: frame.height || 700,
+            insetLeft: insets.left,
+            insetRight: insets.right,
+            insetTop: 0,
+        });
+        return listClearance({ norm, bounds, fabCount });
+    }, [norm, frame.width, frame.height, fabCount, insets.left, insets.right]);
+    return { listInset, norm };
 }

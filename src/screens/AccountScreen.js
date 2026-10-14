@@ -37,6 +37,7 @@ import AnimatedPressable from '../components/AnimatedPressable';
 import { useMonetization } from '../monetization/MonetizationContext';
 import { USER_SAFETY_SUMMARY, USER_SAFETY_TITLE } from '../constants/userSafety';
 import { useLayoutMode } from '../layout/useLayoutMode';
+import { resetFabPosition } from '../layout/fabPlacement';
 import AccountDesktopShell from '../components/layout/AccountDesktopShell';
 import DesktopPageHeader from '../components/layout/DesktopPageHeader';
 
@@ -450,6 +451,33 @@ const AccountScreen = ({ navigation, route }) => {
                 >
                     <Ionicons name="shield-outline" size={24} color={theme.colors.text.primary} />
                     <Text style={[styles.settingText, { color: theme.colors.text.primary }]}>Privacy</Text>
+                    <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
+                </ElevatedCard>
+
+                <ElevatedCard
+                    theme={theme}
+                    style={styles.settingItem}
+                    tilt={false}
+                    accessibilityRole="button"
+                    accessibilityLabel="Reset button position"
+                    testID="reset-fab-position"
+                    onPress={() => {
+                        const message = 'Move the add button back to the bottom-right on every page?';
+                        const apply = () => resetFabPosition();
+                        if (Platform.OS === 'web') {
+                            if (typeof window !== 'undefined' && window.confirm(message)) apply();
+                            return;
+                        }
+                        Alert.alert('Reset button position', message, [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Reset', onPress: apply },
+                        ]);
+                    }}
+                >
+                    <Ionicons name="move-outline" size={24} color={theme.colors.text.primary} />
+                    <Text style={[styles.settingText, { color: theme.colors.text.primary }]}>
+                        Reset button position
+                    </Text>
                     <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
                 </ElevatedCard>
 

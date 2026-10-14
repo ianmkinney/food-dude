@@ -16,6 +16,9 @@ const ElevatedCard = ({
     disabled,
     tilt = false,
     entering = true,
+    accessibilityRole,
+    accessibilityLabel,
+    testID,
 }) => {
     const reduceMotion = useReducedMotion();
     const surface = getSurfaceStyle({ ...theme, platform: Platform.OS }, variant);
@@ -29,6 +32,9 @@ const ElevatedCard = ({
                     onPress={onPress}
                     disabled={disabled}
                     tilt={tilt}
+                    accessibilityRole={accessibilityRole}
+                    accessibilityLabel={accessibilityLabel}
+                    testID={testID}
                     style={[styles.card, surface, style]}
                 >
                     {children}
