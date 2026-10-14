@@ -14,6 +14,7 @@ import {
     signOutGoogleAccount,
     subscribeGoogleAccount,
 } from '../platform/googleAccountAuth';
+import { shouldRedirectGoogleSignInHere, signInWithGoogleRedirect } from '../platform/googleWebAuth';
 import { startCloudSyncScheduler, stopCloudSyncScheduler } from '../sync/engine';
 import { subscribeSyncEngineStatus } from '../sync/syncStatusBridge';
 
@@ -59,7 +60,6 @@ function GoogleAccountProviderInner({ children }: { children: React.ReactNode })
     const [profile, setProfile] = useState<AuthSessionProfile | null>(null);
     const [platformAiAllowed, setPlatformAiAllowed] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [usePopup, setUsePopup] = useState(false);
     const [syncStatus, setSyncStatus] = useState<SyncUiStatus>('signed_out');
 
     const googleNonce = useMemo(() => randomGoogleNonce(), []);
@@ -85,15 +85,28 @@ function GoogleAccountProviderInner({ children }: { children: React.ReactNode })
     }, [applyState]);
 
     useEffect(() => {
-        applyState();
-        return subscribeGoogleAccount(() => {
-            applyState();
+        let cancel = false;
+        // Finish a same-tab Google redirect before the first profile read.
+        // Otherwise that read resolves signed-out and overwrites the session
+        // that lands a moment later.
+        const unsub = subscribeGoogleAccount(() => {
+            if (!cancel) applyState();
         });
+        consumePendingWebGoogleSignIn().finally(() => {
+            if (!cancel) applyState();
+        });
+        const onPageShow = (event: PageTransitionEvent) => {
+            // Back from Google's error page restores this document from cache.
+            if (!event.persisted) return;
+            consumePendingWebGoogleSignIn();
+        };
+        window.addEventListener('pageshow', onPageShow);
+        return () => {
+            cancel = true;
+            unsub();
+            window.removeEventListener('pageshow', onPageShow);
+        };
     }, [applyState]);
-
-    useEffect(() => {
-        consumePendingWebGoogleSignIn();
-    }, []);
 
     useEffect(() => subscribeSyncEngineStatus(setSyncStatus), []);
 
@@ -113,15 +126,25 @@ function GoogleAccountProviderInner({ children }: { children: React.ReactNode })
     }, [session?.token]);
 
     const signIn = useCallback(async () => {
-        setBusy(true);
         try {
             if (Platform.OS === 'web') {
                 if (!webClientId) {
                     throw new Error('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not set in this build.');
                 }
-                const result = await signInWithGoogleWeb(webClientId, usePopup);
+                // Assign before any await or setState. Safari drops window.open
+                // when it is not the direct result of the tap, and a home-screen
+                // app must stay in this window.
+                if (shouldRedirectGoogleSignInHere()) {
+                    signInWithGoogleRedirect(webClientId);
+                    return;
+                }
+            }
+            setBusy(true);
+            if (Platform.OS === 'web') {
+                const result = await signInWithGoogleWeb(webClientId!, false);
+                if (result === 'redirecting') return;
                 if (result === 'popup-fallback') {
-                    setUsePopup(true);
+                    signInWithGoogleRedirect(webClientId!);
                     return;
                 }
             } else {
@@ -142,7 +165,7 @@ function GoogleAccountProviderInner({ children }: { children: React.ReactNode })
         } finally {
             setBusy(false);
         }
-    }, [applyState, googleNonce, promptAsync, request, usePopup, webClientId]);
+    }, [applyState, googleNonce, promptAsync, request, webClientId]);
 
     const signOut = useCallback(async () => {
         setBusy(true);

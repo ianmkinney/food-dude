@@ -3,11 +3,14 @@ import { StyleSheet, View } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { getTheme } from '../../theme';
 import { installDesktopScroll } from '../../platform/desktopScroll';
+import { useDesktopViewportUnlock, useLayoutMode } from '../../layout/useLayoutMode';
 
 /** Unchanged phone-width column for mobile and tablet web viewports. */
 export default function MobileWebShell({ children }) {
     const { isDark } = useTheme();
     const theme = getTheme(isDark);
+    const { isDesktop } = useLayoutMode();
+    useDesktopViewportUnlock(isDesktop);
     const columnRef = useRef(null);
 
     useEffect(() => installDesktopScroll(columnRef.current), []);

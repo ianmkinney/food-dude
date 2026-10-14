@@ -11,7 +11,7 @@ type Props = {
 
 /** Account details for the unified Google session (sign-in lives in the header). */
 export default function AccountGoogleSection({ theme }: Props) {
-    const { configured, session, platformAiAllowed, busy, signOut } = useGoogleAccount();
+    const { configured, session, platformAiAllowed, busy, signIn, signOut } = useGoogleAccount();
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -38,10 +38,23 @@ export default function AccountGoogleSection({ theme }: Props) {
         <View style={styles.wrap}>
             <Text style={[styles.title, { color: text.primary }]}>Google account</Text>
             {!session ? (
-                <Text style={[styles.hint, { color: text.secondary }]}>
-                    Tap <Text style={styles.em}>Sign in</Text> in the top bar to sync across browsers, use parties,
-                    and cloud backup. One Google sign-in for everything — no separate owner step.
-                </Text>
+                <>
+                    <Text style={[styles.hint, { color: text.secondary }]}>
+                        Sign in to sync across browsers, use parties, and cloud backup. One Google sign-in for
+                        everything — no separate owner step.
+                    </Text>
+                    <Pressable
+                        onPress={() => {
+                            void signIn();
+                        }}
+                        disabled={busy}
+                        accessibilityRole="button"
+                        accessibilityLabel="Sign in with Google"
+                        style={[styles.button, { backgroundColor: theme.primary[500] }]}
+                    >
+                        <Text style={[styles.buttonText, { color: '#fff' }]}>{busy ? '…' : 'Sign in with Google'}</Text>
+                    </Pressable>
+                </>
             ) : (
                 <>
                     <Text style={[styles.value, { color: text.primary }]}>
@@ -98,7 +111,6 @@ const styles = StyleSheet.create({
     wrap: { gap: 8 },
     title: { fontSize: 17, fontWeight: '600' },
     hint: { fontSize: 14, lineHeight: 20 },
-    em: { fontWeight: '600' },
     value: { fontSize: 15, fontWeight: '500' },
     statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     testButton: {

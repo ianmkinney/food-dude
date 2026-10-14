@@ -9,6 +9,7 @@
     <meta name="application-name" content="AmpliFood" />
     <meta name="apple-mobile-web-app-title" content="AmpliFood" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- black-translucent lets the standalone web view run edge to edge, including under the home indicator. -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#FBF6EE" media="(prefers-color-scheme: light)" />
@@ -58,7 +59,46 @@
         inset: 0;
         height: 100vh;
         height: 100dvh;
+        margin: 0;
+        padding: 0;
         display: flex;
+      }
+      /* Installed home-screen app. 100dvh can stop above the home indicator;
+         -webkit-fill-available covers that strip. Safe-area padding stays on
+         the tab bar, not on html/body/#root, so nothing sits below the bar. */
+      @media (display-mode: standalone), (display-mode: fullscreen) {
+        html,
+        body,
+        #root {
+          height: 100%;
+          height: 100dvh;
+          height: -webkit-fill-available;
+          min-height: 100dvh;
+          min-height: -webkit-fill-available;
+          margin: 0;
+          padding: 0;
+          padding-bottom: 0;
+          margin-bottom: 0;
+        }
+      }
+      html.af-standalone,
+      html.af-standalone body,
+      html.af-standalone #root {
+        height: 100%;
+        height: 100dvh;
+        height: -webkit-fill-available;
+        min-height: 100dvh;
+        min-height: -webkit-fill-available;
+        margin: 0;
+        padding: 0;
+        padding-bottom: 0;
+        margin-bottom: 0;
+      }
+      html.af-standalone [role='tablist'] {
+        margin: 0;
+        margin-bottom: 0;
+        box-sizing: border-box;
+        padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
       }
       /* While Ampi pins #root to visualViewport (class toggled from useKeyboardViewport.web.ts). */
       html.af-keyboard-open {
@@ -66,6 +106,7 @@
         position: fixed;
         width: 100%;
         height: 100%;
+        min-height: 0;
         overscroll-behavior: none;
       }
       html.af-keyboard-open body {
@@ -74,13 +115,17 @@
         inset: 0;
         width: 100%;
         height: 100%;
+        min-height: 0;
+        padding-bottom: 0;
         overscroll-behavior: none;
       }
       html.af-keyboard-open #root {
         inset: unset;
         bottom: auto;
         height: auto;
+        min-height: 0;
         max-height: none;
+        padding-bottom: 0;
       }
       input,
       textarea,

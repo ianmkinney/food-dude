@@ -27,6 +27,7 @@ const modules = [
     '_lib/env.js',
     '_lib/session.js',
     '_lib/google.js',
+    '_lib/googleNonce.js',
     '_lib/store.js',
     '_lib/openRouterImage.js',
     '_lib/openRouterModels.js',

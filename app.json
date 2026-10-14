@@ -2,7 +2,7 @@
   "expo": {
     "name": "AmpliFood",
     "slug": "food-dude",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "scheme": "fooddude",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

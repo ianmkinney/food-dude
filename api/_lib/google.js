@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { getGoogleClientIds } from './env.js';
+import { googleNonceMatches } from './googleNonce.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 
@@ -24,7 +25,7 @@ export async function verifyGoogleIdToken(idToken, expectedNonce) {
         throw new Error('Invalid Google sign-in');
     }
 
-    if (payload.nonce !== expectedNonce) {
+    if (!googleNonceMatches(payload.nonce, expectedNonce)) {
         throw new Error('Invalid Google sign-in nonce');
     }
     if (payload.email_verified !== true) {

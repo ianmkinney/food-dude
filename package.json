@@ -1,6 +1,6 @@
 {
   "name": "amplifood",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -34,6 +34,8 @@
     "test:web-ampi-chat-scroll": "node scripts/test-web-ampi-chat-scroll.mjs",
     "test:recipe-enhance-slow": "node scripts/test-recipe-enhance-slow.mjs",
     "test:web-safari-composer": "node scripts/test-web-safari-composer.mjs",
+    "test:google-signin": "node scripts/test-google-signin.mjs",
+    "test:google-signin-webkit": "node scripts/test-google-signin-webkit.mjs",
     "test:sync-merge": "node scripts/test-sync-merge.mjs",
     "test:party-members": "node scripts/test-party-members.mjs",
     "test:party-meal-meta": "node scripts/test-party-meal-meta.mjs",
@@ -61,6 +63,7 @@
     "test:grocery-normalize": "node scripts/test-grocery-normalize.mjs",
     "test:recipe-normalize": "node scripts/test-recipe-normalize.mjs",
     "test:web-all-tabs": "node scripts/test-web-all-tabs-smoke.mjs",
+    "test:standalone-tabbar": "node scripts/test-standalone-tabbar.mjs",
     "test:speech-input-session": "node scripts/test-speech-input-session.mjs"
   },
   "dependencies": {

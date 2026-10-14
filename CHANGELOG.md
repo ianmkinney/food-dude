@@ -2,6 +2,19 @@
 
 All notable user-facing changes to AmpliFood are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.4] - 2026-10-14
+
+Google sign-in on iPhone Safari.
+
+- Sign in on iPhone and iPad, desktop Safari, and the installed home-screen app stays in the same tab. A popup there is blocked or ignored, so the first tap did nothing in a Safari tab; the home-screen app was sent to Google's own error page
+- The redirect URI sent to Google is exactly `https://amplifood.vercel.app/auth/google-callback` (no `.html`, no trailing slash). The home-screen app uses that same path on the page origin. Google returns Error 400: redirect_uri_mismatch until that exact string is listed under Authorized redirect URIs. Coming back from Google's error page shows that URI in the app
+- If a desktop popup is blocked, sign-in continues in the same tab
+- Account has its own **Sign in with Google** button, using the same sign-in as the header
+- After Google, you land back on the page you started from
+- Desktop popup sign-in waits for the result instead of treating an early focus return as cancel
+- The server accepts the raw sign-in nonce and the SHA-256 digest Google Identity Services may put in the ID token
+- In the installed home-screen app, the tab bar sits flush with the bottom of the screen. The home-indicator inset is padding inside the bar. Safari tabs, desktop, and the Ampi and party composers are unchanged
+
 ## [1.0.3] - 2026-10-13
 
 Party @Ampi recipe suggestions in group chat.
