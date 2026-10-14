@@ -57,10 +57,14 @@ assert.equal(isStandaloneWebApp({ navigatorStandalone: true }), true);
 assert.equal(isStandaloneWebApp({ displayMode: 'standalone' }), true);
 assert.equal(isStandaloneWebApp({ displayMode: 'browser' }), false);
 
+assert.equal(PRODUCTION_GOOGLE_REDIRECT_URI, 'https://amplifood.vercel.app/auth/google-callback');
+assert.equal(PRODUCTION_GOOGLE_REDIRECT_URI.endsWith('.html'), false);
 assert.equal(googleRedirectUri('https://amplifood.vercel.app'), PRODUCTION_GOOGLE_REDIRECT_URI);
 assert.equal(googleRedirectUri('https://amplifood.vercel.app/'), PRODUCTION_GOOGLE_REDIRECT_URI);
 assert.equal(googleRedirectUri('http://localhost:8080'), 'http://localhost:8080/auth/google-callback');
-assert.match(googleSignInErrorMessage('redirect_uri_mismatch', '', PRODUCTION_GOOGLE_REDIRECT_URI), /amplifood\.vercel\.app\/auth\/google-callback/);
+assert.match(googleSignInErrorMessage('redirect_uri_mismatch', '', PRODUCTION_GOOGLE_REDIRECT_URI), /https:\/\/amplifood\.vercel\.app\/auth\/google-callback/);
+assert.match(googleSignInErrorMessage('redirect_uri_mismatch', '', PRODUCTION_GOOGLE_REDIRECT_URI), /Authorized redirect URIs/);
+assert.match(googleSignInErrorMessage('redirect_uri_mismatch', '', PRODUCTION_GOOGLE_REDIRECT_URI), /google-callback\.html is a different URI/);
 assert.match(googleSignInErrorMessage('disallowed_useragent', '', ''), /home-screen/);
 assert.equal(googleSignInErrorMessage('access_denied', '', ''), 'cancelled');
 assert.match(googleSignInErrorMessage('incomplete', '', 'https://amplifood.vercel.app/auth/google-callback'), /didn't finish/);

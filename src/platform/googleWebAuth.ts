@@ -49,9 +49,13 @@ function currentRedirectUri() {
 }
 
 function buildAuthUrl(clientId: string, state: string, nonce: string) {
+    const redirectUri = currentRedirectUri();
+    // Visible in Safari Web Inspector with Preserve Log. This is the string
+    // Google compares to Authorized redirect URIs.
+    console.info('AmpliFood Google redirect_uri:', redirectUri);
     const params = new URLSearchParams({
         client_id: clientId,
-        redirect_uri: currentRedirectUri(),
+        redirect_uri: redirectUri,
         response_type: 'id_token',
         scope: 'openid email profile',
         nonce,

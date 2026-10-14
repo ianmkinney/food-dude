@@ -11,7 +11,7 @@ The proxy is **off until `ALLOWED_EMAILS` is set** on Vercel. If that variable i
 1. Open [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → **Credentials**.
 2. Configure the **OAuth consent screen** (External or Internal, as appropriate).
 3. Create **three OAuth 2.0 Client IDs** (or Web + iOS + Android as needed):
-   - **Web** — Authorized JavaScript origins: `https://amplifood.vercel.app` (and `http://localhost:8080` for local web dev if you use it). Authorized redirect URIs: `https://amplifood.vercel.app/auth/google-callback` for the popup/redirect flow.
+   - **Web** — Authorized JavaScript origins: `https://amplifood.vercel.app` (and `http://localhost:8080` for local web dev if you use it). Authorized redirect URIs must include this exact string: `https://amplifood.vercel.app/auth/google-callback`. Google compares it character for character. The app does not send `https://amplifood.vercel.app/auth/google-callback.html` or a trailing slash. The installed home-screen app uses the same path on `window.location.origin`. Local web dev on port 8080 sends `http://localhost:8080/auth/google-callback`. One Tap only checks the JavaScript origin; the full-page redirect also needs the redirect URI.
    - **iOS** — Bundle ID: `com.fooddude.app`
    - **Android** — Package: `com.fooddude.app` + SHA-1 from your signing key (EAS credentials).
 4. Copy each client ID.

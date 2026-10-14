@@ -7,7 +7,7 @@ All notable user-facing changes to AmpliFood are documented here. Versions follo
 Google sign-in on iPhone Safari.
 
 - Sign in on iPhone and iPad, desktop Safari, and the installed home-screen app stays in the same tab. A popup there is blocked or ignored, so the first tap did nothing in a Safari tab; the home-screen app was sent to Google's own error page
-- The redirect URI sent to Google is `https://amplifood.vercel.app/auth/google-callback` (the registered one, no trailing slash). If Google rejects it, or you come back from Google's error page, AmpliFood shows the reason instead of failing quietly
+- The redirect URI sent to Google is exactly `https://amplifood.vercel.app/auth/google-callback` (no `.html`, no trailing slash). The home-screen app uses that same path on the page origin. Google returns Error 400: redirect_uri_mismatch until that exact string is listed under Authorized redirect URIs. Coming back from Google's error page shows that URI in the app
 - If a desktop popup is blocked, sign-in continues in the same tab
 - Account has its own **Sign in with Google** button, using the same sign-in as the header
 - After Google, you land back on the page you started from

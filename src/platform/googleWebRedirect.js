@@ -54,13 +54,13 @@ export function googleSignInErrorMessage(code, description, redirectUri) {
     const sent = redirectUri || PRODUCTION_GOOGLE_REDIRECT_URI;
     if (code === 'access_denied') return 'cancelled';
     if (code === 'redirect_uri_mismatch' || code === 'origin_mismatch') {
-        return `Google rejected the sign-in address (${sent}). It has to match the registered redirect URI ${PRODUCTION_GOOGLE_REDIRECT_URI}.`;
+        return `Google rejected this redirect URI: ${sent}. Add that exact string under Authorized redirect URIs for the web client. /auth/google-callback.html is a different URI.`;
     }
     if (code === 'disallowed_useragent') {
         return 'Google blocked sign-in in this browser. The installed home-screen app and in-app browsers often get this. Open amplifood.vercel.app in a Safari tab and sign in there.';
     }
     if (code === 'incomplete') {
-        return `Google didn't finish sign-in. If Google showed an error page, the redirect URI sent was ${sent}. It must match ${PRODUCTION_GOOGLE_REDIRECT_URI}. In the installed app, Google may block the browser.`;
+        return `Google didn't finish sign-in. The redirect URI sent was ${sent}. Add that exact string under Authorized redirect URIs if Google showed Error 400: redirect_uri_mismatch. In the installed app, Google may also block the browser.`;
     }
     const detail = typeof description === 'string' ? description.trim() : '';
     if (detail) return detail;
